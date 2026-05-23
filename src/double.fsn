@@ -1,0 +1,4 @@
+(
+  [] => [],
+  [first, ...rest] => [[first, first] | add, ...rest | @double]
+)
