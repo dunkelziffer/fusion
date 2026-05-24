@@ -560,8 +560,10 @@ module Fusion
       env.define("__dir__", File.dirname(abspath))
       eval_expr(ast, env)
     rescue Errno::ENOENT
+      warn "[fusion] file not found: #{abspath}" if ENV["FUSION_DEBUG"]
       ERROR
-    rescue ParseError
+    rescue ParseError => err
+      warn "[fusion] parse error in #{abspath}: #{err.message}" if ENV["FUSION_DEBUG"]
       ERROR
     end
 
