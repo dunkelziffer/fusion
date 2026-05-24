@@ -1,0 +1,4 @@
+(
+  0 => [],
+  n ? Integer => [...([n, 1] | @std/subtract_helper | @std/range), [n, 1] | @std/subtract_helper]
+)

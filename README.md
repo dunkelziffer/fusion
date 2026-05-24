@@ -7,9 +7,12 @@ is one value, `@refs` for modules/stdlib.
 ## Files
 
 - `fusion.rb` — the interpreter (Ruby, single file). **This is the deliverable.**
-- `oracle.py` — a faithful Python port of the same algorithm, used to verify the
-  logic (Ruby could not be executed in the authoring sandbox; see *Verification*).
-- `test.py` — 38-case test suite driving the oracle.
+- `test.rb` — Ruby test suite (38 cases) driving `fusion.rb` directly. Run with
+  `ruby test.rb` from this directory.
+- `oracle.py` — a faithful Python port of the same algorithm, used during authoring
+  to verify the logic where Ruby could not be executed (see *Verification*).
+- `test.py` — the same 38 cases against the Python oracle (`python3 test.py`); kept
+  in lockstep with `test.rb`.
 - `examples/` — sample `.fsn` programs.
 - `stdlib/` — standard-library files written in Fusion (`@std/...`).
 
