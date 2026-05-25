@@ -45,7 +45,7 @@ to implement.
 - **Sandboxed reference resolution** confined to a project root.
 - **A real CLI** beyond the prototype (`-e`, file, stdin) with better error reporting.
 - **A faster implementation** once semantics are frozen (the current `fusion.rb` is a
-  proof of concept, verified by a Python oracle, not optimized).
+  proof of concept, not optimized).
 
 ## 5. Open semantic questions to settle
 

@@ -70,8 +70,7 @@ shapes what comes next.
 
 The current implementation is a proof of concept, `fusion.rb` (Ruby), accompanied by:
 
-- `oracle.py` — a Python port used to verify behavior;
-- `test.rb` / `test.py` — a 38-case suite run against each;
+- `test.rb` — a 38-case test suite;
 - `examples/` — sample `.fsn` programs;
 - `stdlib/` — standard-library functions written in Fusion, reached via `@std/...`.
 

@@ -320,8 +320,7 @@ parse errors during reference resolution to be reported on standard error.
 
 ## 10. Prototype status
 
-This reference describes the proof-of-concept interpreter `fusion.rb`. Its behavior
-was verified against a Python port (`oracle.py`) with a 38-case suite (`test.rb` /
-`test.py`). Features specified but not fully populated in the prototype standard
-library, and deliberately deferred design questions, are listed in the
-[Design documentation](../lang/design-decisions.md).
+This reference describes the proof-of-concept interpreter `fusion.rb`, covered by a
+38-case test suite (`test.rb`). Features specified but not fully populated in the
+prototype standard library, and deliberately deferred design questions, are listed in
+the [Design documentation](../lang/design-decisions.md).

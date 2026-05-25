@@ -1,7 +1,7 @@
 #!/usr/bin/env ruby
 # frozen_string_literal: true
 
-# Ruby test suite for the Fusion interpreter — a faithful port of test.py.
+# Ruby test suite for the Fusion interpreter.
 # Loads fusion.rb as a library (its CLI block is guarded by $PROGRAM_NAME == __FILE__,
 # so requiring it does not run the CLI).
 #
