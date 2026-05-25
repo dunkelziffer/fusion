@@ -12,19 +12,19 @@ scan for the problem you have and copy the solution.*
 Pipe JSON into the interpreter:
 
 ```sh
-echo '[1,2,3]' | ruby fusion.rb path/to/program.fsn
+echo '[1,2,3]' | ruby lib/fusion.rb path/to/program.fsn
 ```
 
 Pass the input as an argument instead of stdin:
 
 ```sh
-ruby fusion.rb path/to/program.fsn '[1,2,3]'
+ruby lib/fusion.rb path/to/program.fsn '[1,2,3]'
 ```
 
 Run a one-off snippet without a file:
 
 ```sh
-ruby fusion.rb -e '(n => [n, 2] | multiply)' '21'
+ruby lib/fusion.rb -e '(n => [n, 2] | multiply)' '21'
 ```
 
 A program that produces the error value `!` exits with a nonzero status, so you can
@@ -38,12 +38,11 @@ A bare `!` usually means a file failed to load (missing file, or a parse error)
 somewhere in the reference chain. Turn on diagnostics:
 
 ```sh
-FUSION_DEBUG=1 ruby fusion.rb program.fsn '...'
+FUSION_DEBUG=1 ruby lib/fusion.rb program.fsn '...'
 ```
 
 With `FUSION_DEBUG` set, the interpreter prints to stderr the exact path it failed to
-find or the parse error it hit. The most common cause is that `examples/` and
-`stdlib/` are not sitting next to `fusion.rb`, so `@`-references can't be resolved.
+find or the parse error it hit.
 
 ---
 
@@ -108,7 +107,7 @@ Build a range by recursion, then process it. This is `range.fsn` from the stdlib
 )
 ```
 
-`echo '5' | ruby fusion.rb stdlib/range.fsn` gives `[0,1,2,3,4]`. Pipe that into a
+`echo '5' | ruby lib/fusion.rb stdlib/range.fsn` gives `[0,1,2,3,4]`. Pipe that into a
 recursive list function to do work for each number.
 
 ---

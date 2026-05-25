@@ -7,11 +7,11 @@
 #
 # Run:  ruby test.rb
 
-require_relative "fusion"
+require_relative "../lib/fusion"
 
 HERE   = File.dirname(File.expand_path(__FILE__))
-STDLIB = File.join(HERE, "stdlib")
-EX     = File.join(HERE, "examples")
+STDLIB = File.join(HERE, "../stdlib")
+EX     = File.join(HERE, "../examples")
 
 # Run an example file from examples/ against a JSON input string.
 def run_file(relpath, input_json)

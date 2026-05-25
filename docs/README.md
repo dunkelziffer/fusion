@@ -11,7 +11,7 @@ one input and one output and work by pattern-matching; application is written
 ```
 
 ```sh
-echo '21' | ruby fusion.rb double.fsn      # => 42
+echo '21' | ruby lib/fusion.rb examples/double.fsn      # => 42
 ```
 
 ---
@@ -68,9 +68,9 @@ shapes what comes next.
 
 ## The interpreter
 
-The current implementation is a proof of concept, `fusion.rb` (Ruby), accompanied by:
+The current implementation is a proof of concept, `lib/fusion.rb` (Ruby), accompanied by:
 
-- `test.rb` — a 38-case test suite;
+- `spec/test.rb` — a 38-case test suite;
 - `examples/` — sample `.fsn` programs;
 - `stdlib/` — standard-library functions written in Fusion, reached via `@std/...`.
 

@@ -12,7 +12,7 @@ roadmap of unfinished work and possible experiments, refer to [roadmap.md](./roa
   interpreter, often because the running code exposed a question the spec had left
   implicit or gotten wrong.
 
-**Status of this document:** describes the prototype interpreter `fusion.rb`.
+**Status of this document:** describes the prototype interpreter `lib/fusion.rb`.
 
 ---
 

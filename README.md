@@ -9,10 +9,10 @@ A reference implementation of the Fusion language:
 ## Running code
 
 ```sh
-echo '5' | ruby fusion.rb examples/fact.fsn          # => 120
-echo '[1,2,3]' | ruby fusion.rb examples/main.fsn    # => [2,4,6]
-ruby fusion.rb examples/fact.fsn 5                   # input as an argument
-ruby fusion.rb -e '(n => [n,2] | multiply)' 21       # inline program  => 42
+echo '5' | ruby lib/fusion.rb examples/fact.fsn          # => 120
+echo '[1,2,3]' | ruby lib/fusion.rb examples/main.fsn    # => [2,4,6]
+ruby lib/fusion.rb examples/fact.fsn 5                   # input as an argument
+ruby lib/fusion.rb -e '(n => [n,2] | multiply)' 21       # inline program  => 42
 ```
 
 Input is read from stdin (or the 2nd CLI arg) as JSON, parsed into a Fusion value,
@@ -22,7 +22,7 @@ result of `!` sets exit code 1.
 ## Running the tests
 
 ```bash
-ruby test.rb
+ruby spec/test.rb
 ```
 
 ## Documentation
