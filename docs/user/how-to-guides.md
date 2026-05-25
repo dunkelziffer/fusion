@@ -152,7 +152,7 @@ A predicate is just a function returning a boolean. Make it *total* (never `!`) 
 ending with a `_ => false` catch-all, so it's safe to throw any value at it:
 
 ```fusion
-// isPositive.fsn
+# isPositive.fsn
 (n ? Number => [n, 0] | greaterThan, _ => false)
 ```
 
@@ -169,7 +169,8 @@ with it, an unmatched input becomes the error value `!`:
 (
   0 => 1,
   n ? Integer => [n, [n, 1] | subtract | @fact] | multiply,
-  _ => !                          // reject non-integers loudly
+  # reject non-integers loudly
+  _ => !
 )
 ```
 
@@ -181,13 +182,15 @@ By default `!` propagates: any function given `!` returns `!`, *unless* it has a
 clause that explicitly matches `!`. To recover, write that clause:
 
 ```fusion
-(! => 0, x => x)        // turn any error into 0, pass everything else through
+# turn any error into 0, pass everything else through
+(! => 0, x => x)
 ```
 
 To guard a risky operation and substitute a default:
 
 ```fusion
-(x => ([x, 0] | divide) | (! => -1, y => y))     // divide-by-zero becomes -1
+# divide-by-zero becomes -1
+(x => ([x, 0] | divide) | (! => -1, y => y))
 ```
 
 ---
@@ -197,17 +200,28 @@ To guard a risky operation and substitute a default:
 There is no operator sugar; pipe a pair (or value) into a built-in.
 
 ```fusion
-[a, b] | add            // a + b
-[a, b] | subtract       // a - b
-[a, b] | multiply       // a * b
-[a, b] | divide         // a / b   (! if b is 0)
-[a, b] | mod            // a % b
-n | negate              // -n
-[s1, s2] | concat       // string concatenation
-s | chars               // "abc" -> ["a","b","c"]
-[parts, sep] | join     // ["a","b"], "-"  ->  "a-b"
-n | toString            // number -> string
-s | parseNumber         // "42" -> 42   (! if not numeric)
+# a + b
+[a, b] | add
+# a - b
+[a, b] | subtract
+# a * b
+[a, b] | multiply
+# a / b   (! if b is 0)
+[a, b] | divide
+# a % b
+[a, b] | mod
+# -n
+n | negate
+# string concatenation
+[s1, s2] | concat
+# "abc" -> ["a","b","c"]
+s | chars
+# ["a","b"], "-"  ->  "a-b"
+[parts, sep] | join
+# number -> string
+n | toString
+# "42" -> 42   (! if not numeric)
+s | parseNumber
 ```
 
 ---
@@ -217,19 +231,19 @@ s | parseNumber         // "42" -> 42   (! if not numeric)
 Pull known keys by destructuring; keep the rest with `...`:
 
 ```fusion
-({"id": id, ...rest} => rest)            // drop the id field
+({"id": id, ...rest} => rest)
 ```
 
 Add or override a field with object spread in the result:
 
 ```fusion
-(o => {"seen": true, ...o})              // ensure a "seen" field
+(o => {"seen": true, ...o})
 ```
 
 Enumerate *unknown* keys (pattern matching can't do this) with the `keys` built-in:
 
 ```fusion
-(o => o | keys)                          // {"a":1,"b":2} -> ["a","b"]
+(o => o | keys)
 ```
 
 ---
@@ -246,7 +260,8 @@ file's directory:
 If a file evaluates to an object of functions, reach a member with a dot:
 
 ```fusion
-(xs => {"f": @double, "xs": xs} | @lib.map)   // lib.fsn is {"map": (...), ...}
+# lib.fsn is {"map": (...), ...}
+(xs => {"f": @double, "xs": xs} | @lib.map)
 ```
 
 ---

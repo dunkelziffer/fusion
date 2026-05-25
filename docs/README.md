@@ -6,7 +6,7 @@ one input and one output and work by pattern-matching; application is written
 `value | function`.
 
 ```fusion
-// double.fsn — pipe a number in, get it doubled out
+# double.fsn — pipe a number in, get it doubled out
 (n => [n, 2] | multiply)
 ```
 
