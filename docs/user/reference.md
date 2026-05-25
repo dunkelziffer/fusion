@@ -5,7 +5,7 @@ neutral, complete technical description, structured to mirror the language itsel
 describes **what is**, not how to use it or why it is so. For guided learning see the
 [Tutorial](./tutorial.md); for task recipes see the [How-to guides](./how-to-guides.md);
 for rationale see the [Explanation](./explanation.md). This documents the prototype as
-implemented (`fusion.rb`), grammar rev 4.*
+implemented (`lib/fusion.rb`), grammar rev 4.*
 
 ---
 
@@ -308,8 +308,8 @@ computes `v | programFunction`, and prints the result as JSON.
 ### 9.4 Command-line interface
 
 ```
-ruby fusion.rb <file.fsn> [json-input]
-ruby fusion.rb -e '<source>' [json-input]
+ruby lib/fusion.rb <file.fsn> [json-input]
+ruby lib/fusion.rb -e '<source>' [json-input]
 ```
 
 Input comes from the `[json-input]` argument if present, otherwise from standard
@@ -320,7 +320,7 @@ parse errors during reference resolution to be reported on standard error.
 
 ## 10. Prototype status
 
-This reference describes the proof-of-concept interpreter `fusion.rb`, covered by a
-38-case test suite (`test.rb`). Features specified but not fully populated in the
+This reference describes the proof-of-concept interpreter `lib/fusion.rb`, covered by a
+38-case test suite (`spec/test.rb`). Features specified but not fully populated in the
 prototype standard library, and deliberately deferred design questions, are listed in
 the [Design documentation](../lang/design-decisions.md).

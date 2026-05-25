@@ -6,7 +6,7 @@ small programs, not to get a particular job done. Follow it start to finish, typ
 the code yourself, and run every example. By the end you will have written a
 recursive program and understood how Fusion's pieces fit together.*
 
-> **What you need:** Ruby installed, and the interpreter package (`fusion.rb` plus
+> **What you need:** Ruby installed, and the interpreter package (`lib/fusion.rb` plus
 > the `examples/` and `stdlib/` folders). All commands below are run from inside the
 > interpreter directory.
 
@@ -24,7 +24,7 @@ run the smallest possible program. Create a file `lesson.fsn` containing exactly
 Now run it:
 
 ```sh
-echo '21' | ruby fusion.rb lesson.fsn
+echo '21' | ruby lib/fusion.rb lesson.fsn
 ```
 
 You should see `42`. Take a moment to notice three things you just used without
@@ -56,10 +56,10 @@ in parentheses. When you apply it, the clauses are tried top to bottom and the
 )
 ```
 
-Run `echo '1' | ruby fusion.rb lesson.fsn` and you get `"one"`. The pattern `1`
+Run `echo '1' | ruby lib/fusion.rb lesson.fsn` and you get `"one"`. The pattern `1`
 is a *literal* — it matches only the value `1`.
 
-Now try an input no clause matches: `echo '5' | ruby fusion.rb lesson.fsn`. You get
+Now try an input no clause matches: `echo '5' | ruby lib/fusion.rb lesson.fsn`. You get
 `null`. **A function with no matching clause returns `null`.** Remember this; it is a
 deliberate, important rule.
 
@@ -76,7 +76,7 @@ The same bare word in the result **reads** that captured value back out. Try:
 ```
 
 ```sh
-echo '[1, 2]' | ruby fusion.rb lesson.fsn
+echo '[1, 2]' | ruby lib/fusion.rb lesson.fsn
 ```
 
 You get `[2, 1]`. The pattern `[a, b]` required a two-element array and bound its
@@ -99,7 +99,7 @@ file with a function that pulls a name out of a person object:
 ```
 
 ```sh
-echo '{"name": "Ada", "age": 36}' | ruby fusion.rb lesson.fsn
+echo '{"name": "Ada", "age": 36}' | ruby lib/fusion.rb lesson.fsn
 ```
 
 You get `"Ada"`. Two new things here:
@@ -131,8 +131,8 @@ as a boolean and match on `true`/`false`. Write an absolute-value function:
 Run it on `-5` and on `5`:
 
 ```sh
-echo '-5' | ruby fusion.rb lesson.fsn    # => 5
-echo '5'  | ruby fusion.rb lesson.fsn    # => 5
+echo '-5' | ruby lib/fusion.rb lesson.fsn    # => 5
+echo '5'  | ruby lib/fusion.rb lesson.fsn    # => 5
 ```
 
 Read the middle line carefully: `[n, 0] | lessThan` produces `true` or `false`, and
@@ -157,7 +157,7 @@ file." Create a new file `sum.fsn`:
 ```
 
 ```sh
-echo '[1, 2, 3, 4]' | ruby fusion.rb sum.fsn    # => 10
+echo '[1, 2, 3, 4]' | ruby lib/fusion.rb sum.fsn    # => 10
 ```
 
 Walk through what happened. The pattern `[x, ...rest]` matched a non-empty list,
@@ -182,7 +182,7 @@ the structure matches *and* the predicate returns `true`. Make a factorial:
 )
 ```
 
-Save it as `fact.fsn` and run `echo '5' | ruby fusion.rb fact.fsn` → `120`.
+Save it as `fact.fsn` and run `echo '5' | ruby lib/fusion.rb fact.fsn` → `120`.
 
 `n ? Integer` reads as "bind `n`, but only if `n` is an integer." And here is the
 beautiful part: `Integer` is not a keyword. It is just a built-in function that
@@ -203,7 +203,7 @@ Create `doubler.fsn`:
 ```
 
 ```sh
-echo '[1, 2, 3]' | ruby fusion.rb doubler.fsn    # => [2, 4, 6]
+echo '[1, 2, 3]' | ruby lib/fusion.rb doubler.fsn    # => [2, 4, 6]
 ```
 
 Because every Fusion function takes exactly one argument, `map` takes an *object*
