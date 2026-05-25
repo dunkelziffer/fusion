@@ -59,8 +59,10 @@ expression, not a function.
 Array elements and object members may be **spread** with `...`:
 
 ```
-[1, ...other, 9]            // splice an array's elements in place
-{"a": 1, ...other}          // merge another object's keys in place
+# splice an array's elements in place
+[1, ...other, 9]
+# merge another object's keys in place
+{"a": 1, ...other}
 ```
 
 In a result, `...expr` requires `expr` to be an array (in an array literal) or an
@@ -68,7 +70,15 @@ object (in an object literal); otherwise the literal evaluates to `!`.
 
 ### 2.4 Comments
 
-`// line comment` to end of line, and `/* block comment */`.
+A line is a comment when `#` is the first non-whitespace character on that line. There
+are no block comments and no inline comments — a `#` that appears after other code on
+the same line is not treated as a comment.
+
+```
+# this is a comment
+  # so is this (leading whitespace is allowed)
+(n => [n, 2] | multiply)   # NOT a comment — # is not the first non-whitespace
+```
 
 ### 2.5 Grammar (EBNF)
 

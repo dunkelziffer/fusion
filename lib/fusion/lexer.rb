@@ -18,6 +18,7 @@ module Fusion
       @src = src
       @i = 0
       @n = src.length
+      @seen_nonws_on_line = false
     end
 
     def tokens
@@ -36,11 +37,12 @@ module Fusion
 
     def next_token
       skip_trivia
+      @seen_nonws_on_line = true
       start = @i
       c = peek
       return Token.new(:eof, nil, start) if c.nil?
 
-      # "=>" and "..." and "//" handled specially
+      # "=>" and "..." handled specially
       if c == "=" && peek(1) == ">"
         @i += 2
         return Token.new(:arrow, "=>", start)
@@ -72,15 +74,14 @@ module Fusion
     def skip_trivia
       loop do
         c = peek
-        if c == " " || c == "\t" || c == "\n" || c == "\r"
+        if c == " " || c == "\t"
           @i += 1
-        elsif c == "/" && peek(1) == "/"
-          @i += 2
+        elsif c == "\n" || c == "\r"
+          @i += 1
+          @seen_nonws_on_line = false
+        elsif c == "#" && !@seen_nonws_on_line
+          @i += 1
           @i += 1 until peek.nil? || peek == "\n"
-        elsif c == "/" && peek(1) == "*"
-          @i += 2
-          @i += 1 until peek.nil? || (peek == "*" && peek(1) == "/")
-          @i += 2 unless peek.nil?
         else
           break
         end
