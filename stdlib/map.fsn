@@ -1,4 +1,4 @@
 (
   {"f": _, "xs": []} => [],
-  {"f": f, "xs": [x, ...rest]} => [x | f, ...({"f": f, "xs": rest} | @std/map)]
+  {"f": f, "xs": [x, ...rest]} => [x | f, ...({"f": f, "xs": rest} | @map)]
 )

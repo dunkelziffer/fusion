@@ -22,7 +22,7 @@ A Fusion value is one of:
 | float    | `3.14`, `1e9`, `-0.5`             | Distinct from integer.                       |
 | string   | `"hi"`, `"a\nb"`                  | JSON string syntax and escapes.              |
 | array    | `[]`, `[1, 2, 3]`, `[1, [2]]`     | Ordered, heterogeneous.                      |
-| object   | `{}`, `{"k": 1}`                  | String keys; insertion order preserved.      |
+| object   | `{}`, `{"k": 1}`                  | @String keys; insertion order preserved.      |
 | function | `(p => o, ...)`                   | One input, one output. A first-class value.  |
 
 Atoms are `null`, `!`, booleans, integers, floats, strings. Composites are arrays and
@@ -80,7 +80,7 @@ pipe        = postfix { "|" postfix } ;
 postfix     = primary { "." identifier | "[" expr "]" } ;
 primary     = atom | array | object | function | identifier | fileref | "(" expr ")" ;
 
-fileref     = "@" refpath ;
+fileref     = "@" [ refpath ] ;                     (* bare "@" = current file *)
 refpath     = { "../" } segment { "/" segment } ;   (* ".fsn" implied *)
 segment     = identifier ;
 
@@ -126,7 +126,7 @@ A function is an ordered list of clauses. Applying a function to a value `v`:
 3. If no clause matches, the result is `null`.
 
 Functions take exactly one argument. Multiple arguments are passed as an array or
-object. Currying is done by returning a function: `(x => (y => [x, y] | add))`.
+object. Currying is done by returning a function: `(x => (y => [x, y] | @add))`.
 
 Functions are values: they may be elements of arrays, values of object keys, results
 of clauses, and arguments to other functions.
@@ -152,7 +152,9 @@ A pattern both tests structure and extracts parts. Pattern forms:
 Rules:
 
 - **Bare identifiers are holes.** In a pattern they bind; in an expression they read
-  the bound (or built-in) value of that name.
+  the value bound to that name in the current clause. A bare identifier never denotes
+  a built-in — built-ins are reached with `@` (see §7, §9.2). Reading an unbound bare
+  identifier yields `!`.
 - **No sibling scope.** All bindings in a clause are produced simultaneously. A `?`
   predicate sees **only** the value matched by the pattern it is attached to — never
   another part of the same clause.
@@ -171,9 +173,9 @@ matched value into `predicate` yields exactly `true`. The predicate is any
 expression evaluating to a function (a name, a member access, or an inline function
 literal).
 
-"Types" are not a separate construct: the built-in predicates `Integer`, `String`,
-etc. are ordinary functions returning booleans, used with `?`. User-defined
-predicates work identically.
+"Types" are not a separate construct: the built-in predicates `@Integer`, `@String`,
+etc. are ordinary functions returning booleans, reached with `@` and used with `?`
+(e.g. `n ? @Integer`). User-defined predicates work identically (e.g. `n ? @isEven`).
 
 ---
 
@@ -198,9 +200,11 @@ something went wrong.
 
 ## 7. Built-in functions
 
-All built-ins are ordinary one-argument functions. **Operations** return `!` on
-type-invalid or domain-invalid input. **Predicates** return `false` on any input that
-is not of the queried type (they never return `!`).
+All built-ins are ordinary one-argument functions, **reached with an `@` prefix**
+(`@add`, `@Integer`, …); see §9.2 for how `@name` resolves. The names in the tables
+below are the built-in names; write `@` before them to use them. **Operations** return
+`!` on type-invalid or domain-invalid input. **Predicates** return `false` on any
+input that is not of the queried type (they never return `!`).
 
 ### 7.1 Arithmetic (operations)
 
@@ -250,6 +254,19 @@ for the standard library, derivable from `equals` and `lessThan`.
 `Integer`, `Float`, `Number`, `String`, `Boolean`, `Array`, `Object`, `Null`. Each
 takes any value and returns a boolean. `Number` is true for integers and floats.
 
+### 7.6 Special built-ins: `ENV` and `load`
+
+These resolve in the `@name` chain like other built-ins (so a sibling file of the
+same name shadows them), but they are not plain unary value functions:
+
+- **`@ENV`** evaluates directly to an object mapping every environment variable name
+  to its value. All values are strings; nothing is parsed. Read one with member
+  access: `@ENV.PATH`. A missing variable yields `!`.
+- **`@load`** evaluates to a function taking a filename **string verbatim** (no `.fsn`
+  appended), resolved relative to the referencing file's directory; it returns that
+  file's value, or `!` if the file does not exist. Use it to load files whose names
+  are computed at runtime or are not plain identifiers, e.g. `"a.b.fsn" | @load`.
+
 ---
 
 ## 8. Member and index access
@@ -272,24 +289,55 @@ A `.fsn` file contains **exactly one expression**, which is its value. A file is
 
 ### 9.2 References
 
-`@path` evaluates to the value of another file:
+A `@` reference takes one of these forms:
 
-- `@a` → `a.fsn` in the referencing file's directory.
-- `@dir/a` → `dir/a.fsn` relative to the referencing file.
-- `@../a` → `a.fsn` one directory up (one or more `../` allowed).
-- `@std/a` → `a.fsn` in the bundled standard-library directory.
+- **`@`** (nothing after it) — the **current file**'s value. Used for self-recursion.
+- **`@ENV`** — an object of all environment variables (string keys, string values;
+  no parsing). Resolved in the `@name` chain below, so it is shadowable.
+- **`@name`** — a single bare identifier (no `/`, no `../`).
+- **`@dir/name`, `@a/b/c`** — a downward path.
+- **`@../name`, `@../../a/b`** — an upward path (contains one or more `../`).
 
-The `.fsn` extension is implied and never written. Resolution is relative to the
-**referencing file's** directory, except the `std/` prefix, which resolves against
-the runtime's standard-library root.
+**Resolution of `@name` and downward paths** (any reference *without* `../`) proceeds
+in order, first match winning:
+
+1. a **sibling file** at `<referencing dir>/<name>.fsn`;
+2. a **built-in** of that exact name (including `ENV` and `load`);
+3. a **standard-library file** at `<stdlib root>/<name>.fsn`.
+
+If none match, the result is `!`. Downward paths participate fully: `@math/sqrt`
+checks a sibling `math/sqrt.fsn`, then a built-in named `math/sqrt`, then a stdlib
+`math/sqrt.fsn`.
+
+**Resolution of upward paths** (any reference containing `../`) is **file-only**: it
+resolves solely to a file relative to the referencing directory and never falls back
+to a built-in or the standard library.
+
+The `.fsn` extension is implied and never written in a `@` reference. File resolution
+is relative to the **referencing file's** directory; built-ins and the standard
+library are global to the runtime but, per the order above, are shadowed by a sibling
+file of the same name — and that shadowing is per-directory, never global.
+
+**Built-ins are reached through this same mechanism**: `@add`, `@Integer`, etc. are
+`@name` references that resolve at step 2. A *bare* identifier (without `@`) is only
+a pattern hole; it never denotes a built-in.
+
+Two built-ins are special in how they resolve:
+
+- **`@ENV`** resolves (at step 2) to a fresh object of environment variables.
+- **`@load`** resolves (at step 2) to a function that loads a file by a **verbatim**
+  filename string — no `.fsn` is appended — relative to the referencing directory,
+  returning that file's value, or `!` if the file does not exist. This is the only
+  way to load a file whose name is computed at runtime or is not a plain identifier
+  (e.g. `"data.config.fsn"`).
 
 References are:
 
 - **Lazy** — resolved when evaluated/applied, not when a file loads. A file may
   reference itself (recursion) or another file may reference it back (mutual
   recursion) without an infinite load loop.
-- **Memoized** — each path is loaded and evaluated once per run; shared dependencies
-  load once.
+- **Memoized** — each file path is loaded and evaluated once per run; shared
+  dependencies load once.
 
 A **non-productive data cycle** (files whose values reference each other as data, not
 through a function boundary) yields `!` at the point of the cyclic self-reference;
@@ -321,7 +369,7 @@ parse errors during reference resolution to be reported on standard error.
 ## 10. Prototype status
 
 This reference describes the proof-of-concept interpreter `fusion.rb`. Its behavior
-was verified against a Python port (`oracle.py`) with a 38-case suite (`test.rb` /
+was verified against a Python port (`oracle.py`) with a test suite (`test.rb` /
 `test.py`). Features specified but not fully populated in the prototype standard
 library, and deliberately deferred design questions, are listed in the
-[Design documentation](../lang/design-decisions.md).
+[Design documentation](./design.md).

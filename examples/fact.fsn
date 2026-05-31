@@ -1,1 +1,1 @@
-(0 => 1, n ? Integer => [n, [n,1]|subtract|@fact] | multiply, _ => !)
+(0 => 1, n ? @Integer => [n, [n,1] | @subtract | @fact] | @multiply, _ => !)

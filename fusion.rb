@@ -9,7 +9,7 @@
 # Usage:
 #   echo '[1,2,3]' | ruby fusion.rb path/to/main.fsn
 #   ruby fusion.rb path/to/main.fsn '<json-input>'      # input as an argument
-#   ruby fusion.rb -e '(n => [n,2] | multiply)' '21'      # inline program
+#   ruby fusion.rb -e '(n => [n,2] | @multiply)' '21'     # inline program
 #
 # Values are represented in Ruby as:
 #   null   -> :null            (we avoid Ruby nil so "absent" is explicit)
@@ -205,7 +205,7 @@ module Fusion
   ObjLit    = Struct.new(:members)               # [[:kv, key, expr] | [:spread, expr]]
   FuncLit   = Struct.new(:clauses)               # [[pattern, expr], ...]
   Ident     = Struct.new(:name)                  # read a builtin/bound name
-  FileRef   = Struct.new(:path)                  # @path  (string like "../a/b")
+  FileRef   = Struct.new(:variety, :path)        # variety: :self|:name|:path
   Pipe      = Struct.new(:left, :right)          # left | right
   Member    = Struct.new(:obj, :key)             # obj.key
   Index     = Struct.new(:obj, :idx)             # obj[expr]
@@ -283,20 +283,29 @@ module Fusion
 
     def parse_fileref
       expect(:at)
+      # Bare "@" = current file: not followed by something that can begin a path.
+      nxt = peek
+      starts_path = (nxt.type == :ident) || (nxt.type == :dot && peek(1)&.type == :dot)
+      return FileRef.new(:self, nil) unless starts_path
       # refpath: { "../" } segment { "/" segment }
       parts = []
+      has_dotdot = false
       while at?(:dot) && peek(1)&.type == :dot
-        # ".." then "/"
         advance; advance # consume the two dots of ..
         parts << ".."
         expect(:slash)
+        has_dotdot = true
       end
       parts << expect(:ident).value
       while at?(:slash)
         advance
         parts << expect(:ident).value
       end
-      FileRef.new(parts.join("/"))
+      # A reference is eligible for builtin/stdlib fallback (:name) iff it does NOT
+      # contain "../". Downward paths like "dir/a" are still eligible; only "../"
+      # (escaping upward) forces pure file-path (:path) resolution.
+      bare = !has_dotdot
+      FileRef.new(bare ? :name : :path, parts.join("/"))
     end
 
     def parse_array
@@ -536,12 +545,14 @@ module Fusion
   class Interpreter
     attr_reader :root_env
 
-    def initialize(stdlib_dir: nil)
+    def initialize(stdlib_dir: nil, env_vars: nil)
       @stdlib_dir = stdlib_dir
+      @env_vars = env_vars || ENV.to_h
       @file_cache = {} # abspath -> FileThunk
       @ast_cache = {}  # abspath -> AST
-      @root_env = Env.new
-      Builtins.install(@root_env, self)
+      @builtins = {}   # name -> NativeFunc  (consulted by @name, not via env)
+      Builtins.install(@builtins, self)
+      @root_env = Env.new # holds no builtins now; bare identifiers are holes only
     end
 
     # ---- File loading -----------------------------------------------------
@@ -558,6 +569,7 @@ module Fusion
       # plus knowledge of its own directory for resolving @refs.
       env = @root_env.child
       env.define("__dir__", File.dirname(abspath))
+      env.define("__file__", abspath)
       eval_expr(ast, env)
     rescue Errno::ENOENT
       warn "[fusion] file not found: #{abspath}" if ENV["FUSION_DEBUG"]
@@ -567,13 +579,35 @@ module Fusion
       ERROR
     end
 
-    def resolve_ref(path, dir)
-      # path like "a", "../a", "dir/a", "std/map"
-      if path.start_with?("std/") && @stdlib_dir
-        File.join(@stdlib_dir, path.sub(%r{\Astd/}, "")) + ".fsn"
-      else
-        File.expand_path(path + ".fsn", dir)
+    # Resolve a bare "@name": sibling file > builtin (incl. load, ENV) > stdlib > !.
+    def resolve_name(name, dir)
+      sib = File.expand_path(name + ".fsn", dir)
+      return load_file(sib).force if File.exist?(sib)
+      if name == "ENV"
+        return @env_vars.dup
       end
+      if name == "load"
+        # @load is a builtin closure capturing the calling file's directory. It
+        # loads a VERBATIM filename (no ".fsn" appended) so arbitrary names work.
+        d = dir
+        return NativeFunc.new("load", lambda do |v|
+          next ERROR unless v.is_a?(String)
+          target = File.expand_path(v, d)
+          next ERROR unless File.exist?(target)
+          load_file(target).force
+        end)
+      end
+      return @builtins[name] if @builtins.key?(name)
+      if @stdlib_dir
+        std = File.join(@stdlib_dir, name + ".fsn")
+        return load_file(std).force if File.exist?(std)
+      end
+      ERROR
+    end
+
+    # Resolve a pure path "@dir/a" or "@../a": file only, never builtin/stdlib.
+    def resolve_path(relpath, dir)
+      load_file(File.expand_path(relpath + ".fsn", dir)).force
     end
 
     # ---- Expression evaluation -------------------------------------------
@@ -586,8 +620,15 @@ module Fusion
       when FileRef
         dir = env.lookup("__dir__")
         dir = Dir.pwd if dir == :__unbound__
-        abspath = resolve_ref(node.path, dir)
-        load_file(abspath).force
+        case node.variety
+        when :self
+          f = env.lookup("__file__")
+          f == :__unbound__ ? ERROR : load_file(f).force
+        when :name
+          resolve_name(node.path, dir)
+        else # :path
+          resolve_path(node.path, dir)
+        end
       when ArrLit then eval_array(node, env)
       when ObjLit then eval_object(node, env)
       when FuncLit then Func.new(node.clauses, env)
@@ -780,9 +821,9 @@ module Fusion
   # BUILT-INS  (Tier 0 primitives; everything else is written in Fusion)
   # =========================================================================
   module Builtins
-    def self.install(env, interp)
+    def self.install(table, interp)
       # We model built-ins as Ruby procs wrapped in NativeFunc so `apply` can call them.
-      define = ->(name, fn) { env.define(name, NativeFunc.new(name, fn)) }
+      define = ->(name, fn) { table[name] = NativeFunc.new(name, fn) }
 
       bad = ERROR
 

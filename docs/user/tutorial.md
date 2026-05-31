@@ -18,7 +18,7 @@ Fusion programs read JSON on standard input and write JSON on standard output. L
 run the smallest possible program. Create a file `lesson.fsn` containing exactly:
 
 ```fusion
-(n => [n, 2] | multiply)
+(n => [n, 2] | @multiply)
 ```
 
 Now run it:
@@ -34,9 +34,10 @@ being told:
   statements. The file *is* the program.
 - The input `21` was piped *into* the function. That is what `|` means: **`value |
   function`** applies the function to the value.
-- `[n, 2] | multiply` built a two-element array and piped it into the built-in
-  `multiply`. Fusion has no `*` operator (yet); arithmetic is done by piping a pair
-  into a named function.
+- `[n, 2] | @multiply` built a two-element array and piped it into the built-in
+  `@multiply`. Fusion has no `*` operator (yet); arithmetic is done by piping a pair
+  into a named function. **Built-ins are reached with an `@` prefix**, just like files
+  — `@multiply`, `@add`, and so on. (You'll see why `@` is used for both in Step 8.)
 
 Change the `2` to a `3` and run it again. You are now editing Fusion.
 
@@ -121,8 +122,8 @@ as a boolean and match on `true`/`false`. Write an absolute-value function:
 
 ```fusion
 (n =>
-  [n, 0] | lessThan | (
-    true  => [0, n] | subtract,
+  [n, 0] | @lessThan | (
+    true  => [0, n] | @subtract,
     false => n
   )
 )
@@ -135,7 +136,7 @@ echo '-5' | ruby fusion.rb lesson.fsn    # => 5
 echo '5'  | ruby fusion.rb lesson.fsn    # => 5
 ```
 
-Read the middle line carefully: `[n, 0] | lessThan` produces `true` or `false`, and
+Read the middle line carefully: `[n, 0] | @lessThan` produces `true` or `false`, and
 that boolean is piped into a *second, inline function* whose two clauses are the two
 branches. **An `if` is just a function with a `true` clause and a `false` clause.**
 Once you see this, you will see it everywhere.
@@ -152,7 +153,7 @@ file." Create a new file `sum.fsn`:
 ```fusion
 (
   [] => 0,
-  [x, ...rest] => [x, rest | @sum] | add
+  [x, ...rest] => [x, rest | @sum] | @add
 )
 ```
 
@@ -178,28 +179,28 @@ the structure matches *and* the predicate returns `true`. Make a factorial:
 ```fusion
 (
   0 => 1,
-  n ? Integer => [n, [n, 1] | subtract | @fact] | multiply
+  n ? @Integer => [n, [n, 1] | @subtract | @fact] | @multiply
 )
 ```
 
 Save it as `fact.fsn` and run `echo '5' | ruby fusion.rb fact.fsn` → `120`.
 
-`n ? Integer` reads as "bind `n`, but only if `n` is an integer." And here is the
-beautiful part: `Integer` is not a keyword. It is just a built-in function that
-returns `true` for integers. Fusion's "type system" is nothing more than ordinary
-predicate functions you attach with `?`. You can write your own and use them exactly
-the same way.
+`n ? @Integer` reads as "bind `n`, but only if `n` is an integer." And here is the
+beautiful part: `@Integer` is not a keyword. It is just a built-in function that
+returns `true` for integers, reached with `@` like every built-in. Fusion's "type
+system" is nothing more than ordinary predicate functions you attach with `?`. You
+can write your own and use them exactly the same way.
 
 ---
 
-## Step 8 — Using the standard library
+## Step 8 — Using the standard library (and the one `@` namespace)
 
 You don't have to write `sum` and friends from scratch; common helpers live in the
-standard library and are reached with the `@std/` prefix. The classic `map` is there.
-Create `doubler.fsn`:
+standard library and are reached with a plain `@name` — the same `@map` you'd use for
+a sibling file. The classic `map` is there. Create `doubler.fsn`:
 
 ```fusion
-(xs => {"f": (n => [n, 2] | multiply), "xs": xs} | @std/map)
+(xs => {"f": (n => [n, 2] | @multiply), "xs": xs} | @map)
 ```
 
 ```sh
@@ -209,6 +210,15 @@ echo '[1, 2, 3]' | ruby fusion.rb doubler.fsn    # => [2, 4, 6]
 Because every Fusion function takes exactly one argument, `map` takes an *object*
 bundling the function `f` and the list `xs`. You just passed a function as a value
 inside an object — functions are values like any other.
+
+Now the payoff for using `@` everywhere. A bare `@name` is resolved by looking, in
+order: (1) a **sibling file** `name.fsn` next to the current file, (2) a **built-in**
+of that name, (3) a **standard-library** file `name.fsn`. The first match wins. So
+`@multiply` finds the built-in, `@map` falls through to the standard library, and if
+*you* put a `map.fsn` next to your program, *your* `map` shadows the standard one —
+but only for files in that directory. Built-ins and the standard library share the
+same `@` namespace as your own files, and you can locally override either, without
+ever affecting other directories.
 
 ---
 
@@ -222,9 +232,13 @@ In about an hour you have used every major feature of the language:
 - Bare words are holes: they bind in patterns and read in results.
 - Destructuring matches and extracts nested array/object shape at once; `_` ignores,
   `...rest` captures the remainder.
-- `if` is a function matching `true`/`false`; a loop is recursion via `@self`.
+- `if` is a function matching `true`/`false`; a loop is recursion via `@` (a bare
+  `@` means "this file").
 - `?` attaches a predicate to refine a match, and predicates double as types.
-- The standard library is reached with `@std/...`.
+- Everything reachable lives in one `@` namespace: built-ins (`@add`, `@Integer`),
+  the standard library (`@map`), sibling files (`@helper`), and the current file
+  (`@`). A bare `@name` checks sibling → built-in → standard library, so you can
+  locally shadow a built-in or stdlib function per directory.
 
 You are ready to solve real problems. For that, turn to the
 [**How-to guides**](./how-to-guides.md). To look up exact behavior, see the

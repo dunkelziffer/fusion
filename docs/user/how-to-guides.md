@@ -24,7 +24,7 @@ ruby fusion.rb path/to/program.fsn '[1,2,3]'
 Run a one-off snippet without a file:
 
 ```sh
-ruby fusion.rb -e '(n => [n, 2] | multiply)' '21'
+ruby fusion.rb -e '(n => [n, 2] | @multiply)' '21'
 ```
 
 A program that produces the error value `!` exits with a nonzero status, so you can
@@ -53,7 +53,7 @@ Compute a boolean, then pipe it into a two-clause function:
 
 ```fusion
 (n =>
-  [n, 0] | lessThan | (
+  [n, 0] | @lessThan | (
     true  => "negative",
     false => "non-negative"
   )
@@ -64,8 +64,8 @@ For a three-way branch, match a small tuple of booleans (priority is top-to-bott
 
 ```fusion
 (n =>
-  [ [n, 0] | lessThan,
-    [n, 0] | equals ] | (
+  [ [n, 0] | @lessThan,
+    [n, 0] | @equals ] | (
     [true, _]  => "negative",
     [_, true]  => "zero",
     _          => "positive"
@@ -82,7 +82,7 @@ Recurse by peeling the head off with `[x, ...rest]` and bottoming out on `[]`. S
 ```fusion
 (
   [] => 0,
-  [x, ...rest] => [x, rest | @sum] | add
+  [x, ...rest] => [x, rest | @sum] | @add
 )
 ```
 
@@ -91,7 +91,7 @@ Count elements (length):
 ```fusion
 (
   [] => 0,
-  [_, ...rest] => [1, rest | @count] | add
+  [_, ...rest] => [1, rest | @count] | @add
 )
 ```
 
@@ -104,7 +104,7 @@ Build a range by recursion, then process it. This is `range.fsn` from the stdlib
 ```fusion
 (
   0 => [],
-  n ? Integer => [...([n, 1] | subtract | @std/range), [n, 1] | subtract]
+  n ? @Integer => [...([n, 1] | @subtract | @range), [n, 1] | @subtract]
 )
 ```
 
@@ -120,8 +120,8 @@ Attach a predicate with `?`. The built-in type predicates are `Integer`, `Float`
 
 ```fusion
 (
-  s ? String  => [s, " (text)"]   | concat,
-  n ? Integer => n | toString,
+  s ? @String  => [s, " (text)"]   | @concat,
+  n ? @Integer => n | @toString,
   _           => "unsupported"
 )
 ```
@@ -136,13 +136,13 @@ sibling bindings. To compare two captured values, attach the predicate to the
 
 ```fusion
 (
-  [a, b] ? ([x, y] => [x, y] | lessThan) => "ascending",
+  [a, b] ? ([x, y] => [x, y] | @lessThan) => "ascending",
   _                                       => "not ascending"
 )
 ```
 
 The outer pattern `[a, b]` is what you destructure for the result; the inline
-predicate `([x, y] => [x, y] | lessThan)` independently re-destructures the same pair
+predicate `([x, y] => [x, y] | @lessThan)` independently re-destructures the same pair
 to do the comparison.
 
 ---
@@ -154,7 +154,7 @@ ending with a `_ => false` catch-all, so it's safe to throw any value at it:
 
 ```fusion
 // isPositive.fsn
-(n ? Number => [n, 0] | greaterThan, _ => false)
+(n ? @Number => [n, 0] | @greaterThan, _ => false)
 ```
 
 Use it like any built-in predicate: `(n ? @isPositive => "ok", _ => "bad")`.
@@ -169,7 +169,7 @@ with it, an unmatched input becomes the error value `!`:
 ```fusion
 (
   0 => 1,
-  n ? Integer => [n, [n, 1] | subtract | @fact] | multiply,
+  n ? @Integer => [n, [n, 1] | @subtract | @fact] | @multiply,
   _ => !                          // reject non-integers loudly
 )
 ```
@@ -188,7 +188,7 @@ clause that explicitly matches `!`. To recover, write that clause:
 To guard a risky operation and substitute a default:
 
 ```fusion
-(x => ([x, 0] | divide) | (! => -1, y => y))     // divide-by-zero becomes -1
+(x => ([x, 0] | @divide) | (! => -1, y => y))     // divide-by-zero becomes -1
 ```
 
 ---
@@ -198,17 +198,17 @@ To guard a risky operation and substitute a default:
 There is no operator sugar; pipe a pair (or value) into a built-in.
 
 ```fusion
-[a, b] | add            // a + b
-[a, b] | subtract       // a - b
-[a, b] | multiply       // a * b
-[a, b] | divide         // a / b   (! if b is 0)
-[a, b] | mod            // a % b
-n | negate              // -n
-[s1, s2] | concat       // string concatenation
-s | chars               // "abc" -> ["a","b","c"]
-[parts, sep] | join     // ["a","b"], "-"  ->  "a-b"
-n | toString            // number -> string
-s | parseNumber         // "42" -> 42   (! if not numeric)
+[a, b] | @add            // a + b
+[a, b] | @subtract       // a - b
+[a, b] | @multiply       // a * b
+[a, b] | @divide         // a / b   (! if b is 0)
+[a, b] | @mod            // a % b
+n | @negate              // -n
+[s1, s2] | @concat       // string concatenation
+s | @chars               // "abc" -> ["a","b","c"]
+[parts, sep] | @join     // ["a","b"], "-"  ->  "a-b"
+n | @toString            // number -> string
+s | @parseNumber         // "42" -> 42   (! if not numeric)
 ```
 
 ---
@@ -230,19 +230,31 @@ Add or override a field with object spread in the result:
 Enumerate *unknown* keys (pattern matching can't do this) with the `keys` built-in:
 
 ```fusion
-(o => o | keys)                          // {"a":1,"b":2} -> ["a","b"]
+(o => o | @keys)                          // {"a":1,"b":2} -> ["a","b"]
 ```
 
 ---
 
 ## Reuse code across files
 
-Reference another file's value with `@`. Resolution is relative to the *referencing*
-file's directory:
+Reference another value with `@`. A bare `@name` (no slash, no `../`) is resolved in
+order — **sibling file → built-in → standard-library file** — and the first match
+wins:
 
-- `@helper` → `helper.fsn` in the same directory
-- `@../shared/util` → `util.fsn` one directory up, in `shared/`
-- `@std/map` → the bundled standard library
+- `@helper` → `helper.fsn` in the same directory (a sibling)
+- `@add`, `@Integer` → a built-in (when no sibling `add.fsn`/`Integer.fsn` exists)
+- `@map` → the standard library (when no sibling and no built-in `map`)
+
+Paths are also allowed:
+
+- `@dir/util` → `dir/util.fsn` in a **subdirectory**. Downward paths are still
+  eligible for the built-in/standard-library fallback, so `@math/sqrt` can resolve to
+  a stdlib `math/sqrt.fsn`.
+- `@../shared/util` → `util.fsn` one directory up. **Upward paths (`../`) are
+  file-only** — they never fall back to a built-in or the standard library.
+
+A bare `@` (nothing after it) means **the current file** — this is how a function
+refers to itself for recursion.
 
 If a file evaluates to an object of functions, reach a member with a dot:
 
@@ -250,16 +262,53 @@ If a file evaluates to an object of functions, reach a member with a dot:
 (xs => {"f": @double, "xs": xs} | @lib.map)   // lib.fsn is {"map": (...), ...}
 ```
 
+### Shadow a built-in or stdlib function locally
+
+Because a sibling file wins over a built-in or the standard library, you can override
+either — but only for files in the same directory, so you can't break things
+globally. Put an `add.fsn` next to your program and every `@add` *in that directory*
+uses yours; files elsewhere still get the built-in.
+
+### Read environment variables
+
+`@ENV` evaluates to an object of all environment variables (every value is a string;
+nothing is auto-parsed). Read one with member access:
+
+```fusion
+(_ => @ENV.CI)        // with CI=1 in the environment, yields the string "1"
+```
+
+A missing variable (`@ENV.NOPE`) yields `!`. Note `@ENV` is itself shadowable: a
+sibling `ENV.fsn` replaces it for that directory.
+
+### Load a file by a runtime filename
+
+`@map` and friends require the name at parse time and imply the `.fsn` extension.
+When you need to load a file whose name is computed at runtime, or whose name isn't a
+plain identifier (e.g. contains a `.`), use the `@load` built-in. It takes a filename
+**verbatim** — no extension is added — resolved relative to the current file:
+
+```fusion
+("data.config.fsn" | @load)      // loads exactly that file, returns its value
+(name => name | @load)           // load a file chosen at runtime
+```
+
+A missing file yields `!`. Like any built-in, `@load` is shadowable by a sibling
+`load.fsn`.
+
 ---
 
 ## Recurse without giving the function its own file
 
-This is currently awkward — Fusion has no local binding form. Two options:
+A file's function refers to *itself* with a bare `@` (which means "this file"), so
+single-file recursion is easy — that is how `sum` and `fact` above call themselves. A
+recursive *helper* that is not the file's top-level value is still awkward, because
+Fusion has no local binding form. Two options:
 
-1. **Give the helper its own file** and reference it with `@`. This is the idiomatic
-   choice today.
+1. **Give the helper its own file** and reference it with `@name`. This is the
+   idiomatic choice today.
 2. **Pass the function to itself** as part of the input, simulating a fixpoint. This
    works but is verbose and is not recommended for everyday code.
 
-See the [Explanation](./explanation.md) and [Design doc](../lang/design-decisions.md) for why this
+See the [Explanation](./explanation.md) and [Design doc](./design.md) for why this
 gap exists and what may fix it.

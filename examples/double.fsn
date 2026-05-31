@@ -1,1 +1,1 @@
-(n => [n, 2] | multiply)
+(n => [n, 2] | @multiply)

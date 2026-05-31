@@ -1,1 +1,1 @@
-(0 => false, n ? Integer => [n,1]|subtract|@even)
+(0 => false, n ? @Integer => [n,1] | @subtract | @even)

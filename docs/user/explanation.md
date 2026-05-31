@@ -6,7 +6,7 @@ a lesson, a recipe, or a spec — for those see the [Tutorial](./tutorial.md),
 [How-to guides](./how-to-guides.md), and [Reference](./reference.md). This article may
 hold opinions and approach the subject from several angles. For the formal decision
 ledger (who decided what, alternatives, trade-offs) see the
-[Design documentation](../lang/design-decisions.md).*
+[Design documentation](./design.md).*
 
 ---
 
@@ -55,7 +55,7 @@ everything else line up. With exactly one input and one output:
 - **Pattern matching has one job:** match the single input. A function's clauses are
   just alternative shapes that one input might have.
 
-The cost is verbosity in arithmetic (`[a, b] | add` instead of `a + b`) and a little
+The cost is verbosity in arithmetic (`[a, b] | @add` instead of `a + b`) and a little
 ceremony for multi-argument library functions. The first is a candidate for later
 syntactic sugar; the second is mild. In exchange, the evaluation model is almost
 trivially simple, which is exactly what you want in a language meant to be small.
@@ -156,15 +156,22 @@ This also resolved the module system for free. If a file is a value, then refere
 a file *is* importing a value — no separate `import` construct, no namespace syntax.
 The directory tree becomes the namespace. The standard library is just a folder of
 files. One mechanism (`@`-references) now does top-level structure, modules, and
-library delivery.
+library delivery — and, in the current design, built-in access too: `@add` and
+`@Integer` are looked up through the very same `@name` machinery as files. A bare
+`@name` checks for a sibling file, then a built-in, then a standard-library file, so
+your own files can locally shadow a built-in or a stdlib function without affecting
+any other directory. The cost of folding built-ins into `@` is that a bare word like
+`add` is no longer the built-in — it is only ever a pattern hole — so built-ins must
+always be written with `@`.
 
-There is a real cost, and it is honest to name it: with one anonymous value per file
-and no local binding form, a function can only name itself or its siblings through the
-*filesystem*. Recursion works (`@fact` inside `fact.fsn` means "this file"), but a
-small recursive *helper* that doesn't deserve its own file has nowhere to live. This
-tension — call it "anonymous local recursion is awkward" — keeps resurfacing, and it
-is the strongest argument for eventually adding a single local-binding form. We have
-resisted so far, because it would be the first genuine new construct.
+There is a real cost to "one value per file," and it is honest to name it: with one
+anonymous value per file and no local binding form, a function can only name itself or
+its siblings through the *filesystem*. Recursion works (a bare `@` inside a file means
+"this file"), but a small recursive *helper* that doesn't deserve its own file has
+nowhere to live. This tension — call it "anonymous local recursion is awkward" — keeps
+resurfacing, and it is the strongest argument for eventually adding a single
+local-binding form. We have resisted so far, because it would be the first genuine new
+construct.
 
 ---
 
@@ -189,7 +196,7 @@ productive structure surrounds it.
 
 Two ideas were explored and deliberately set aside, both documented in the design doc.
 
-**Operator sugar.** We could write `a + b` and desugar it to `[a, b] | add`. We rolled
+**Operator sugar.** We could write `a + b` and desugar it to `[a, b] | @add`. We rolled
 this back early to keep the core honest, with the explicit intent to reintroduce it
 once the semantics were settled. It is a pure ergonomics layer; it changes nothing
 underneath.

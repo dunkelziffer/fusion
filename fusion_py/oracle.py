@@ -137,13 +137,23 @@ class Parser:
         if t.type=="at": return self.fileref()
         raise SyntaxError(f"Unexpected {t.type} at {t.pos}")
     def fileref(self):
-        self.expect("at"); parts=[]
+        self.expect("at")
+        nxt = self.peek().type
+        starts_path = (nxt == "ident") or (nxt == "dot" and self.peek(1).type == "dot")
+        if not starts_path:
+            return FileRef(kind2="self", path=None, segments=None)
+        parts=[]; has_dotdot=False
         while self.at("dot") and self.peek(1).type=="dot":
-            self.adv(); self.adv(); parts.append(".."); self.expect("slash")
+            self.adv(); self.adv(); parts.append(".."); self.expect("slash"); has_dotdot=True
         parts.append(self.expect("ident").value)
         while self.at("slash"):
             self.adv(); parts.append(self.expect("ident").value)
-        return FileRef(path="/".join(parts))
+        # A reference is eligible for builtin/stdlib fallback ("name") iff it does
+        # NOT contain "../". Downward paths like "dir/a" are still eligible; only
+        # "../" (escaping upward) forces pure file-path resolution.
+        bare_name = (not has_dotdot)
+        return FileRef(kind2="name" if bare_name else "path",
+                       path="/".join(parts), segments=parts)
     def array(self):
         self.expect("lbracket"); elems=[]
         while not self.at("rbracket"):
@@ -263,34 +273,71 @@ def deep_equal(a,b):
 
 # ---------------- Interpreter ----------------
 class Interp:
-    def __init__(self, stdlib_dir=None):
+    def __init__(self, stdlib_dir=None, env_vars=None):
         self.stdlib_dir=stdlib_dir; self.file_cache={}; self.ast_cache={}
-        self.root=Env(); install_builtins(self.root,self)
+        self.env_vars = env_vars if env_vars is not None else dict(os.environ)
+        self.builtins={}; install_builtins(self.builtins, self)
+        self.root=Env()   # root no longer holds builtins; bare idents are holes only
     def load_file(self,path):
         if path not in self.file_cache: self.file_cache[path]=FileThunk(self,path)
         return self.file_cache[path]
     def evaluate_file(self,path):
         try:
             if path not in self.ast_cache:
-                with open(path) as f: self.ast_cache[path]=Parser.parse_file(f.read())
+                with open(path, encoding="utf-8") as f: self.ast_cache[path]=Parser.parse_file(f.read())
         except (FileNotFoundError, SyntaxError):
             return ERROR
         ast=self.ast_cache[path]
-        env=self.root.child(); env.define("__dir__", os.path.dirname(path))
+        env=self.root.child()
+        env.define("__dir__", os.path.dirname(path))
+        env.define("__file__", path)
         return self.eval(ast,env)
-    def resolve_ref(self,path,dirn):
-        if path.startswith("std/") and self.stdlib_dir:
-            return os.path.join(self.stdlib_dir, path[4:])+".fsn"
-        return os.path.abspath(os.path.join(dirn, path+".fsn"))
+
+    # Resolve a bare "@name": sibling file > builtin (incl. load, ENV) > stdlib > !.
+    def resolve_name(self, name, dirn):
+        sib = os.path.abspath(os.path.join(dirn, name + ".fsn"))
+        if os.path.exists(sib):
+            return self.load_file(sib).force()
+        if name == "ENV":
+            return {kk: vv for kk, vv in self.env_vars.items()}
+        if name == "load":
+            # @load is a builtin that must know the calling file's directory, so
+            # it resolves to a closure capturing dirn. It loads a VERBATIM filename
+            # (no .fsn appended), enabling arbitrary names like "data.json".
+            interp = self
+            def _load(v):
+                if not isinstance(v, str): return ERROR
+                target = os.path.abspath(os.path.join(dirn, v))
+                if not os.path.exists(target): return ERROR
+                return interp.load_file(target).force()
+            return NativeFunc("load", _load)
+        if name in self.builtins:
+            return self.builtins[name]
+        if self.stdlib_dir:
+            std = os.path.join(self.stdlib_dir, name + ".fsn")
+            if os.path.exists(std):
+                return self.load_file(std).force()
+        return ERROR
+
+    # Resolve a pure path "@dir/a" or "@../a": file only, never builtin/stdlib.
+    def resolve_path(self, relpath, dirn):
+        return self.load_file(os.path.abspath(os.path.join(dirn, relpath + ".fsn"))).force()
+
     def eval(self,node,env):
         k=node.kind
         if k=="Lit": return node.value
         if k=="Ident":
             v=env.lookup(node.name); return ERROR if v=="__unbound__" else v
         if k=="FileRef":
-            dirn=env.lookup("__dir__"); 
+            dirn=env.lookup("__dir__")
             if dirn=="__unbound__": dirn=os.getcwd()
-            return self.load_file(self.resolve_ref(node.path,dirn)).force()
+            if node.kind2=="self":
+                f=env.lookup("__file__")
+                return ERROR if f=="__unbound__" else self.load_file(f).force()
+            if node.kind2=="name":
+                return self.resolve_name(node.path, dirn)
+            # "path"
+            return self.resolve_path(node.path, dirn)
         if k=="ArrLit":
             out=[]
             for kind,expr in node.elems:
@@ -387,9 +434,9 @@ class Interp:
             b[rest_name]={k:v for k,v in value.items() if k not in matched}
         return True
 
-def install_builtins(env,interp):
+def install_builtins(table,interp):
     bad=ERROR
-    def d(name,fn): env.define(name,NativeFunc(name,fn))
+    def d(name,fn): table[name]=NativeFunc(name,fn)
     def pair_num(v):
         if isinstance(v,list) and len(v)==2:
             a,bb=v

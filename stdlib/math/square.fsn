@@ -1,0 +1,1 @@
+(n ? @Integer => [n, n] | @multiply)
