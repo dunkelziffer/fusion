@@ -16,17 +16,18 @@ A Fusion value is one of:
 | Kind     | Examples                          | Notes                                        |
 | -------- | --------------------------------- | -------------------------------------------- |
 | null     | `null`                            | Ordinary data: a legitimate "absent" value.  |
-| error    | `!`                               | The error value. Distinct from `null`.       |
+| error    | `!42`, `!"oops"`, `!null`         | An error: always a `!` followed by a payload (any value). Distinct from `null`. |
 | boolean  | `true`, `false`                   |                                              |
 | integer  | `0`, `-7`, `42`                   | Distinct from float.                         |
 | float    | `3.14`, `1e9`, `-0.5`             | Distinct from integer.                       |
 | string   | `"hi"`, `"a\nb"`                  | JSON string syntax and escapes.              |
 | array    | `[]`, `[1, 2, 3]`, `[1, [2]]`     | Ordered, heterogeneous.                      |
-| object   | `{}`, `{"k": 1}`                  | @String keys; insertion order preserved.      |
+| object   | `{}`, `{"k": 1}`                  | String keys; insertion order preserved.      |
 | function | `(p => o, ...)`                   | One input, one output. A first-class value.  |
 
-Atoms are `null`, `!`, booleans, integers, floats, strings. Composites are arrays and
+Atoms are `null`, booleans, integers, floats, strings. Composites are arrays and
 objects. The three non-atomic "ingredients" are arrays, objects, and functions.
+Errors are a compound form (`!` plus a payload) — see §6.
 
 ---
 
@@ -39,9 +40,11 @@ Precedence, tightest to loosest:
 1. Primary: literals, `[...]`, `{...}`, `(...)` grouping, function literals,
    identifiers, `@`-references.
 2. Postfix member/index access: `x.key`, `x[expr]`.
-3. Pipe (application): `value | function`. Left-associative
+3. Error prefix: `!expr` (construct an error). Bare `!` (with no operand) is the
+   same as `!null`.
+4. Pipe (application): `value | function`. Left-associative
    (`a | f | g` ≡ `(a | f) | g`).
-4. Clause arrow: `=>` (loosest, so the entire right-hand side of a clause is one
+5. Clause arrow: `=>` (loosest, so the entire right-hand side of a clause is one
    expression).
 
 ### 2.2 Function literals
@@ -76,7 +79,8 @@ object (in an object literal); otherwise the literal evaluates to `!`.
 file        = expr ;
 
 expr        = pipe ;
-pipe        = postfix { "|" postfix } ;
+pipe        = prefix { "|" prefix } ;
+prefix      = "!" [ prefix ] | postfix ;            (* bare "!" -> !null *)
 postfix     = primary { "." identifier | "[" expr "]" } ;
 primary     = atom | array | object | function | identifier | fileref | "(" expr ")" ;
 
@@ -84,7 +88,8 @@ fileref     = "@" [ refpath ] ;                     (* bare "@" = current file *
 refpath     = { "../" } segment { "/" segment } ;   (* ".fsn" implied *)
 segment     = identifier ;
 
-atom        = "null" | "!" | "true" | "false" | number | string ;
+atom        = "null" | "true" | "false" | number | string ;
+                                                    (* errors are `!`+payload (see prefix) *)
 array       = "[" [ elem { "," elem } [ "," ] ] "]" ;
 elem        = expr | spread ;
 spread      = "..." expr ;
@@ -94,16 +99,23 @@ member      = string ":" expr | spread ;
 function    = "(" clause { "," clause } [ "," ] ")" ;
 clause      = pattern "=>" expr ;
 
-pattern     = corepat [ "?" predicate ] ;
-predicate   = postfix ;
+(* An error pattern is a top-level construct: a clause can match an error, but
+   array elements, object members, and error payloads cannot. This restriction
+   falls out of the grammar shape -- `corepat` does not include `errpat`, so
+   no recursive descent can re-enter `errpat`. There is no flag-threading,
+   look-ahead, or post-parse check involved. *)
+pattern     = errpat | guardedpat ;
+errpat      = "!" | "!" guardedpat ;                (* bare "!" matches any error, binds nothing *)
+guardedpat  = corepat [ "?" predicate ] ;
+predicate   = prefix ;                              (* any expression yielding a function *)
 corepat     = literalpat | bindpat | wildcard | arraypat | objectpat ;
 literalpat  = atom ;
 wildcard    = "_" ;
 bindpat     = identifier ;
 arraypat    = "[" [ pelem { "," pelem } [ "," ] ] "]" ;
-pelem       = pattern | "..." [ identifier ] ;
+pelem       = guardedpat | "..." [ identifier ] ;
 objectpat   = "{" [ pmember { "," pmember } [ "," ] ] "}" ;
-pmember     = string ":" pattern | "..." [ identifier ] ;
+pmember     = string ":" guardedpat | "..." [ identifier ] ;
 
 identifier  = letter { letter | digit | "_" } ;
 number      = int_lit | float_lit ;
@@ -119,11 +131,23 @@ string      = '"' { char | escape } '"' ;
 
 A function is an ordered list of clauses. Applying a function to a value `v`:
 
-1. If `v` is `!`: the result is `!`, **unless** some clause's pattern is the literal
-   `!`, in which case matching proceeds normally (see §6).
-2. Otherwise clauses are tried in order. The first clause whose pattern matches `v`
-   produces the result, evaluated with that clause's bindings in scope.
-3. If no clause matches, the result is `null`.
+1. If the function value itself is an error (e.g. piping into an unresolved name),
+   that error is the result.
+2. Otherwise clauses are tried in order. The first clause whose pattern matches
+   `v` produces the result, evaluated with that clause's bindings in scope.
+3. If a `?` predicate evaluates to an error during matching, that error becomes
+   the function's result; no further clauses are tried (see §6.4).
+4. **If no clause matches:** the result is `v` itself when `v` is an error
+   (propagation — an unmatched error is never silently swallowed), and `null`
+   otherwise (the lenient default).
+
+A consequence of rule 4: a function with error clauses that only match *some*
+shapes of error (e.g. `(!42 => "got 42", _ => "ok")`) still propagates any
+other-shaped error it receives — `!"oops"` is not caught by `!42`, the `_`
+clause rejects errors, no clause matches, so `!"oops"` propagates. To handle
+"any unrecognized error" you must add a catch-all error clause: `!` (or
+equivalently `!_`) for "catch any error, ignore the payload"; `!msg` to bind
+the payload.
 
 Functions take exactly one argument. Multiple arguments are passed as an array or
 object. Currying is done by returning a function: `(x => (y => [x, y] | @add))`.
@@ -139,9 +163,10 @@ A pattern both tests structure and extracts parts. Pattern forms:
 
 | Form              | Matches                                  | Binds                       |
 | ----------------- | ---------------------------------------- | --------------------------- |
-| literal (`42`, `"x"`, `true`, `null`, `!`) | exactly that value          | nothing                     |
-| `_` (wildcard)    | anything **except** `!`                  | nothing                     |
-| identifier (`a`)  | anything **except** `!`                  | the value, under that name  |
+| literal (`42`, `"x"`, `true`, `null`) | exactly that value                  | nothing                     |
+| `!`, `!_`, `!pat` | an error; `!pat` destructures the payload (see §6.2) | as `pat` binds  |
+| `_` (wildcard)    | anything **except** an error             | nothing                     |
+| identifier (`a`)  | anything **except** an error             | the value, under that name  |
 | `[p1, p2, ...]`   | array of matching length, elementwise    | as each `pi` binds          |
 | `[p, ...rest]`    | array with ≥ fixed elements              | `rest` = remaining elements |
 | `[...init, p]`    | array; `...` may appear before fixed tail | `init` = leading elements  |
@@ -154,10 +179,14 @@ Rules:
 - **Bare identifiers are holes.** In a pattern they bind; in an expression they read
   the value bound to that name in the current clause. A bare identifier never denotes
   a built-in — built-ins are reached with `@` (see §7, §9.2). Reading an unbound bare
-  identifier yields `!`.
+  identifier yields an error.
 - **No sibling scope.** All bindings in a clause are produced simultaneously. A `?`
   predicate sees **only** the value matched by the pattern it is attached to — never
-  another part of the same clause.
+  another part of the same clause. For `!pat ? pred`, the `?` binds *inside* the
+  `!` (the grammar parses it as `!(pat ? pred)`), so the predicate runs against the
+  payload — exactly what `pat` binds. `(!a ? @Integer => ...)` checks whether the
+  payload `a` is an integer. If a `?` predicate evaluates to an error, that error
+  bubbles up as the function's result (see §6.4).
 - **`...rest` in an array** may appear once, anywhere, capturing the middle/remaining
   elements. In an object it captures all keys not explicitly matched. A bare `...`
   with no name matches the remainder without binding.
@@ -179,22 +208,130 @@ etc. are ordinary functions returning booleans, reached with `@` and used with `
 
 ---
 
-## 6. The error value `!`
+## 6. Errors
 
-`!` is a value distinct from `null`. `null` means legitimate absence; `!` means
-something went wrong.
+An **error value** is `!` followed by a payload: `!42`, `!"divide by zero"`,
+`!{"kind":"missing_key","key":"id"}`, `!null`. The payload may be any Fusion value
+(including `null`, including another error). The error value is distinct from
+ordinary data: `null` means legitimate absence; an error means something went wrong.
 
-- **Matching.** `!` matches **only** the literal `!` pattern. It does not match `_`,
-  an identifier binder, or any array/object pattern.
-- **Propagation.** Applying any function to `!` yields `!`, unless the function has a
-  clause whose pattern is the literal `!`. This makes errors flow through pipelines
-  automatically and be caught only by explicit intent.
-- **Source.** `!` is produced by: a strict function (`_ => !`) on no match; built-in
-  operations on bad input (§7); division/mod by zero; member/index access that fails
-  (§8); a spread of a non-array/non-object; an unresolved `@`-reference; a
-  non-productive data cycle (§9).
-- **Catching.** A clause `! => ...` matches `!` and stops propagation.
-- `!` is a single opaque value; it carries no payload distinguishing error kinds.
+### 6.1 Constructing errors
+
+In expression position, `!` is a prefix operator that constructs an error from its
+operand:
+
+- `!42` is an error with payload `42`.
+- `!"oops"` is an error with payload the string `"oops"`.
+- `!` alone (with nothing following it) is shorthand for `!null`.
+- `!expr` where `expr` itself evaluates to an error **propagates** that inner error
+  rather than wrapping it (so you cannot accidentally bury an error inside another
+  error's payload).
+
+Precedence: `!` binds tighter than `|` so `!x | f` is `(!x) | f`; looser than
+postfix `.`/`[]` so `!x.foo` is `!(x.foo)`.
+
+### 6.2 Matching errors
+
+In pattern position, `!` introduces an **error pattern**:
+
+| Pattern             | Matches                                                                  |
+| ------------------- | ------------------------------------------------------------------------ |
+| `!`                 | any error; payload is not bound. Cannot carry a `?` predicate.           |
+| `!_`                | any error; payload is not bound. Equivalent to `!` *except* that it can carry a predicate (`!_ ? @pred`). |
+| `!x`                | any error; binds the payload to `x`                                      |
+| `!42`               | only an error whose payload deep-equals `42` (any literal works here)    |
+| `!{"kind": k, ...}` | an error whose payload is an object with key `kind`, binding `k`; other payload keys captured by `...` |
+| `![p1, p2, ...]`    | an error whose payload is an array matching that array pattern           |
+
+The payload pattern (the `pat` in `!pat`) is a full `guardedpat` — it uses the
+destructuring machinery you'd expect: `_`, binders, literals, `...rest`,
+nested arrays/objects, plus an optional `?` predicate. It cannot itself contain
+another `!pat`: at runtime there is no error nested inside another error, so
+the syntax is rejected at parse time.
+
+**`!pat` may only appear as a clause's top-level pattern.** The grammar
+expresses this directly: `errpat` is one of the two alternatives of `pattern`
+(see §2.5), and `corepat` does not include `errpat`. So `[!a, b]`,
+`{"err": !x}`, `[..., !x]`, `!!42`, and `!{"k": !v}` are all syntax errors.
+The reasoning: errors propagate before they can sit inside a collection, so
+a value matching `[!a, b]` never exists at runtime, and admitting the syntax
+would create dead code.
+
+The `?` predicate of an error pattern lives **inside** the payload pattern,
+not after it: `!a ? @Integer` parses as `!(a ? @Integer)`. So the predicate
+refines the **payload** `a`, not the error wrapping it. This is what you want:
+`(!a ? @Integer => ...)` asks "is the error's payload an integer." A
+consequence: `! ? @Integer` is a syntax error — bare `!` has no payload
+pattern for the predicate to refer to. Use `!_ ? @Integer` instead.
+
+### 6.3 Propagation
+
+**Errors are not first-class values.** At any moment of execution there is either
+a value in motion or an error in motion, never both. An error reaches user code
+only through a clause whose pattern catches it; outside of that catch site, an
+error encountered where a value is expected always propagates.
+
+The propagation rule is uniform — there is no special handling for predicates or
+particular built-ins:
+
+- **Applying any function to an error** returns that same error (payload
+  preserved), **unless** a clause's pattern actually matches it. The matching
+  is per-call: it is not enough for the function to have *some* error clause;
+  that clause must match the specific error received. An error of a shape no
+  clause catches propagates unchanged.
+- **Built-in operations (`@add`, `@divide`, `@equals`, `@Integer`, …) all
+  propagate** their input error without examining it. To inspect or compare an
+  error's payload, you must catch it first and operate on the extracted payload:
+  `!42 | (!a => a) | @Integer` returns `true` (the payload `42` *is* an integer);
+  `!42 | @Integer` returns `!42` (the predicate never runs).
+- **Building an array or object propagates** any error encountered while
+  evaluating an element/member. `[1, !"bad", 2]` evaluates to `!"bad"`, not to
+  an array of three things.
+- **Constructing an error from an erroring expression** propagates the inner
+  error rather than wrapping it. `!([5,0] | @divide)` evaluates to
+  `!"divide: division by zero"`, never to an error wrapping an error. (This
+  preserves the rule that there is never more than one error simultaneously.)
+- **When the function value itself is an error** (e.g. `value | @undefined_name`
+  where `@undefined_name` resolves to an error), that error is the result.
+
+### 6.4 `?`-predicate errors bubble up
+
+If a `?` predicate evaluates to an error (the predicate function itself errored,
+or it was a non-function error value), that error becomes the function's return
+value immediately. Subsequent clauses are **not** tried — predicate-errors are
+treated as program failures, not as "no match." This is the key reason to make
+your predicates *total* (end with `_ => false`): a predicate that can crash will
+short-circuit your whole function.
+
+### 6.5 Sources of errors
+
+Built-in errors are produced by:
+
+- A strict function (`_ => !`) on no match — payload `null`.
+- Built-in operations on bad input — payload is a descriptive string,
+  e.g. `"divide: division by zero"`, `"add: expected a pair of numbers"`.
+- Member access on a missing key or non-object, index out of range, or bad index
+  type — payload is a structured object like
+  `{"kind":"missing_key","key":"foo"}` or `{"kind":"index_out_of_range",...}`.
+- Spread of a non-array or non-object — `{"kind":"spread_non_array",...}`.
+- Unresolved `@`-reference — `{"kind":"unresolved_ref","name":"..."}`.
+- Non-productive data cycle — `{"kind":"data_cycle","path":"..."}`.
+- Applying a non-function — `{"kind":"apply_non_function","got":"..."}`.
+
+User code constructs errors with `!payload` as described above.
+
+### 6.6 Equality
+
+`@equals` propagates errors like every other built-in: comparing involving an
+error returns that error, not a boolean. To compare two errors' payloads,
+extract them first with catches:
+
+```fusion
+(e1 => e1 | (!a => a)) | (e2 => e2 | (!b => b)) | @equals
+```
+
+In practice this isn't a common need — errors are usually caught and inspected
+once, then routed.
 
 ---
 
@@ -327,9 +464,11 @@ Two built-ins are special in how they resolve:
 - **`@ENV`** resolves (at step 2) to a fresh object of environment variables.
 - **`@load`** resolves (at step 2) to a function that loads a file by a **verbatim**
   filename string — no `.fsn` is appended — relative to the referencing directory,
-  returning that file's value, or `!` if the file does not exist. This is the only
-  way to load a file whose name is computed at runtime or is not a plain identifier
-  (e.g. `"data.config.fsn"`).
+  returning that file's value. If the argument is not a string, or the file does not
+  exist, the result is an error (`{"kind":"load_bad_arg",...}` or
+  `{"kind":"file_not_found","path":...}` respectively). This is the only way to load
+  a file whose name is computed at runtime or is not a plain identifier (e.g.
+  `"data.config.fsn"`).
 
 References are:
 
@@ -347,11 +486,16 @@ data cycle and terminates normally when guided by pattern matching.
 ### 9.3 Runtime contract
 
 The interpreter reads standard input as JSON, converts it to a Fusion value `v`,
-computes `v | programFunction`, and prints the result as JSON.
+computes `v | programFunction`, and prints the result on standard output as JSON.
 
 - Empty input is treated as `null`.
-- Non-JSON input yields `!`.
-- A final result of `!` causes a nonzero process exit code.
+- Non-JSON input yields an error (payload `{"kind":"stdin_not_json"}`).
+- **If the final result is an error**, the interpreter prints **nothing** to
+  standard output, prints the error's **payload** (as JSON) to standard error, and
+  exits with status `1`. Otherwise the result is printed to standard output and the
+  interpreter exits `0`. This makes Fusion programs first-class Unix filters: the
+  stdout stream carries the value-or-nothing, the stderr stream carries the failure
+  detail, and the exit code is `0`/`1` accordingly.
 
 ### 9.4 Command-line interface
 

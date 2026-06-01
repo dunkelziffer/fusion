@@ -10,6 +10,10 @@ def chk(desc, got, exp):
     ok=(got==exp); results.append(ok)
     print(f"[{'ok  ' if ok else 'FAIL'}] {desc}")
     if not ok: print(f"        got: {got}\n        exp: {exp}")
+def chk_contains(desc, got, *needles):
+    ok=all(n in got for n in needles); results.append(ok)
+    print(f"[{'ok  ' if ok else 'FAIL'}] {desc}")
+    if not ok: print(f"        got: {got}\n        needles: {needles}")
 
 def run(relpath, inp, env_vars=None):
     i=Interp(stdlib_dir=STD, env_vars=env_vars)
@@ -24,10 +28,11 @@ chk("no sibling -> @add is builtin", run("sub/usesBuiltinAdd.fsn","null"), "5")
 chk("bare @ self-recursion countdown", run("countdown.fsn","3"), "[3,2,1,0]")
 # 4. @ENV.CI reads env var as string
 chk("@ENV.CI -> string", run("readenv.fsn","null", env_vars={"CI":"1"}), '"1"')
-chk("@ENV.CI missing -> !", run("readenv.fsn","null", env_vars={}), '"!"')
+chk("@ENV.CI missing -> !", run("readenv.fsn","null", env_vars={}), '!{"kind":"missing_key","key":"CI"}')
 # 5. @load with arbitrary filename containing a dot
 chk("@load 'data.config.fsn' verbatim", run("loader.fsn",'"data.config.fsn"'), '{"setting":"on"}')
-chk("@load missing file -> !", run("loader.fsn",'"nope.fsn"'), '"!"')
+chk_contains("@load missing file -> !", run("loader.fsn",'"nope.fsn"'),
+             '"kind":"file_not_found"', 'nope.fsn')
 # 6. @../helper resolves up a dir (path ref, never builtin)
 chk("@../helper from subdir", run("sub/usesParent.fsn","7"), "[7,7]")
 
@@ -43,7 +48,9 @@ chk("sibling load.fsn shadows @load", run("shadowload/usesLoad.fsn","null"), '"s
 # --- Downward paths "dir/a" ARE eligible for stdlib/builtin (only "../" is not) ---
 chk("@math/square falls through to stdlib subdir", run("usesStdSub.fsn","6"), "36")
 chk("sibling subdir shadows stdlib subdir method", run("usesLocalSub.fsn","6"), '"local-square"')
-chk("@../subtract is file-only (no builtin fallback) -> !", run("sub/usesDotDotBuiltin.fsn","null"), '"!"')
+chk_contains("@../subtract is file-only (no builtin fallback) -> !",
+             run("sub/usesDotDotBuiltin.fsn","null"),
+             '"kind":"file_not_found"', 'subtract.fsn')
 
 passed=sum(results); total=len(results)
 print(f"\n{passed}/{total} new-feature tests passed")

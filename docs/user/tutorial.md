@@ -222,6 +222,60 @@ ever affecting other directories.
 
 ---
 
+## Step 9 — When things go wrong: errors with payloads
+
+So far you have written programs that succeed. What happens when something goes
+wrong? Try dividing by zero. Save as `boom.fsn`:
+
+```fusion
+(n => [n, 0] | @divide)
+```
+
+```sh
+echo '5' | ruby fusion.rb boom.fsn
+```
+
+You will see no output on stdout, a message like `"divide: division by zero"` on
+stderr, and the process will exit with status `1`. The result *was* an error, and
+the interpreter knows the difference: it routes the **payload** of the error to
+stderr, leaves stdout empty, and signals failure. That makes Fusion programs
+well-behaved Unix filters.
+
+An error is always written `!` followed by a **payload** — any value at all. The
+built-ins above produced `!"divide: division by zero"` (an error whose payload is a
+string). You can construct your own:
+
+```fusion
+!42                                     // error with payload 42
+!"could not parse"                      // error carrying a message
+!{"kind": "bad_input", "got": 99}      // structured error
+!                                       // shorthand for !null
+```
+
+Errors **propagate** through pipelines automatically. If any step in
+`a | f | g | h` produces an error, the rest is skipped and the error becomes the
+final result — *unless* you write a clause that explicitly catches an error.
+Catching is done with an error pattern:
+
+```fusion
+(! => "recovered", x => x)              // matches any error, returns "recovered"
+(!msg => msg, x => "ok")                // binds the payload to msg
+```
+
+Here's `safeDivide` that returns `0` instead of failing:
+
+```fusion
+(p => p | @divide | (! => 0, n => n))
+```
+
+Run `echo '[10, 0]' | ruby fusion.rb safeDivide.fsn` and you get `0` rather than a
+crash. Notice how matching `!` is symmetric with constructing it: in expression
+position, `!42` *builds* an error with payload 42; in pattern position, `!42`
+*matches* an error with payload 42. The same syntax means "construct" on the right
+of `=>` and "destructure" on the left, just like every other pattern in Fusion.
+
+---
+
 ## What you have learned
 
 In about an hour you have used every major feature of the language:

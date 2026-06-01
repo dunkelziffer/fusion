@@ -93,8 +93,10 @@ working notes that predate this documentation, see `fusion-grammar.md` and
   `false` clauses; a `for` loop is recursion that peels a list down to `[]`.
 - **Types are predicates.** `n ? @Integer` matches integers; `@Integer` is just a
   built-in function reached with `@`, and you can write your own predicates.
-- **Two empties.** `null` is ordinary "absent" data; `!` is the error value, which
-  propagates through pipelines unless explicitly caught with an `! =>` clause.
+- **Two empties.** `null` is ordinary "absent" data; an error is `!` followed by a
+  payload (e.g. `!"divide by zero"`, `!42`, `!{"kind":"missing_key",...}`). Errors
+  propagate through pipelines, preserving their payload, unless caught with an
+  error pattern like `!msg`, `!_`, or just `!`.
 - **One `@` namespace for everything.** `@helper` is a sibling file, `@add`/`@Integer`
   are built-ins, `@map` is the standard library, a bare `@` is the current file (for
   recursion), `@ENV` is the environment, and `@load` loads a file by name. A bare

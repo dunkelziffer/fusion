@@ -13,7 +13,7 @@
 #
 # Values are represented in Ruby as:
 #   null   -> :null            (we avoid Ruby nil so "absent" is explicit)
-#   !      -> ERROR (a unique singleton)
+#   !      -> ErrorVal (always carries a payload; bare `!` means `!null`)
 #   bool   -> true / false
 #   int    -> Integer
 #   float  -> Float
@@ -25,10 +25,17 @@
 module Fusion
   # ---- Special singletons -------------------------------------------------
   NULL  = :null
-  ERROR = Object.new
-  def ERROR.inspect = "!"
-  def ERROR.to_s = "!"
-  ERROR.freeze
+
+  # An error value, always carrying a payload (any JSON-like Fusion value).
+  # `mkerr(payload)` constructs one; a bare `!` in source means `!null`.
+  class ErrorVal
+    attr_reader :payload
+    def initialize(payload) @payload = payload end
+    def inspect = "!#{payload.inspect}"
+    def to_s = inspect
+  end
+  def self.mkerr(payload = NULL) = ErrorVal.new(payload)
+  def self.error?(v) = v.is_a?(ErrorVal)
 
   class FusionError < StandardError; end
   class ParseError < FusionError; end
@@ -200,7 +207,8 @@ module Fusion
   # AST
   # =========================================================================
   # Expressions
-  Lit       = Struct.new(:value)                 # atom literal (incl NULL/ERROR)
+  Lit       = Struct.new(:value)                 # atom literal (incl NULL)
+  ErrLit    = Struct.new(:payload)               # !expr or bare ! (payload nil = !null)
   ArrLit    = Struct.new(:elems)                 # elems: [[:item|:spread, expr], ...]
   ObjLit    = Struct.new(:members)               # [[:kv, key, expr] | [:spread, expr]]
   FuncLit   = Struct.new(:clauses)               # [[pattern, expr], ...]
@@ -211,7 +219,8 @@ module Fusion
   Index     = Struct.new(:obj, :idx)             # obj[expr]
 
   # Patterns
-  PLit      = Struct.new(:value)                 # literal pattern (incl ! and null)
+  PLit      = Struct.new(:value)                 # literal pattern
+  PErr      = Struct.new(:inner)                 # ! or !pat ; inner=nil matches any error
   PBind     = Struct.new(:name)                  # binds
   PWild     = Struct.new(:dummy)                 # _
   PArr      = Struct.new(:elems)                 # [[:pat,p]|[:rest,name_or_nil], ...]
@@ -238,13 +247,34 @@ module Fusion
     def parse_expr = parse_pipe
 
     def parse_pipe
-      left = parse_postfix
+      left = parse_prefix
       while at?(:pipe)
         advance
-        right = parse_postfix
+        right = parse_prefix
         left = Pipe.new(left, right)
       end
       left
+    end
+
+    # Tokens that can begin a primary expression (used by parse_prefix to decide
+    # whether `!` is followed by an operand).
+    PRIMARY_STARTERS = %i[number string true_kw false_kw null_kw bang
+                          lbracket lbrace lparen ident at].freeze
+
+    # `!` is a prefix operator that constructs an error from its operand. A bare
+    # `!` (no operand follows) is shorthand for `!null`. Binds tighter than `|`
+    # so `!x | f` is `(!x) | f`; looser than postfix so `!x.foo` is `!(x.foo)`.
+    def parse_prefix
+      if at?(:bang)
+        advance
+        if PRIMARY_STARTERS.include?(peek.type)
+          ErrLit.new(parse_prefix)            # allow !!x to nest
+        else
+          ErrLit.new(nil)                     # bare ! -> !null
+        end
+      else
+        parse_postfix
+      end
     end
 
     def parse_postfix
@@ -271,7 +301,6 @@ module Fusion
       case t.type
       when :number, :string then advance; Lit.new(t.value)
       when :true_kw, :false_kw, :null_kw then advance; Lit.new(t.value)
-      when :bang then advance; Lit.new(ERROR)
       when :lbracket then parse_array
       when :lbrace then parse_object
       when :lparen then parse_function_or_group
@@ -396,11 +425,38 @@ module Fusion
     end
 
     # ---- Patterns ----
+    # ---- Pattern grammar (mirrors reference.md §2.5 EBNF) ------------------
+    #   pattern    = errpat | guardedpat
+    #   errpat     = "!" | "!" guardedpat
+    #   guardedpat = corepat [ "?" predicate ]
+    #   corepat    = literalpat | bindpat | wildcard | arraypat | objectpat
+    # Note: `corepat` does NOT include errpat. The "no nested !pat" property
+    # falls out of the grammar shape — `errpat` is only reachable from `pattern`
+    # (a clause's top level), never from inside arrays, objects, or another
+    # error's payload. No flag-threading is needed.
     def parse_pattern
+      at?(:bang) ? parse_errpat : parse_guardedpat
+    end
+
+    # Tokens that can begin a `guardedpat` (used to detect whether `!` is
+    # followed by a payload pattern or stands alone).
+    GUARDEDPAT_STARTERS = %i[number string true_kw false_kw null_kw
+                             lbracket lbrace ident].freeze
+
+    def parse_errpat
+      expect(:bang)
+      if GUARDEDPAT_STARTERS.include?(peek.type)
+        PErr.new(parse_guardedpat)            # "!" guardedpat
+      else
+        PErr.new(PWild.new(nil))               # bare "!" — matches any error, binds nothing
+      end
+    end
+
+    def parse_guardedpat
       inner = parse_corepat
       if at?(:question)
         advance
-        pred = parse_postfix # predicate is a postfix-level expr (fn value)
+        pred = parse_prefix
         PGuard.new(inner, pred)
       else
         inner
@@ -412,18 +468,22 @@ module Fusion
       case t.type
       when :number, :string then advance; PLit.new(t.value)
       when :true_kw, :false_kw, :null_kw then advance; PLit.new(t.value)
-      when :bang then advance; PLit.new(ERROR)
       when :lbracket then parse_arraypat
       when :lbrace then parse_objectpat
       when :ident
         advance
         t.value == "_" ? PWild.new(nil) : PBind.new(t.value)
+      when :bang
+        # `!pat` is only valid as a clause's top-level pattern, never inside an
+        # array element, object member, or error payload.
+        raise ParseError, "`!pat` may only appear as a clause's top-level pattern (at #{t.pos})"
       else
         raise ParseError, "Unexpected token in pattern: #{t.type} at #{t.pos}"
       end
     end
 
     def parse_arraypat
+      # Array elements are `guardedpat`s — they cannot be error patterns.
       expect(:lbracket)
       elems = []
       until at?(:rbracket)
@@ -432,7 +492,7 @@ module Fusion
           name = at?(:ident) ? advance.value : nil
           elems << [:rest, name]
         else
-          elems << [:pat, parse_pattern]
+          elems << [:pat, parse_guardedpat]
         end
         break unless at?(:comma)
         advance
@@ -442,6 +502,7 @@ module Fusion
     end
 
     def parse_objectpat
+      # Object members are `guardedpat`s — they cannot be error patterns.
       expect(:lbrace)
       members = []
       until at?(:rbrace)
@@ -452,7 +513,7 @@ module Fusion
         else
           key = expect(:string).value
           expect(:colon)
-          members << [:kv, key, parse_pattern]
+          members << [:kv, key, parse_guardedpat]
         end
         break unless at?(:comma)
         advance
@@ -500,7 +561,7 @@ module Fusion
       when :forcing
         # We are already evaluating this file and were asked for it again
         # without any intervening function boundary => non-productive data cycle.
-        ERROR
+        Fusion.mkerr({"kind" => "data_cycle", "path" => @abspath})
       else
         @state = :forcing
         @value = @loader.evaluate_file(@abspath)
@@ -573,10 +634,10 @@ module Fusion
       eval_expr(ast, env)
     rescue Errno::ENOENT
       warn "[fusion] file not found: #{abspath}" if ENV["FUSION_DEBUG"]
-      ERROR
+      Fusion.mkerr({"kind" => "file_not_found", "path" => abspath})
     rescue ParseError => err
       warn "[fusion] parse error in #{abspath}: #{err.message}" if ENV["FUSION_DEBUG"]
-      ERROR
+      Fusion.mkerr({"kind" => "parse_error", "path" => abspath, "message" => err.message})
     end
 
     # Resolve a bare "@name": sibling file > builtin (incl. load, ENV) > stdlib > !.
@@ -591,9 +652,9 @@ module Fusion
         # loads a VERBATIM filename (no ".fsn" appended) so arbitrary names work.
         d = dir
         return NativeFunc.new("load", lambda do |v|
-          next ERROR unless v.is_a?(String)
+          next Fusion.mkerr({"kind" => "load_bad_arg", "got" => v.class.name}) unless v.is_a?(String)
           target = File.expand_path(v, d)
-          next ERROR unless File.exist?(target)
+          next Fusion.mkerr({"kind" => "file_not_found", "path" => target}) unless File.exist?(target)
           load_file(target).force
         end)
       end
@@ -602,7 +663,7 @@ module Fusion
         std = File.join(@stdlib_dir, name + ".fsn")
         return load_file(std).force if File.exist?(std)
       end
-      ERROR
+      Fusion.mkerr({"kind" => "unresolved_ref", "name" => name})
     end
 
     # Resolve a pure path "@dir/a" or "@../a": file only, never builtin/stdlib.
@@ -614,16 +675,26 @@ module Fusion
     def eval_expr(node, env)
       case node
       when Lit then node.value
+      when ErrLit
+        # Bare `!` means `!null`; `!expr` wraps expr's value as an error.
+        # If the payload expression itself errors, propagate THAT error rather
+        # than wrapping it -- prevents accidental error-burying.
+        if node.payload.nil?
+          Fusion.mkerr(NULL)
+        else
+          p = eval_expr(node.payload, env)
+          Fusion.error?(p) ? p : Fusion.mkerr(p)
+        end
       when Ident
         v = env.lookup(node.name)
-        v == :__unbound__ ? ERROR : v
+        v == :__unbound__ ? Fusion.mkerr({"kind" => "unbound", "name" => node.name}) : v
       when FileRef
         dir = env.lookup("__dir__")
         dir = Dir.pwd if dir == :__unbound__
         case node.variety
         when :self
           f = env.lookup("__file__")
-          f == :__unbound__ ? ERROR : load_file(f).force
+          f == :__unbound__ ? Fusion.mkerr({"kind" => "no_current_file"}) : load_file(f).force
         when :name
           resolve_name(node.path, dir)
         else # :path
@@ -639,12 +710,16 @@ module Fusion
       end
     end
 
+    # Array/object literals propagate any error encountered during construction.
+    # Errors are not first-class: at any point during execution there is either
+    # a value or an error in motion, never both.
     def eval_array(node, env)
       out = []
       node.elems.each do |kind, expr|
         v = eval_expr(expr, env)
+        return v if Fusion.error?(v)
         if kind == :spread
-          return ERROR unless v.is_a?(Array)
+          return Fusion.mkerr({"kind" => "spread_non_array", "got" => v.class.name}) unless v.is_a?(Array)
           out.concat(v)
         else
           out << v
@@ -658,11 +733,14 @@ module Fusion
       node.members.each do |m|
         if m[0] == :spread
           v = eval_expr(m[1], env)
-          return ERROR unless v.is_a?(Hash)
+          return v if Fusion.error?(v)
+          return Fusion.mkerr({"kind" => "spread_non_object", "got" => v.class.name}) unless v.is_a?(Hash)
           out.merge!(v)
         else
           _, key, expr = m
-          out[key] = eval_expr(expr, env)
+          v = eval_expr(expr, env)
+          return v if Fusion.error?(v)
+          out[key] = v
         end
       end
       out
@@ -676,62 +754,73 @@ module Fusion
 
     def eval_member(node, env)
       obj = eval_expr(node.obj, env)
-      return ERROR unless obj.is_a?(Hash)
-      obj.key?(node.key) ? obj[node.key] : ERROR
+      return obj if Fusion.error?(obj)
+      return Fusion.mkerr({"kind" => "member_on_non_object", "key" => node.key}) unless obj.is_a?(Hash)
+      return Fusion.mkerr({"kind" => "missing_key", "key" => node.key}) unless obj.key?(node.key)
+      obj[node.key]
     end
 
     def eval_index(node, env)
       obj = eval_expr(node.obj, env)
+      return obj if Fusion.error?(obj)
       idx = eval_expr(node.idx, env)
+      return idx if Fusion.error?(idx)
       if obj.is_a?(Array) && idx.is_a?(Integer)
         i = idx >= 0 ? idx : obj.length + idx
-        (i >= 0 && i < obj.length) ? obj[i] : ERROR
+        return obj[i] if i >= 0 && i < obj.length
+        return Fusion.mkerr({"kind" => "index_out_of_range", "index" => idx, "length" => obj.length})
       elsif obj.is_a?(Hash) && idx.is_a?(String)
-        obj.key?(idx) ? obj[idx] : ERROR
-      else
-        ERROR
+        return obj[idx] if obj.key?(idx)
+        return Fusion.mkerr({"kind" => "missing_key", "key" => idx})
       end
+      Fusion.mkerr({"kind" => "bad_index", "obj" => obj.class.name, "idx" => idx.class.name})
     end
 
     # ---- Application & matching ------------------------------------------
     def apply(f, v)
+      # An errored function value propagates as-is (more useful than a generic
+      # "applied a non-function" wrapper).
+      return f if Fusion.error?(f)
       if f.is_a?(NativeFunc)
-        # Built-in operations propagate `!` (they have no clauses to catch it).
-        return ERROR if error?(v)
+        # Uniform propagation: built-ins never receive errors as inputs.
+        return v if Fusion.error?(v)
         return f.fn.call(v)
       end
       unless f.is_a?(Func)
-        # Applying a non-function is an error.
-        return ERROR
-      end
-      # Error propagation: if the input is `!`, it propagates automatically UNLESS
-      # some clause explicitly matches `!` (an `! => ...` handler). This makes `!`
-      # flow through every function by default and be caught only on purpose.
-      if error?(v) && !f.clauses.any? { |p, _| p.is_a?(PLit) && p.value.equal?(ERROR) }
-        return ERROR
+        return Fusion.mkerr({"kind" => "apply_non_function", "got" => f.class.name})
       end
       f.clauses.each do |pattern, body|
         bindings = {}
-        if match(pattern, v, bindings, f.env)
+        m = match(pattern, v, bindings, f.env)
+        # A `?` predicate raised an error during matching: bubble it up as the
+        # function's return value (no further clauses are tried).
+        return m if Fusion.error?(m)
+        if m
           return eval_expr(body, f.env.child(bindings))
         end
       end
-      # No clause matched: lenient default -> null.
-      # (Strict functions include a final `_ => !` clause, handled above.)
-      NULL
+      # No clause matched. If the input was an error, it keeps propagating
+      # (an unmatched error must never be silently swallowed). Otherwise the
+      # lenient default is `null`.
+      Fusion.error?(v) ? v : NULL
     end
 
-    # Returns true and fills `bindings` if `pattern` matches `value`.
-    # `env` is the function's closure env, used to evaluate `?` predicates.
+    # Returns true (match), false (no match), or an ErrorVal (predicate errored).
     def match(pattern, value, bindings, env)
       case pattern
       when PLit
         deep_equal?(pattern.value, value)
+      when PErr
+        # If the value is an error, match the inner pattern against its
+        # payload. The inner is always a non-`!` pattern (the parser ensures
+        # that), so for a bare `!` we synthesized PWild as the inner.
+        return false unless Fusion.error?(value)
+        match(pattern.inner, value.payload, bindings, env)
       when PWild
-        # `_` matches anything EXCEPT the error value.
-        !error?(value)
+        # `_` matches anything EXCEPT an error value.
+        !Fusion.error?(value)
       when PBind
-        return false if error?(value) # binders never capture `!`
+        return false if Fusion.error?(value)    # binders never capture an error
         bindings[pattern.name] = value
         true
       when PArr
@@ -739,10 +828,18 @@ module Fusion
       when PObj
         match_object(pattern, value, bindings, env)
       when PGuard
-        return false unless match(pattern.inner, value, bindings, env)
+        inner_res = match(pattern.inner, value, bindings, env)
+        return inner_res if Fusion.error?(inner_res)
+        return false unless inner_res
         pred = eval_expr(pattern.pred_expr, env)
-        # Predicate sees ONLY the value matched by this subtree.
-        apply(pred, value) == true
+        return pred if Fusion.error?(pred)       # predicate expression itself errored
+        # The predicate sees whatever value reached this PGuard, which is
+        # already the right value because `!pat ? pred` parses as
+        # PErr(PGuard(pat, pred)) — by the time PGuard runs, the value is
+        # already the payload.
+        r = apply(pred, value)
+        return r if Fusion.error?(r)             # predicate raised during application
+        r == true
       else
         raise FusionError, "Unknown pattern #{pattern.class}"
       end
@@ -756,7 +853,9 @@ module Fusion
       if rest_index.nil?
         return false unless value.length == elems.length
         elems.each_with_index do |(_, p), i|
-          return false unless match(p, value[i], bindings, env)
+          r = match(p, value[i], bindings, env)
+          return r if Fusion.error?(r)
+          return false unless r
         end
         true
       else
@@ -764,11 +863,15 @@ module Fusion
         after  = elems[(rest_index + 1)..]
         return false if value.length < before.length + after.length
         before.each_with_index do |(_, p), i|
-          return false unless match(p, value[i], bindings, env)
+          r = match(p, value[i], bindings, env)
+          return r if Fusion.error?(r)
+          return false unless r
         end
         after.each_with_index do |(_, p), k|
           vi = value.length - after.length + k
-          return false unless match(p, value[vi], bindings, env)
+          r = match(p, value[vi], bindings, env)
+          return r if Fusion.error?(r)
+          return false unless r
         end
         rest_name = elems[rest_index][1]
         if rest_name
@@ -789,7 +892,9 @@ module Fusion
         else
           _, key, p = m
           return false unless value.key?(key)
-          return false unless match(p, value[key], bindings, env)
+          r = match(p, value[key], bindings, env)
+          return r if Fusion.error?(r)
+          return false unless r
           matched_keys << key
         end
       end
@@ -801,7 +906,7 @@ module Fusion
     end
 
     # ---- Equality & helpers ----------------------------------------------
-    def error?(v) = v.equal?(ERROR)
+    def error?(v) = Fusion.error?(v)
 
     def deep_equal?(a, b)
       return true if a.equal?(b)
@@ -822,26 +927,33 @@ module Fusion
   # =========================================================================
   module Builtins
     def self.install(table, interp)
-      # We model built-ins as Ruby procs wrapped in NativeFunc so `apply` can call them.
+      # Helper to construct an informative error from a builtin context.
+      err = ->(fn, msg) { Fusion.mkerr("#{fn}: #{msg}") }
       define = ->(name, fn) { table[name] = NativeFunc.new(name, fn) }
-
-      bad = ERROR
 
       # --- arithmetic on a pair [a, b] (or unary for negate) ---
       pair_num = lambda do |v|
         return nil unless v.is_a?(Array) && v.length == 2
         a, b = v
-        return nil unless a.is_a?(Numeric) && b.is_a?(Numeric)
+        return nil unless a.is_a?(Numeric) && !(a == true || a == false) &&
+                          b.is_a?(Numeric) && !(b == true || b == false)
         [a, b]
       end
+      isnum = ->(x) { x.is_a?(Numeric) && !(x == true || x == false) }
 
-      define.call("add", ->(v) { (p = pair_num.call(v)) ? p[0] + p[1] : bad })
-      define.call("subtract", ->(v) { (p = pair_num.call(v)) ? p[0] - p[1] : bad })
-      define.call("multiply", ->(v) { (p = pair_num.call(v)) ? p[0] * p[1] : bad })
+      define.call("add", ->(v) {
+        p = pair_num.call(v); p ? p[0] + p[1] : err.call("add", "expected a pair of numbers")
+      })
+      define.call("subtract", ->(v) {
+        p = pair_num.call(v); p ? p[0] - p[1] : err.call("subtract", "expected a pair of numbers")
+      })
+      define.call("multiply", ->(v) {
+        p = pair_num.call(v); p ? p[0] * p[1] : err.call("multiply", "expected a pair of numbers")
+      })
       define.call("divide", lambda do |v|
         p = pair_num.call(v)
-        next bad unless p
-        next bad if p[1] == 0
+        next err.call("divide", "expected a pair of numbers") unless p
+        next err.call("divide", "division by zero") if p[1] == 0
         if p[0].is_a?(Integer) && p[1].is_a?(Integer) && (p[0] % p[1] == 0)
           p[0] / p[1]
         else
@@ -850,36 +962,46 @@ module Fusion
       end)
       define.call("mod", lambda do |v|
         p = pair_num.call(v)
-        next bad unless p
-        next bad if p[1] == 0
+        next err.call("mod", "expected a pair of numbers") unless p
+        next err.call("mod", "modulo by zero") if p[1] == 0
         p[0] % p[1]
       end)
-      define.call("negate", ->(v) { v.is_a?(Numeric) ? -v : bad })
-      define.call("floor", ->(v) { v.is_a?(Numeric) ? v.floor : bad })
+      define.call("negate", ->(v) {
+        isnum.call(v) ? -v : err.call("negate", "expected a number")
+      })
+      define.call("floor", ->(v) {
+        isnum.call(v) ? v.floor : err.call("floor", "expected a number")
+      })
 
       # --- comparison ---
       define.call("equals", lambda do |v|
-        next bad unless v.is_a?(Array) && v.length == 2
+        next err.call("equals", "expected a pair") unless v.is_a?(Array) && v.length == 2
         interp.deep_equal?(v[0], v[1])
       end)
       define.call("lessThan", lambda do |v|
-        next bad unless v.is_a?(Array) && v.length == 2
+        next err.call("lessThan", "expected two numbers or two strings") unless v.is_a?(Array) && v.length == 2
         a, b = v
-        if a.is_a?(Numeric) && b.is_a?(Numeric) then a < b
+        if isnum.call(a) && isnum.call(b) then a < b
         elsif a.is_a?(String) && b.is_a?(String) then a < b
-        else bad end
+        else err.call("lessThan", "expected two numbers or two strings") end
       end)
 
       # --- boolean ---
       define.call("and", lambda do |v|
-        next bad unless v.is_a?(Array) && v.length == 2 && v.all? { |x| x == true || x == false }
+        unless v.is_a?(Array) && v.length == 2 && v.all? { |x| x == true || x == false }
+          next err.call("and", "expected a pair of booleans")
+        end
         v[0] && v[1]
       end)
       define.call("or", lambda do |v|
-        next bad unless v.is_a?(Array) && v.length == 2 && v.all? { |x| x == true || x == false }
+        unless v.is_a?(Array) && v.length == 2 && v.all? { |x| x == true || x == false }
+          next err.call("or", "expected a pair of booleans")
+        end
         v[0] || v[1]
       end)
-      define.call("not", ->(v) { (v == true || v == false) ? !v : bad })
+      define.call("not", ->(v) {
+        (v == true || v == false) ? !v : err.call("not", "expected a boolean")
+      })
 
       # --- strings / structure bridges ---
       define.call("length", lambda do |v|
@@ -887,17 +1009,23 @@ module Fusion
         when String then v.length
         when Array then v.length
         when Hash then v.length
-        else bad end
+        else err.call("length", "expected a string, array, or object") end
       end)
       define.call("concat", lambda do |v|
-        next bad unless v.is_a?(Array) && v.length == 2 && v.all? { |x| x.is_a?(String) }
+        unless v.is_a?(Array) && v.length == 2 && v.all? { |x| x.is_a?(String) }
+          next err.call("concat", "expected a pair of strings")
+        end
         v[0] + v[1]
       end)
-      define.call("chars", ->(v) { v.is_a?(String) ? v.chars : bad })
+      define.call("chars", ->(v) {
+        v.is_a?(String) ? v.chars : err.call("chars", "expected a string")
+      })
       define.call("join", lambda do |v|
-        next bad unless v.is_a?(Array) && v.length == 2
+        next err.call("join", "expected [array-of-strings, separator-string]") unless v.is_a?(Array) && v.length == 2
         arr, sep = v
-        next bad unless arr.is_a?(Array) && sep.is_a?(String) && arr.all? { |x| x.is_a?(String) }
+        unless arr.is_a?(Array) && sep.is_a?(String) && arr.all? { |x| x.is_a?(String) }
+          next err.call("join", "expected [array-of-strings, separator-string]")
+        end
         arr.join(sep)
       end)
       define.call("toString", lambda do |v|
@@ -907,23 +1035,25 @@ module Fusion
         when true then "true"
         when false then "false"
         when NULL then "null"
-        else (v.equal?(ERROR) ? bad : Serializer.to_json(v)) end
+        else err.call("toString", "cannot stringify this value type")
+        end
       end)
       define.call("parseNumber", lambda do |v|
-        next bad unless v.is_a?(String)
+        next err.call("parseNumber", "expected a string") unless v.is_a?(String)
         if v =~ /\A-?\d+\z/ then v.to_i
         elsif v =~ /\A-?\d+(\.\d+)?([eE][+-]?\d+)?\z/ then v.to_f
-        else bad end
+        else err.call("parseNumber", "not a numeric string")
+        end
       end)
 
       # --- object key enumeration (Tier 0: patterns can't enumerate unknown keys) ---
-      define.call("keys", ->(v) { v.is_a?(Hash) ? v.keys : bad })
-      define.call("values", ->(v) { v.is_a?(Hash) ? v.values : bad })
+      define.call("keys", ->(v) { v.is_a?(Hash) ? v.keys : err.call("keys", "expected an object") })
+      define.call("values", ->(v) { v.is_a?(Hash) ? v.values : err.call("values", "expected an object") })
 
-      # --- type predicates (return false, never !, on any input) ---
-      define.call("Integer", ->(v) { v.is_a?(Integer) })
+      # --- type predicates (return false on any non-matching value; propagate on error like every other builtin) ---
+      define.call("Integer", ->(v) { v.is_a?(Integer) && !(v == true || v == false) })
       define.call("Float", ->(v) { v.is_a?(Float) })
-      define.call("Number", ->(v) { v.is_a?(Numeric) })
+      define.call("Number", ->(v) { isnum.call(v) })
       define.call("String", ->(v) { v.is_a?(String) })
       define.call("Boolean", ->(v) { v == true || v == false })
       define.call("Array", ->(v) { v.is_a?(Array) })
@@ -943,7 +1073,7 @@ module Fusion
   end
 
   # =========================================================================
-  # JSON I/O  (minimal, with NULL/ERROR handling)
+  # JSON I/O  (minimal, with NULL and ErrorVal handling)
   # =========================================================================
   module Serializer
     def self.to_json(v)
@@ -957,8 +1087,12 @@ module Fusion
       when Array then "[" + v.map { |x| to_json(x) }.join(",") + "]"
       when Hash then "{" + v.map { |k, x| "#{string_json(k.to_s)}:#{to_json(x)}" }.join(",") + "}"
       when Func, NativeFunc then '"<function>"'
+      when ErrorVal
+        # Errors render as `!<payload-json>`. This form is NOT valid JSON; the CLI
+        # prints the payload (as JSON) to stderr and nothing to stdout on error.
+        "!" + to_json(v.payload)
       else
-        v.equal?(ERROR) ? '"!"' : v.inspect
+        v.inspect
       end
     end
 
@@ -986,7 +1120,7 @@ module Fusion
       raw = JSON.parse(text)
       convert(raw)
     rescue JSON::ParserError
-      ERROR
+      Fusion.mkerr({"kind" => "stdin_not_json"})
     end
 
     def self.convert(x)
@@ -1037,6 +1171,13 @@ if $PROGRAM_NAME == __FILE__
 
   result = interp.apply(program_value, input_value)
 
-  puts Fusion::Serializer.to_json(result)
-  exit(result.equal?(Fusion::ERROR) ? 1 : 0)
+  if Fusion.error?(result)
+    # Print only the payload (as JSON) to stderr; stdout stays empty so that
+    # shell pipelines can rely on "stdout has the result, or there isn't one".
+    $stderr.puts Fusion::Serializer.to_json(result.payload)
+    exit 1
+  else
+    puts Fusion::Serializer.to_json(result)
+    exit 0
+  end
 end

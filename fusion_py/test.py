@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 import sys, os, json
 sys.path.insert(0, os.path.dirname(__file__))
-from oracle import Interp, Parser, Env, to_json, from_json, ERROR, NULL
+from oracle import Interp, Parser, Env, to_json, from_json, NULL
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 STDLIB = os.path.join(HERE, "stdlib")
@@ -37,7 +37,7 @@ check("double 21 -> 42", run_file("double.fsn", "21"), "42")
 check("swap [1,2] -> [2,1]", run_file("swap.fsn", "[1,2]"), "[2,1]")
 check("fact 5 -> 120 (self-recursion via @fact)", run_file("fact.fsn", "5"), "120")
 check("fact 0 -> 1", run_file("fact.fsn", "0"), "1")
-check("fact \"x\" -> ! (strict, non-integer)", run_file("fact.fsn", '"x"'), '"!"')
+check("fact \"x\" -> ! (strict, non-integer)", run_file("fact.fsn", '"x"'), '!null')
 check("sum [1,2,3,4] -> 10 (self-recursion via @sum)", run_file("sum.fsn", "[1,2,3,4]"), "10")
 check("sum [] -> 0", run_file("sum.fsn", "[]"), "0")
 check("main [1,2,3] -> [2,4,6] (uses @double + @map)", run_file("main.fsn", "[1,2,3]"), "[2,4,6]")
@@ -46,11 +46,11 @@ check("fizzbuzz 9 -> Fizz", run_file("fizzbuzz.fsn", "9"), '"Fizz"')
 check("fizzbuzz 10 -> Buzz", run_file("fizzbuzz.fsn", "10"), '"Buzz"')
 check("fizzbuzz 7 -> 7", run_file("fizzbuzz.fsn", "7"), "7")
 check("safeDivide [10,2] -> 5", run_file("safeDivide.fsn", "[10,2]"), "5")
-check("safeDivide [10,0] -> !", run_file("safeDivide.fsn", "[10,0]"), '"!"')
+check("safeDivide [10,0] -> !", run_file("safeDivide.fsn", "[10,0]"), '!null')
 
 # --- Inline source tests for core semantics ---
 check("lenient no-match -> null", run_src("(1 => 2)", "99"), "null")
-check("strict no-match -> !", run_src("(1 => 2, _ => !)", "99"), '"!"')
+check("strict no-match -> !", run_src("(1 => 2, _ => !)", "99"), '!null')
 check("wildcard matches ordinary value -> 1", run_src("(_ => 1)", "null"), "1")
 check("object destructure + rest",
       run_src('({"a": x, ...rest} => [x, rest])', '{"a":1,"b":2,"c":3}'),
@@ -67,12 +67,12 @@ check("relational guard on parent container (a<b)",
 check("relational guard rejects (a>=b)",
       run_src("([a,b] ? ([x,y] => [x,y] | @lessThan) => \"asc\", _ => \"not\")", "[2,1]"), '"not"')
 check("member access present", run_src('(o => o.name)', '{"name":"bob"}'), '"bob"')
-check("member access missing -> !", run_src('(o => o.nope)', '{"name":"bob"}'), '"!"')
+check("member access missing -> !", run_src('(o => o.nope)', '{"name":"bob"}'), '!{"kind":"missing_key","key":"nope"}')
 check("index access", run_src("(a => a[1])", "[10,20,30]"), "20")
 check("negative index", run_src("(a => a[-1])", "[10,20,30]"), "30")
-check("index out of range -> !", run_src("(a => a[9])", "[10,20,30]"), '"!"')
-check("divide by zero -> !", run_src("(p => p | @divide)", "[1,0]"), '"!"')
-check("type error in add -> !", run_src("(p => p | @add)", '["a","b"]'), '"!"')
+check("index out of range -> !", run_src("(a => a[9])", "[10,20,30]"), '!{"kind":"index_out_of_range","index":9,"length":3}')
+check("divide by zero -> !", run_src("(p => p | @divide)", "[1,0]"), '!"divide: division by zero"')
+check("type error in add -> !", run_src("(p => p | @add)", '["a","b"]'), '!"add: expected a pair of numbers"')
 check("deep equality structural", run_src("(p => p | @equals)", "[[1,[2]],[1,[2]]]"), "true")
 check("null is ordinary data (matches binder)", run_src("(x => [x, x])", "null"), "[null,null]")
 check("spread in array literal", run_src("(x => [0, ...x, 9])", "[1,2]"), "[0,1,2,9]")

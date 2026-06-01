@@ -27,22 +27,27 @@ Run a one-off snippet without a file:
 ruby fusion.rb -e '(n => [n, 2] | @multiply)' '21'
 ```
 
-A program that produces the error value `!` exits with a nonzero status, so you can
-use Fusion programs in shell pipelines and `&&` chains.
+A program that produces an error exits with status `1` and prints the error's
+payload (as JSON) to standard error, while writing nothing to standard output. This
+makes Fusion programs first-class citizens in shell pipelines and `&&` chains:
+`prog1.fsn input | prog2.fsn` will short-circuit cleanly on a failure.
 
 ---
 
-## Diagnose a program that returns `!` unexpectedly
+## Diagnose a program that returns an error unexpectedly
 
-A bare `!` usually means a file failed to load (missing file, or a parse error)
-somewhere in the reference chain. Turn on diagnostics:
+When you run a program and see an error payload on stderr, the payload itself
+usually tells you what went wrong (e.g. `"divide: division by zero"` or
+`{"kind":"missing_key","key":"email"}`). For errors arising *during reference
+resolution* — typically a missing file or a parse error in an `@`-referenced file —
+enable extra diagnostics:
 
 ```sh
 FUSION_DEBUG=1 ruby fusion.rb program.fsn '...'
 ```
 
-With `FUSION_DEBUG` set, the interpreter prints to stderr the exact path it failed to
-find or the parse error it hit. The most common cause is that `examples/` and
+With `FUSION_DEBUG` set, the interpreter prints to stderr the exact path it failed
+to find or the parse error it hit. The most common cause is that `examples/` and
 `stdlib/` are not sitting next to `fusion.rb`, so `@`-references can't be resolved.
 
 ---
@@ -164,7 +169,7 @@ Use it like any built-in predicate: `(n ? @isPositive => "ok", _ => "bad")`.
 ## Make a function strict (error instead of `null` on no match)
 
 Add a final `_ => !` clause. Without it, an unmatched input silently becomes `null`;
-with it, an unmatched input becomes the error value `!`:
+with it, an unmatched input becomes the error `!null`:
 
 ```fusion
 (
@@ -174,15 +179,62 @@ with it, an unmatched input becomes the error value `!`:
 )
 ```
 
----
-
-## Handle (catch) an error value
-
-By default `!` propagates: any function given `!` returns `!`, *unless* it has a
-clause that explicitly matches `!`. To recover, write that clause:
+If you want a more informative error than `!null`, give it a payload — a string
+message or a structured object:
 
 ```fusion
-(! => 0, x => x)        // turn any error into 0, pass everything else through
+(
+  0 => 1,
+  n ? @Integer => [n, [n, 1] | @subtract | @fact] | @multiply,
+  _ => !"fact: expected a non-negative integer"
+)
+```
+
+---
+
+## Construct an error with a payload
+
+Use `!expr` to wrap any value as an error:
+
+```fusion
+!42                                                // error with payload 42
+!"could not parse"                                 // error with a message
+!{"kind": "missing_field", "field": "email"}      // structured error
+!                                                  // same as !null
+```
+
+You can construct errors from captured values, just like any other expression:
+
+```fusion
+(s => !{"input": s, "reason": "not numeric"})
+```
+
+If the payload expression itself evaluates to an error, that inner error
+**propagates** rather than being wrapped — so `!([5,0] | @divide)` gives you back
+the original `!"divide: division by zero"`, not an error-wrapping-an-error.
+
+---
+
+## Handle (catch) an error
+
+By default an error propagates: any function given an error returns the same
+error, **unless** it has a clause that explicitly matches an error. The error
+patterns are:
+
+```fusion
+!         // matches any error; binds nothing. Cannot carry a ? predicate.
+!_        // matches any error; binds nothing. Same as ! except it supports
+          //   a predicate (`!_ ? @pred`).
+!msg      // matches any error and binds the payload to msg
+!42       // matches only an error whose payload deep-equals 42
+!{"kind": k}     // matches an error with an object payload having a "kind" key
+```
+
+Recover by writing a catch clause:
+
+```fusion
+(! => 0, x => x)               // turn any error into 0, pass everything else through
+(!msg => msg, x => "ok")       // extract the payload (e.g. an error message)
 ```
 
 To guard a risky operation and substitute a default:
@@ -190,6 +242,45 @@ To guard a risky operation and substitute a default:
 ```fusion
 (x => ([x, 0] | @divide) | (! => -1, y => y))     // divide-by-zero becomes -1
 ```
+
+Dispatch on the kind of error. Any error your clauses don't match keeps
+propagating — there's no need for a catch-all re-raise clause:
+
+```fusion
+(x => x | @parseNumber | (
+  !{"kind": "parseNumber"} => 0,    // recover from parse failures with 0
+  n                        => n     // otherwise the parsed number;
+                                    // any OTHER error propagates automatically
+))
+```
+
+If you want to *transform* uncaught errors (e.g. wrap them with extra context)
+rather than letting them propagate untouched, add an explicit catch-all clause:
+
+```fusion
+(x => x | @parseNumber | (
+  !{"kind": "parseNumber"} => 0,
+  !msg                     => !{"kind": "wrapped", "cause": msg, "input": x},
+  n                        => n
+))
+```
+
+---
+
+## Beware: a `?` predicate that errors short-circuits the whole function
+
+If a `?` predicate evaluates to an error (for example, you wrote a predicate that
+can divide by zero), that error becomes the function's result immediately — no
+later clauses are tried. This is intentional: a crashing predicate is a program
+bug, not a "no match." The defense is to **make your predicates total** by ending
+them with `_ => false`:
+
+```fusion
+@isPositive = (n ? @Number => [n, 0] | @greaterThan, _ => false)
+```
+
+Without the `_ => false`, throwing `"hi"` at `@isPositive` would error inside the
+predicate and that error would short-circuit any function using it.
 
 ---
 

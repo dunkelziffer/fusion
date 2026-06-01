@@ -104,15 +104,31 @@ nothing here" and "something went wrong." Fusion splits them deliberately:
 
 - `null` is ordinary data. It matches binders and `_`, can be stored, compared, and
   passed around. It means *absence*.
-- `!` is the error value. It means *failure*.
+- An error is `!` followed by a **payload** (any value). It means *failure*, and the
+  payload says what kind. `!"divide by zero"`, `!42`, `!{"kind":"missing_key",...}`,
+  and bare `!` (which is shorthand for `!null`) are all errors with different
+  payloads.
 
 The split earns its keep in how the two behave under application. `null` flows like
-any value. `!`, by contrast, **propagates**: feed it to any function and you get `!`
-back, unless that function explicitly opts in to catch it with an `! =>` clause. So a
-long pipeline short-circuits at the first failure and carries the error to the end —
-the ergonomics of exceptions or a `Result` type, but with no new machinery: it falls
-out of two small rules (`!` matches only the literal `!` pattern; applying a function
-to `!` returns `!` unless caught).
+any value. An error, by contrast, **propagates**: feed it to any function and you
+get the *same* error back (payload preserved), unless that function explicitly opts
+in to catch it with an error pattern. So a long pipeline short-circuits at the
+first failure and carries the original error to the end — the ergonomics of
+exceptions or a `Result` type, but with no new machinery, falling out of two small
+rules (errors match only error patterns; applying a function to an error returns
+that error unless caught).
+
+Two design decisions sharpen this. First, the error's payload is preserved
+through propagation, not just the *fact* of an error — so by the time you reach
+a catch site, you still know what happened. Second, **errors are not
+first-class values**: at any moment of execution there is either a normal value
+in motion or an error in motion, never both. An error appearing where a value
+is expected always propagates — it cannot sit inside an array, be compared
+with `@equals`, or be examined by `@Integer`. To do anything with an error's
+payload you must catch it first (with an `!pat` clause), which yields a normal
+value you can then inspect. This is what keeps propagation uniform: there are
+no exceptions, no "but predicates examine errors as data" carve-outs to
+remember.
 
 This propagation behavior was, notably, *not* something we got right on paper. We
 originally tied it to strictness ("a strict function propagates errors"), and the
@@ -134,6 +150,14 @@ The fix made the language simpler, not more complex: propagation became a proper
 *application itself* (any function returns `!` for an `!` input unless it explicitly
 matches `!`), fully independent of strictness. "Strict" went back to meaning only
 "error on no match."
+
+A later refinement sharpened the same rule. With payloaded errors and clauses that
+catch *specific* error shapes (e.g. `!{"kind": "parseNumber"} => 0`), an error of
+a *different* shape would silently fall through to the function's lenient default
+of `null` — exactly the silent-swallow bug the propagation rule was meant to
+prevent. The fix is small: the lenient `null` default only applies to non-error
+inputs; an unmatched error propagates. Same lesson: rules that look fine separately
+need to be checked against actual value flow.
 
 The lesson is the ordinary one about prototypes, but worth stating: a specification
 can be internally inconsistent in ways that feel fine until values actually flow

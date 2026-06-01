@@ -135,11 +135,12 @@ Relational conditions (`a < b` across two bindings) need the slightly awkward
 
 ### 1.8 The error value `!`, distinct from `null` — 🧑 (concept) / 🤖 (propagation semantics)
 
-**Decision (🧑).** Introduce a first-class error value `!`, separate from `null`.
+**Decision (🧑).** Introduce a distinct error mode `!`, separate from `null`.
 `null` = legitimate absence; `!` = failure. A function is made *strict* by ending with
 `_ => !` (error on no match) and is otherwise *lenient* (returns `null` on no match).
 Total predicates end with `_ => false`. Built-in operations return `!` on bad input;
-built-in predicates return `false`.
+built-in predicates return `false`. (At this stage, `!` is opaque — see 1.22 for
+the payload extension.)
 
 **Decision (🤖).** `!` matches **only** the literal `!` pattern (not `_`, not a
 binder), and **applying any function to `!` returns `!` unless that function has an
@@ -162,23 +163,34 @@ distinguish error kinds (deferred — see roadmap).
 
 **Pros.** `Result`/exception-style short-circuiting with no new syntax; absence and
 failure are cleanly separated; strictness is opt-in per function. **Cons.** `_` no
-longer means "literally anything" (it excludes `!`), a subtle asymmetry; `!` is opaque,
-so all failures look alike; an uncaught `!` can travel far from its origin, which can
-make debugging harder (mitigated by `FUSION_DEBUG`).
+longer means "literally anything" (it excludes `!`), a subtle asymmetry; an uncaught
+error can travel far from its origin, which can make debugging harder (mitigated by
+`FUSION_DEBUG`). Originally, `!` was opaque — all failures looked alike — which was
+the dominant ergonomic complaint and led to the later redesign in **1.22**, where
+`!` was made to carry a payload.
 
 ---
 
-### 1.9 Non-exhaustive match returns `null` by default — 🧑
+### 1.9 Non-exhaustive match: `null` for normal inputs, propagate for errors — 🧑
 
-**Decision.** If no clause matches and the function is not strict, the result is
-`null`. Strictness (`_ => !`) is opt-in.
+**Decision.** If no clause matches and the input is not an error, the result is
+`null`. Strictness (`_ => !`) is opt-in. **If the input is an error and no
+clause matched, the original error propagates** (it is never silently turned
+into `null`). This was a refinement: early implementation defaulted to `null`
+in both cases, but that meant a function with error clauses that only matched
+*some* error shapes would silently swallow the others — exactly the kind of
+"loud failure quietly disappears" bug the error model is designed to prevent.
 
-**Alternatives.** Make non-exhaustive matching an error by default (strict-by-default),
-with leniency opt-in.
+**Alternatives.** Make non-exhaustive matching an error by default
+(strict-by-default), with leniency opt-in; or unify "no match" handling
+(always `null` regardless of input kind).
 
-**Pros.** Forgiving during exploration and prototyping; base cases read naturally.
-**Cons.** A typo'd or incomplete function silently yields `null`, which can hide bugs
-several layers deep; the safer strict behavior must be remembered and added.
+**Pros.** Forgiving during exploration and prototyping; base cases read
+naturally for non-error inputs; errors are *never* silently swallowed, so a
+partially-matching error handler still preserves the original failure for
+diagnosis. **Cons.** A typo'd or incomplete function silently yields `null`
+on non-error inputs, which can hide bugs several layers deep; the safer
+strict behavior must be remembered and added.
 
 ---
 
@@ -417,7 +429,92 @@ dynamic load; built-ins can no longer be accidentally shadowed by bindings; safe
 work. **Cons.** Built-ins are now verbose (`@add` everywhere); shadowing is invisible
 at the call site (whether `@map` is yours or the stdlib's depends on directory
 contents); a bare word that *looks* like a function reference is silently just a hole
-(reading an unbound one yields `!`).
+(reading an unbound one yields an error).
+
+---
+
+### 1.22 Payloaded errors — 🧑 (concept and motivation) / 🤖 (predicate/equality/literal subtleties)
+
+**Decision (🧑).** Replace the opaque `!` of 1.8 with a compound error value: every
+error is `!` followed by a **payload**, which may be any Fusion value (`!42`,
+`!"divide by zero"`, `!{"kind":"missing_key","key":"id"}`, `!null`). Bare `!` is
+shorthand for `!null`, preserving the look of existing code. In expression position,
+`!expr` is a prefix operator that wraps a value as an error; in pattern position,
+`!pat` matches an error and destructures its payload (bare `!` and `!_` match any
+error). Propagation preserves the *same* error (payload intact), so by the time you
+reach a catch site you still know what happened. The CLI prints the payload (as
+JSON) to stderr on failure and exits `1`, leaving stdout empty.
+
+**Decision (🤖).** Three subtleties emerged from implementation that needed to be
+nailed down for the model to hold together coherently:
+
+- **Errors propagate uniformly — they are not values.** At any moment of
+  execution there is either a value or an error in motion, never both.
+  Built-ins (including `@equals` and the type predicates), array and object
+  literals, `?` predicates, and the function-value position of a pipe all
+  propagate an encountered error. The only way to do anything with an error
+  besides letting it propagate is to catch it in an `!pat` clause, which
+  yields a normal value (the payload). An earlier prototype made errors
+  "first-class values" (storable in collections, examined by predicates,
+  comparable with `@equals`); the user rejected this — it created exactly the
+  kind of carve-outs the rest of the language is designed to avoid, and was
+  reverted before any external code grew.
+- **No nested errors.** When `!expr` is evaluated and `expr` itself produces an
+  error, that inner error propagates and the outer `!` is a no-op. This
+  preserves the "never more than one error simultaneously" invariant — there
+  is no `!!` value, ever.
+- **Partial matching propagates the unmatched error.** A function with error
+  clauses that match *some* error shapes (e.g. `!42 => ...`) but not the one
+  it receives (e.g. `!"oops"`) must still propagate the unmatched error,
+  not turn it into `null`. The simpler "lenient default" rule from 1.9 was
+  refined to: on no clause matching, return `null` only if the input is not
+  an error; otherwise propagate the error. This prevents the silent-swallow
+  bug where a partial error handler would erase the original failure.
+- **`!pat` is a top-level prefix in the clause grammar.** `!` is a prefix on
+  the *clause pattern*, not on any sub-pattern: array elements, object
+  members, and the payload of another `!` all recurse into the non-`!`
+  pattern production. This grammar shape simultaneously enforces two things
+  with no special-case parsing flag: (i) nested error patterns
+  (`[!a, b]`, `{"err": !x}`, `!!42`, `!{"k": !v}`) are syntax errors,
+  matching the runtime invariant that errors never sit inside other values;
+  and (ii) `!pat ? pred` parses as `!(pat ? pred)`, so the `?` binds *inside*
+  the `!`. The runtime payoff is that the predicate of `!a ? pred` naturally
+  sees the payload (because by the time the guard runs, the value at hand is
+  already the payload), removing what would otherwise be a special case in
+  `PGuard`. An earlier implementation parsed `!pat ? pred` as
+  `(!pat) ? pred` and special-cased `PGuard` to inspect its inner for `PErr`;
+  the user pointed out the parse shape was wrong, and switching to the
+  cleaner grammar dropped both that runtime special case and the per-context
+  parser flag (`allow_err`) in one change.
+- **Predicate-errors bubble up to the function level.** If a `?` predicate
+  evaluates to an error (it crashed, or it was itself an error value), that
+  error becomes the function's result immediately, without trying later
+  clauses. The alternative — treating a predicate-error as "no match" and
+  continuing — would silently hide bugs in the predicate.
+
+**Alternatives.** Keep `!` opaque, with a separate logging channel for
+diagnostics (rejected: the payload carries debugging context exactly where it's
+needed); use a `Result`-style two-variant `Ok | Err` (rejected: needs new
+machinery; payloaded errors with propagation give the same ergonomics with two
+rules); make payloads always strings (rejected: built-in mechanics like missing
+keys benefit from structured payloads); make errors first-class values that can
+be stored, compared, and inspected directly (rejected by the user: creates
+carve-outs in propagation that contradict the "never more than one error"
+invariant).
+
+**Pros.** Vastly improved debuggability — a propagated error tells you both
+*that* something failed and *what*; the catch site can dispatch on the error
+kind (`(!{"kind":"missing_key"} => ..., !msg => !msg)`); construction and
+matching are syntactically symmetric (`!42` builds on the right of `=>`,
+matches on the left); propagation remains uniform, with no carve-outs to
+remember. **Cons.** The payload format is now part of the language's surface
+— built-ins currently use string payloads (`"divide: division by zero"`)
+while runtime mechanics use structured object payloads (`{"kind": ...}`), an
+inconsistency worth resolving (see 2.2); a payload that itself contains
+sensitive data becomes part of the program's stderr stream; the bare-`!`-means-
+`!null` rule preserves source compatibility but means a careless `_ => !`
+clause gives a maximally unhelpful error; inspecting an error's payload now
+requires a small catch-and-rebind (`(!a => a)`) rather than direct comparison.
 
 ---
 
@@ -448,13 +545,27 @@ see 1.21.
 
 ### 2.2 Error model
 
-**Payloaded errors.** `!` is currently opaque, conflating divide-by-zero, type errors,
-and non-exhaustive matches. A payload (`!"divide by zero"`, or a structured
-`{"error": ...}`) would aid debugging and allow selective handling. This is a real
-expansion to design carefully, not bolt on.
+**Payload shape consistency** *(open)*. Payloaded errors landed (see 1.22), but the
+payload *shape* is inconsistent: built-ins use bare strings (`"divide: division by
+zero"`) while runtime mechanics use structured objects (`{"kind":"missing_key",
+"key":"foo"}`). The string form is human-friendlier; the structured form is
+machine-friendlier (catchable via `!{"kind": k}`). Three plausible resolutions:
+(a) all errors get structured payloads with a `kind` and an optional `message`;
+(b) all errors get human strings, and structured matching is left to user code;
+(c) keep both, document the rule that built-in operations use strings and runtime
+mechanics use objects. This is a small but irreversible decision (it shapes how
+catch clauses are written) and should be decided before any external code grows
+that depends on the current shapes.
 
-**Better diagnostics.** `FUSION_DEBUG` exists for file/parse errors; extend principled
-diagnostics to runtime `!` origins (where did this error first arise?).
+**Better diagnostics.** `FUSION_DEBUG` exists for file/parse errors; extend
+principled diagnostics to runtime error origins (where did this error first
+arise?). With payloaded errors this could mean attaching a source position to the
+payload (an extra `"at": "file.fsn:L:C"` field) when `FUSION_DEBUG` is set.
+
+**Stack traces** *(deferred)*. Currently a propagated error tells you what
+happened, but not the chain of function applications it passed through. A capped
+trace (last N frames, accessible as an extra payload field, opt-in via env) would
+help in deep pipelines.
 
 ### 2.3 Standard library completion
 
