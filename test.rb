@@ -1,7 +1,7 @@
 #!/usr/bin/env ruby
 # frozen_string_literal: true
 
-# Ruby test suite for the Fusion interpreter — a faithful port of test.py.
+# Test suite for the Fusion interpreter.
 # Loads fusion.rb as a library (its CLI block is guarded by $PROGRAM_NAME == __FILE__,
 # so requiring it does not run the CLI).
 #
@@ -115,7 +115,7 @@ check("explicit ! clause catches error", run_src("(! => 0, x => x)", "null"), "n
 check("explicit ! clause: feed an error via failed op then pipe into recover",
       run_src("(x => ([x,0] | @divide) | (! => 999, y => y))", "5"), "999")
 
-# --- New @-resolution features (mirror newfeat_test.py) ---
+# --- New @-resolution features ---
 NF = File.join(EX, "newfeat")
 
 def run_nf(relpath, input_json, env_vars = nil)

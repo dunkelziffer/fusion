@@ -16,7 +16,7 @@ It supersedes and consolidates the earlier working notes (`fusion-grammar.md` an
   implicit or gotten wrong.
 
 **Status of this document:** describes the prototype interpreter `fusion.rb`
-(grammar rev 4), verified by a test suite (core plus @-resolution feature tests) via a Python oracle.
+(grammar rev 4), covered by a test suite (core plus @-resolution feature tests).
 
 ---
 
@@ -582,7 +582,7 @@ to implement.
 - **Sandboxed reference resolution** confined to a project root.
 - **A real CLI** beyond the prototype (`-e`, file, stdin) with better error reporting.
 - **A faster implementation** once semantics are frozen (the current `fusion.rb` is a
-  proof of concept, verified by a Python oracle, not optimized).
+  proof of concept, not optimized).
 
 ### 2.5 Open semantic questions to settle
 

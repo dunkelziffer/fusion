@@ -175,7 +175,7 @@ language and should be its own project/mode.
 
 ---
 
-## G. Decisions forced by the proof-of-concept interpreter (Ruby; verified via Python oracle)
+## G. Decisions forced by the proof-of-concept interpreter (Ruby)
 
 - **Error propagation decoupled from strictness (CORRECTION).** The rev-3 claim
   "strict ⇔ error-propagating" was WRONG and the implementation proved it: a strict
@@ -196,6 +196,3 @@ language and should be its own project/mode.
   This is the resolution of the earlier "stdlib root vs pure-relative" question:
   ONE magic prefix (`std/`) + pure-relative for everything else.
 - **Non-JSON stdin → `!`; empty stdin → `null`.**
-- **Implementation caveat:** Ruby was not executable in the authoring sandbox (no
-  network); `fusion.rb` was verified by behavioral equivalence to a runnable Python
-  port (`oracle.py`, 38/38 tests), not by direct execution. Run locally to confirm.

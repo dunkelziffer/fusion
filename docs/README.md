@@ -69,10 +69,8 @@ shapes what comes next.
 
 The current implementation is a proof of concept, `fusion.rb` (Ruby), accompanied by:
 
-- `oracle.py` — a Python port used to verify behavior;
-- `test.rb` / `test.py` — the core test suite run against each;
-- `newfeat_test.py` — additional tests for `@`-reference resolution (shadowing,
-  `@ENV`, `@load`, subdirectory and `../` paths);
+- `test.rb` — the core test suite;
+- `error_test.rb` — additional tests for error handling
 - `examples/` — sample `.fsn` programs;
 - `stdlib/` — standard-library functions written in Fusion, reached via `@name`.
 

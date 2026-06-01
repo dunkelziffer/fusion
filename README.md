@@ -6,13 +6,9 @@ is one value, `@refs` for modules/stdlib.
 
 ## Files
 
-- `fusion.rb` — the interpreter (Ruby, single file). **This is the deliverable.**
-- `test.rb` — Ruby test suite (38 cases) driving `fusion.rb` directly. Run with
+- `fusion.rb` — the interpreter
+- `test.rb` — the test suite driving `fusion.rb` directly. Run with
   `ruby test.rb` from this directory.
-- `oracle.py` — a faithful Python port of the same algorithm, used during authoring
-  to verify the logic where Ruby could not be executed (see *Verification*).
-- `test.py` — the same 38 cases against the Python oracle (`python3 test.py`); kept
-  in lockstep with `test.rb`.
 - `examples/` — sample `.fsn` programs.
 - `stdlib/` — standard-library files written in Fusion (`@std/...`).
 
@@ -49,18 +45,6 @@ These were open questions in the spec; the implementation commits to:
 - **Non-JSON stdin → `!`.** Empty stdin → `null`.
 - **Numbers** keep Ruby int/float distinction; `divide` yields an int when evenly
   divisible, else a float.
-
-## Verification
-
-The Python oracle passes all 38 tests, covering: file-based recursion (`fact`,
-`sum`), cross-file use (`main` → `@double` + `@std/map`), `fizzbuzz`, destructuring
-(array/object rest, init+last), `?`-guards incl. relational guards on a parent
-container, member/index access and their `!` cases, arithmetic `!` cases, deep
-equality, spreads, closures/currying, and the full `!` propagation/catch matrix.
-
-`fusion.rb` is a line-for-line translation of the verified oracle algorithm. It was
-**not executed** here because the sandbox had no Ruby and no network to install it.
-Run `ruby fusion.rb ...` locally to exercise it; behavior should match the oracle.
 
 ## Known not-yet-implemented
 

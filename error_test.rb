@@ -2,7 +2,7 @@
 # frozen_string_literal: true
 
 # Tests for payloaded errors: !payload construction, !pat matching, propagation,
-# and the ?-predicate-error bubbling rule. Mirrors error_test.py.
+# and the ?-predicate-error bubbling rule.
 #
 # Run:  ruby error_test.rb
 
