@@ -1,55 +1,59 @@
-# Fusion — proof-of-concept interpreter
+# Fusion
 
-A reference implementation of the Fusion language (spec rev 4): JSON + pattern-
-matching functions, one input / one output, `value | function` application, a file
-is one value, `@refs` for modules/stdlib.
+The reference implementation of the Fusion language.
 
-## Files
+> :warning: This project is in an Alpha stage and still subject to rapid and unannounced breaking changes.
 
-- `fusion.rb` — the interpreter
-- `test.rb` — the test suite driving `fusion.rb` directly. Run with
-  `ruby test.rb` from this directory.
-- `examples/` — sample `.fsn` programs.
-- `stdlib/` — standard-library files written in Fusion (`@std/...`).
+**Fusion** is a small programming language. It is "functional JSON". It is JSON's data
+model (atomic values, arrays, objects) plus one more ingredient, the function. Functions take
+one input and one output and work by pattern-matching.
 
-## Running
+## Elevator pitch - a 1-minute taste of the ideas
+
+**A file is one value**:
+- A program is simply a file containing a single function.
+- Executing it means evaluating `STDIN | thatFunction`.
+- Regular result values get printed to `STDOUT`.
+- Errors get printed to `STDERR` and set exit code `1`.
+
+**Pattern matching is the only control flow**:
+- Pattern matching is a better `if` statement.
+- A `for` loop is recursion on lists.
+
+**Bare words are holes**:
+- They bind in patterns and read in results
+- So a pattern and a result are mirror images: `([a, b] => [b, a])` swaps a pair.
+
+**Types are predicates**:
+- `n ? @Integer` matches only integers.
+- `@Integer` is just a built-in function and you could use any of your own functions as well.
+
+**Errors have payloads**:
+- An error is `!` followed by a payload value (e.g. `!"divide by zero"`, `!42`, `!{"kind":"missing_key",...}`).
+- Errors propagate unless caught with an error pattern like `!msg`, `!42`, or just `!`.
+- Pattern matching works the same way on error payloads as on regular values.
+
+**One `@` namespace for everything**:
+- `@name` can access a sibling file `name.fsn`, a standard library file `$STDLIB_DIR/name.fsn` or the builtin `name`.
+- Sibling files can shadow the standard library and builtins.
+- A bare `@` refers to the current file for easier recursion.
+- `@ENV` allows read access to environment variables.
+- `name | @load` loads a file by name. Useful for dynamic file access or file names with special characters.
+
+## How to run your code
 
 ```sh
 echo '5' | ruby fusion.rb examples/fact.fsn          # => 120
 echo '[1,2,3]' | ruby fusion.rb examples/main.fsn    # => [2,4,6]
-ruby fusion.rb examples/fact.fsn 5                    # input as an argument
-ruby fusion.rb -e '(n => [n,2] | multiply)' 21          # inline program  => 42
+ruby fusion.rb examples/fact.fsn 5                   # input as an argument
+ruby fusion.rb -e '(n => [n,2] | @multiply)' 21      # inline program  => 42
 ```
 
-Input is read from stdin (or the 2nd CLI arg) as JSON, parsed into a Fusion value,
-piped through the file's function, and the result is printed as JSON. A final
-result of `!` sets exit code 1.
+- Input is read from stdin (or the 2nd CLI arg) as JSON and parsed into a Fusion value.
+- The file's function gets applied to this value: `value | function`
+- The result gets printed as JSON to stdout.
+- Errors get printed to stderr instead and set exit code `1`.
 
-## Decisions baked into this implementation
+## Documentation
 
-These were open questions in the spec; the implementation commits to:
-
-- **Error propagation is automatic and uniform.** Any function applied to `!`
-  returns `!`, *unless* it has a clause that explicitly matches `!` (`! => ...`).
-  This is decoupled from strictness (a refinement found while implementing: tying
-  propagation to a trailing `_ => !` failed, because `_` rejects `!`).
-- **`_` and binders reject `!`.** Only a literal `!` pattern matches the error value.
-- **Missing object key / out-of-range index / member access on a non-object → `!`.**
-- **Built-in operations return `!` on bad input; predicates return `false`.**
-- **`@refs` are lazy + memoized.** Self-recursion (`@fact` in `fact.fsn`) and
-  cross-file mutual recursion (`@even`/`@odd`) work. A non-productive **data cycle**
-  yields `!` at the exact point of cyclic self-reference, preserving surrounding
-  productive structure (e.g. `cyclicA` => `[1,[2,!]]`).
-- **`@std/x`** resolves to the bundled `stdlib/` dir; every other `@path` is relative
-  to the referencing file.
-- **Non-JSON stdin → `!`.** Empty stdin → `null`.
-- **Numbers** keep Ruby int/float distinction; `divide` yields an int when evenly
-  divisible, else a float.
-
-## Known not-yet-implemented
-
-- No operator sugar (use `[a,b] | add` etc.) — deferred by design.
-- No local `let`-binding form — recursive helpers need their own file (the spec's
-  open "anonymous local recursion" tension).
-- Tier-1 stdlib is only partially populated (`map`, `range`); `filter`, `reduce`,
-  etc. are specified but not all written yet.
+Refer to the [Documentation](docs/index.md) for further information.
