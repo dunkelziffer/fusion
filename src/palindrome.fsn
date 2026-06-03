@@ -1,0 +1,6 @@
+(
+  []  => "palindrome",
+  [_] => "palindrome",
+  [_, ...rest, _] ? ([first, ..., last] => [first, last] | @equals) => rest | @,
+  _   => "not a palindrome"
+)

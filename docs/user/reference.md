@@ -1,33 +1,35 @@
 # Reference
 
-*This is **reference** material in the [Diátaxis](https://diataxis.fr/) sense:
-neutral, complete technical description, structured to mirror the language itself. It
-describes **what is**, not how to use it or why it is so. For guided learning see the
-[Tutorial](./tutorial.md); for task recipes see the [How-to guides](./how-to-guides.md);
-for rationale see the [Explanation](./explanation.md). This documents the prototype as
-implemented (`fusion.rb`), grammar rev 4.*
-
----
-
 ## 1. Values
 
 A Fusion value is one of:
 
-| Kind     | Examples                          | Notes                                        |
-| -------- | --------------------------------- | -------------------------------------------- |
-| null     | `null`                            | Ordinary data: a legitimate "absent" value.  |
-| error    | `!42`, `!"oops"`, `!null`         | An error: always a `!` followed by a payload (any value). Distinct from `null`. |
-| boolean  | `true`, `false`                   |                                              |
-| integer  | `0`, `-7`, `42`                   | Distinct from float.                         |
-| float    | `3.14`, `1e9`, `-0.5`             | Distinct from integer.                       |
-| string   | `"hi"`, `"a\nb"`                  | JSON string syntax and escapes.              |
-| array    | `[]`, `[1, 2, 3]`, `[1, [2]]`     | Ordered, heterogeneous.                      |
-| object   | `{}`, `{"k": 1}`                  | String keys; insertion order preserved.      |
-| function | `(p => o, ...)`                   | One input, one output. A first-class value.  |
+| Kind     | Examples                          | Notes                                         |
+| -------- | --------------------------------- | --------------------------------------------- |
+| null     | `null`                            | Ordinary data: a legitimate "absent" value.   |
+| boolean  | `true`, `false`                   |                                               |
+| integer  | `0`, `-7`, `42`                   | Distinct from float.                          |
+| float    | `3.14`, `1e9`, `-0.5`             | Distinct from integer.                        |
+| string   | `"hi"`, `"a\nb"`                  | JSON string syntax and escapes.               |
+| array    | `[]`, `[1, 2, 3]`, `[1, [2]]`     | Ordered, heterogeneous.                       |
+| object   | `{}`, `{"k": 1}`                  | String keys; insertion order preserved.       |
+| function | `(p => o, ...)`                   | One input, one output. A first-class value.   |
+| error    | `!42`, `!"oops"`, `!null`         | An error with a payload. Not a regular value. |
 
-Atoms are `null`, booleans, integers, floats, strings. Composites are arrays and
-objects. The three non-atomic "ingredients" are arrays, objects, and functions.
-Errors are a compound form (`!` plus a payload) — see §6.
+The only atomic values are `null`, booleans, integers, floats and strings.
+
+The only composite data structures are arrays and objects.
+
+Functions are first-class values. They behave like all other values with 3 small exceptions:
+- They can't cross the CLI boundary. All values on STDIN, STDOUT and STDERR may only
+  contain regular JSON values.
+- In contrast to arrays and objects, there's no syntax for pattern matching on functions.
+- Functions can't be an error payload.
+
+Errors are not regular values:
+- They contain a regular value as "payload", but aren't regular values themselves.
+- They can't be stored in arrays or objects. They always "bubble" and turn that whole
+  data structure into an error.
 
 ---
 
@@ -99,11 +101,6 @@ member      = string ":" expr | spread ;
 function    = "(" clause { "," clause } [ "," ] ")" ;
 clause      = pattern "=>" expr ;
 
-(* An error pattern is a top-level construct: a clause can match an error, but
-   array elements, object members, and error payloads cannot. This restriction
-   falls out of the grammar shape -- `corepat` does not include `errpat`, so
-   no recursive descent can re-enter `errpat`. There is no flag-threading,
-   look-ahead, or post-parse check involved. *)
 pattern     = errpat | guardedpat ;
 errpat      = "!" | "!" guardedpat ;                (* bare "!" matches any error, binds nothing *)
 guardedpat  = corepat [ "?" predicate ] ;
@@ -161,35 +158,43 @@ of clauses, and arguments to other functions.
 
 A pattern both tests structure and extracts parts. Pattern forms:
 
-| Form              | Matches                                  | Binds                       |
-| ----------------- | ---------------------------------------- | --------------------------- |
-| literal (`42`, `"x"`, `true`, `null`) | exactly that value                  | nothing                     |
-| `!`, `!_`, `!pat` | an error; `!pat` destructures the payload (see §6.2) | as `pat` binds  |
-| `_` (wildcard)    | anything **except** an error             | nothing                     |
-| identifier (`a`)  | anything **except** an error             | the value, under that name  |
-| `[p1, p2, ...]`   | array of matching length, elementwise    | as each `pi` binds          |
-| `[p, ...rest]`    | array with ≥ fixed elements              | `rest` = remaining elements |
-| `[...init, p]`    | array; `...` may appear before fixed tail | `init` = leading elements  |
-| `{"k": p, ...}`   | object having key `k` (and others)       | as `p` binds                |
-| `{..., ...rest}`  | object                                   | `rest` = unmatched key/value pairs |
-| `corepat ? pred`  | `corepat` matches **and** `value | pred` is `true` | as `corepat` binds  |
+| Form                                       | Matches                                   | Binds                              |
+| ------------------------------------------ | ----------------------------------------- | ---------------------------------- |
+| literal (`42`, `"x"`, `true`, `null`)      | exactly that value                        | nothing                            |
+| `_` (wildcard)                             | anything **except** an error              | nothing                            |
+| identifier (`a`)                           | anything **except** an error              | the value, under that name         |
+| Fixed size arrays, e.g. `[x_1, x_2]`       | array of matching length, elementwise     | each `x_i` binds                   |
+| Variably arrays, e.g. `[p, ...rest]`       | array with ≥ fixed elements               | `rest` = remaining elements        |
+| Fixed member objects, e.g. `{"a": p}`      | object having key `a` (and others)        | as `p` binds                       |
+| Variable objects, e.g. `{"a": p, ...rest}` | object                                    | `rest` = unmatched key/value pairs |
+| `corepat ? pred`                           | `corepat` matches **and** pred is `true`  | as `corepat` binds                 |
+| `!`, `!_`, `!pat`                          | an error; `!pat` destructures the payload | as `pat` binds                     |
 
 Rules:
 
-- **Bare identifiers are holes.** In a pattern they bind; in an expression they read
-  the value bound to that name in the current clause. A bare identifier never denotes
-  a built-in — built-ins are reached with `@` (see §7, §9.2). Reading an unbound bare
-  identifier yields an error.
-- **No sibling scope.** All bindings in a clause are produced simultaneously. A `?`
-  predicate sees **only** the value matched by the pattern it is attached to — never
-  another part of the same clause. For `!pat ? pred`, the `?` binds *inside* the
-  `!` (the grammar parses it as `!(pat ? pred)`), so the predicate runs against the
-  payload — exactly what `pat` binds. `(!a ? @Integer => ...)` checks whether the
-  payload `a` is an integer. If a `?` predicate evaluates to an error, that error
-  bubbles up as the function's result (see §6.4).
-- **`...rest` in an array** may appear once, anywhere, capturing the middle/remaining
-  elements. In an object it captures all keys not explicitly matched. A bare `...`
-  with no name matches the remainder without binding.
+**Bare identifiers are holes**:
+- In a pattern they bind. In an expression they read the value bound to that name in
+  the current clause.
+- Reading an unbound bare identifier yields an error.
+- A bare identifier never denotes a builtin. Builtins are reached with `@` (see §7,
+  §9.2).
+
+**No sibling scope**:
+- All bindings in a clause are produced simultaneously. A `?` predicate sees **only**
+  the value matched by the pattern it is attached to and never another part of the
+  same clause.
+- For `!pat ? pred`, the `?` binds *inside* the `!` (the grammar parses it as
+  `!(pat ? pred)`), so the predicate runs against the error's payload and sees exactly
+  what `pat` binds. `(!a ? @Integer => ...)` checks whether the payload `a` is an integer.
+- If a `?` predicate evaluates to an error, that error bubbles up as the function's
+  result (see §6.4).
+
+**`...rest` in patterns**:
+- May appear at most once.
+- In an array pattern it may appear in any position and captures the start / middle / end
+  of the array.
+- In an object pattern it may appear at the end and captures all keys not explicitly matched.
+- A bare `...` with no name matches without binding.
 - An object pattern matches if all its named keys are present; extra keys are allowed
   (and captured by `...rest` if present).
 
@@ -211,9 +216,12 @@ etc. are ordinary functions returning booleans, reached with `@` and used with `
 ## 6. Errors
 
 An **error value** is `!` followed by a payload: `!42`, `!"divide by zero"`,
-`!{"kind":"missing_key","key":"id"}`, `!null`. The payload may be any Fusion value
-(including `null`, including another error). The error value is distinct from
-ordinary data: `null` means legitimate absence; an error means something went wrong.
+`!{"kind":"missing_key","key":"id"}`, `!null`. The payload may be any regular Fusion
+value (including `null`). Not allowed are functions and nested errors.
+
+Error values are distinct from ordinary data:
+- `null` means legitimate absence.
+- An error means something went wrong.
 
 ### 6.1 Constructing errors
 
@@ -237,32 +245,17 @@ In pattern position, `!` introduces an **error pattern**:
 | Pattern             | Matches                                                                  |
 | ------------------- | ------------------------------------------------------------------------ |
 | `!`                 | any error; payload is not bound. Cannot carry a `?` predicate.           |
-| `!_`                | any error; payload is not bound. Equivalent to `!` *except* that it can carry a predicate (`!_ ? @pred`). |
-| `!x`                | any error; binds the payload to `x`                                      |
-| `!42`               | only an error whose payload deep-equals `42` (any literal works here)    |
-| `!{"kind": k, ...}` | an error whose payload is an object with key `kind`, binding `k`; other payload keys captured by `...` |
-| `![p1, p2, ...]`    | an error whose payload is an array matching that array pattern           |
+| `!_`                | any error; payload is not bound. Can carry a predicate (`!_ ? @pred`).   |
+| `!pattern`          | any error with a **payload** that matches `pattern`                      |
 
-The payload pattern (the `pat` in `!pat`) is a full `guardedpat` — it uses the
-destructuring machinery you'd expect: `_`, binders, literals, `...rest`,
-nested arrays/objects, plus an optional `?` predicate. It cannot itself contain
-another `!pat`: at runtime there is no error nested inside another error, so
-the syntax is rejected at parse time.
-
-**`!pat` may only appear as a clause's top-level pattern.** The grammar
-expresses this directly: `errpat` is one of the two alternatives of `pattern`
-(see §2.5), and `corepat` does not include `errpat`. So `[!a, b]`,
-`{"err": !x}`, `[..., !x]`, `!!42`, and `!{"k": !v}` are all syntax errors.
-The reasoning: errors propagate before they can sit inside a collection, so
-a value matching `[!a, b]` never exists at runtime, and admitting the syntax
-would create dead code.
-
-The `?` predicate of an error pattern lives **inside** the payload pattern,
-not after it: `!a ? @Integer` parses as `!(a ? @Integer)`. So the predicate
-refines the **payload** `a`, not the error wrapping it. This is what you want:
-`(!a ? @Integer => ...)` asks "is the error's payload an integer." A
-consequence: `! ? @Integer` is a syntax error — bare `!` has no payload
-pattern for the predicate to refer to. Use `!_ ? @Integer` instead.
+The payload pattern (the `pattern` in `!pattern`) is a full `guardedpat`:
+- It uses the same destructuring semantics you know from regular values.
+- It fully supports `?` predicates. Predicates only refer to the payload, not the `!`.
+  Caution: `! ? @Integer` is a syntax error. The bare `!` has no payload pattern
+  for the predicate to refer to. Use `!_ ? @Integer` instead.
+- It cannot itself contain another `!`. At runtime there is no error nested inside another error
+  or value. Errors propagate before they can sit inside a collection, so this syntax is rejected
+  at parse time.
 
 ### 6.3 Propagation
 
@@ -283,7 +276,8 @@ particular built-ins:
   propagate** their input error without examining it. To inspect or compare an
   error's payload, you must catch it first and operate on the extracted payload:
   `!42 | (!a => a) | @Integer` returns `true` (the payload `42` *is* an integer);
-  `!42 | @Integer` returns `!42` (the predicate never runs).
+  `!42 | @Integer` returns `!42` (the predicate doesn't handle the error,
+  evaluates to `!42` and that becomes the return value of the whole function).
 - **Building an array or object propagates** any error encountered while
   evaluating an element/member. `[1, !"bad", 2]` evaluates to `!"bad"`, not to
   an array of three things.
@@ -320,19 +314,6 @@ Built-in errors are produced by:
 
 User code constructs errors with `!payload` as described above.
 
-### 6.6 Equality
-
-`@equals` propagates errors like every other built-in: comparing involving an
-error returns that error, not a boolean. To compare two errors' payloads,
-extract them first with catches:
-
-```fusion
-(e1 => e1 | (!a => a)) | (e2 => e2 | (!b => b)) | @equals
-```
-
-In practice this isn't a common need — errors are usually caught and inspected
-once, then routed.
-
 ---
 
 ## 7. Built-in functions
@@ -367,11 +348,11 @@ for the standard library, derivable from `equals` and `lessThan`.
 
 ### 7.3 Boolean (operations)
 
-| Name  | Input              | Result        |
-| ----- | ------------------ | ------------- |
-| `and` | `[boolean, boolean]`| logical and  |
-| `or`  | `[boolean, boolean]`| logical or   |
-| `not` | `boolean`          | logical not   |
+| Name  | Input                | Result        |
+| ----- | -------------------- | ------------- |
+| `and` | `[boolean, boolean]` | logical and   |
+| `or`  | `[boolean, boolean]` | logical or    |
+| `not` | `boolean`            | logical not   |
 
 ### 7.4 Strings and structure bridges (operations)
 
@@ -453,7 +434,7 @@ to a built-in or the standard library.
 The `.fsn` extension is implied and never written in a `@` reference. File resolution
 is relative to the **referencing file's** directory; built-ins and the standard
 library are global to the runtime but, per the order above, are shadowed by a sibling
-file of the same name — and that shadowing is per-directory, never global.
+file of the same name. That shadowing is per-directory, not global.
 
 **Built-ins are reached through this same mechanism**: `@add`, `@Integer`, etc. are
 `@name` references that resolve at step 2. A *bare* identifier (without `@`) is only
@@ -479,9 +460,9 @@ References are:
   dependencies load once.
 
 A **non-productive data cycle** (files whose values reference each other as data, not
-through a function boundary) yields `!` at the point of the cyclic self-reference;
-surrounding productive structure is preserved. Recursion through functions is not a
-data cycle and terminates normally when guided by pattern matching.
+through a function boundary) yields `!` at the point of the cyclic self-reference.
+This error then immediatly bubbles up according to the propagation semantics described
+above. Recursion through functions is not a data cycle.
 
 ### 9.3 Runtime contract
 
@@ -507,12 +488,3 @@ ruby fusion.rb -e '<source>' [json-input]
 Input comes from the `[json-input]` argument if present, otherwise from standard
 input. Setting the environment variable `FUSION_DEBUG` causes file-not-found and
 parse errors during reference resolution to be reported on standard error.
-
----
-
-## 10. Prototype status
-
-This reference describes the proof-of-concept interpreter `fusion.rb`. Its behavior
-is covered by a test suite (`test.rb`). Features specified but not fully populated
-in the prototype standard library, and deliberately deferred design questions, are
-listed in the [Design documentation](./design.md).

@@ -1,626 +1,640 @@
-# Fusion — language design documentation
+# Fusion — Design decision ledger
 
-This document records the design of the Fusion language ("functional JSON"): every
-decision made, who made it, the alternatives considered, and the trade-offs. It then
-lays out the roadmap of unfinished work and possible experiments.
+This document records the design decisions of the Fusion language: every decision made, who made it, the alternatives considered, and the trade-offs.
 
-It supersedes and consolidates the earlier working notes (`fusion-grammar.md` and
-`fusion-open-questions.md`), which remain as raw history.
+Future work and open questions are tracked separately in our [Roadmap](./roadmap.md).
 
-**Legend for attribution:**
+**Attribution legend:**
 
-- 🧑 **Designer** — decided by the language designer during the active design
-  conversation (the human author of the language).
-- 🤖 **Implementer** — decided or forced by Claude while building the proof-of-concept
-  interpreter, often because the running code exposed a question the spec had left
-  implicit or gotten wrong.
+- 🧑 **Designer** — decided by the language designer during the active design conversation (the human author of the language).
+- 🤖 **Implementer** — decided by Claude (the implementer): either fleshing out a mechanism the designer left open during the design conversation, or forced while building the proof-of-concept interpreter when the running code exposed a question the spec had left implicit.
+- 🔢 **Designer's pick from offered options** — Claude laid out the candidate choices; the designer selected one.
 
-**Status of this document:** describes the prototype interpreter `fusion.rb`
-(grammar rev 4), covered by a test suite (core plus @-resolution feature tests).
+**Status legend:**
 
----
-
-## Part 1 — Design decisions
-
-### 1.1 Three ingredients beyond atoms — 🧑
-
-**Decision.** Besides atomic types (null, booleans, integers, floats, strings), the
-language has exactly three composite ingredients: arrays/lists, objects/maps, and
-functions. Syntax for the first two is borrowed wholesale from JSON.
-
-**Alternatives.** Add records/structs as distinct from maps; add tuples distinct from
-arrays; add a richer primitive set (dates, symbols, sets).
-
-**Pros.** Minimal concept count; instant familiarity for anyone who knows JSON; a
-clean "JSON + functions" elevator pitch. **Cons.** No nominal types or tagged unions;
-everything is structural, which can make large programs harder to keep disciplined.
+- ✅ **Accepted** — the current status quo
+- ⏪ **Rewound** — an overruled or superseded decision, or an alternative that was initially implemented and then later revised (see the referenced section).
+- ❌ **Rejected alternative** — considered, but rejected.
+- 💭 **Hypothetical alternative** — never seriously considered, doesn't fit into the language.
+- 🩹 **Remedied con** — a listed drawback later fixed or mitigated.
 
 ---
 
-### 1.2 JSON syntax for data — 🧑
+# 1. Values and data structures
 
-**Decision.** Arrays are `[...]`, objects are `{...}` with quoted string keys, atoms
-are JSON literals. A program file is therefore almost-JSON with functions added.
+## 1.1 Three ingredients beyond atoms
 
-**Alternatives.** S-expressions (Lisp), a bespoke literal syntax, YAML-like
-indentation.
+### Decisions
 
-**Pros.** Zero learning curve for data; trivially serializable I/O; the language reads
-as data because it largely *is* data. **Cons.** Object keys must be quoted strings,
-which is verbose for record-like use; JSON's lack of bare identifiers is exploited
-(see 1.4) but JSON's other constraints (no comments natively, string-only keys) carry
-over.
+- 🧑 ✅ Besides atomic types (null, booleans, integers, floats, strings), the language has exactly three composite ingredients: arrays/lists, objects/maps and functions.
 
----
+### Alternatives
 
-### 1.3 Functions: one input, one output, ordered pattern-matching clauses — 🧑
+- 🤖 💭 Add records/structs as distinct from maps.
+- 🤖 💭 Add tuples distinct from arrays.
+- 🤖 💭 Add a richer primitive set (dates, symbols, sets).
 
-**Decision.** Every function takes exactly one argument and returns one value. A
-function literal is `(pattern => result, pattern => result, ...)`. Clauses are tried
-top to bottom; the first match wins.
+### Pros
 
-**Alternatives.** Multi-argument functions; unordered/guarded clause sets; a separate
-`match`/`case` construct distinct from function definition.
+- Minimal concept count.
+- Instant familiarity for anyone who knows JSON.
+- A clean "JSON + functions" elevator pitch.
 
-**Pros.** Application has a single uniform shape (see 1.5); matching and dispatch are
-one mechanism; multi-argument needs are met by passing arrays/objects, which are
-themselves first-class data. **Cons.** Verbose arithmetic and multi-argument calls;
-currying must be written explicitly as nested functions.
+### Cons
+
+- No nominal types or tagged unions.
+- Everything is structural, which can make large programs harder to keep disciplined.
 
 ---
 
-### 1.4 Bare identifiers are "holes" — 🧑
+## 1.2 JSON syntax for data
 
-**Decision.** A bare (unquoted) identifier binds in a pattern and reads in an
-expression. Patterns and results are mirror images using the same names.
+### Decisions
 
-**Alternatives.** A sigil for binders (e.g. `$x`); explicit binding keywords; separate
-syntaxes for destructuring vs. construction.
+- 🧑 ✅ Syntax for atomic types, arrays and objects is borrowed wholesale from JSON: arrays are `[...]`, objects are `{...}` with quoted string keys, atoms are JSON literals.
 
-**Pros.** Exploits JSON's one unused syntactic slot; produces a striking
-pattern/result symmetry; destructuring reads as correspondence, not procedure.
-**Cons.** A name in pattern position silently shadows a built-in of the same name
-(e.g. a pattern `add` binds, it does not match the function `add`); no visual marker
-distinguishes a binder from a literal at a glance.
+### Alternatives
 
----
+- 🤖 💭 S-expressions (Lisp).
+- 🤖 💭 A bespoke literal syntax.
+- 🤖 💭 YAML-like indentation.
 
-### 1.5 Application by pipe: `value | function` — 🧑
+### Pros
 
-**Decision.** Function application is written `value | function`, left-associative.
+- Zero learning curve for data.
+- Trivially serializable I/O.
+- The language reads as data because it largely *is* data.
 
-**Alternatives.** Conventional `f(x)`; reverse-pipe `f <| x`; method-style `x.f()`.
+### Cons
 
-**Pros.** Pipelines read left-to-right like a sentence; composes naturally with the
-one-argument rule; no call-syntax or arity. **Cons.** Unfamiliar to those expecting
-`f(x)`; deeply nested non-linear data flow can require parentheses that reduce the
-pipeline's readability.
+- Object keys must be quoted strings, which is verbose for record-like use.
+- JSON's lack of bare identifiers is exploited (see 2.2), but JSON's other constraints (no comments natively, string-only keys) carry over.
 
 ---
 
-### 1.6 Refinement via `?`; types are predicates — 🧑
+## 1.3 Numeric int/float distinction
 
-**Decision.** Any pattern may be followed by `? predicate`. The clause matches iff the
-pattern matches structurally **and** the matched value piped into the predicate yields
-`true`. The predicate is any function. The built-in "types" (`Integer`, `String`, …)
-are simply predicate functions.
+### Decisions
 
-**Alternatives.** A dedicated type-annotation syntax; typed pattern keywords
-(`n: int`); a separate static type system; `if`-style guards with arbitrary boolean
-expressions.
+- 🧑 ✅ Integers and floats are distinct kinds.
+- 🤖 ✅ `divide` returns an integer when evenly divisible and a float otherwise.
+- 🤖 ✅ `floor` returns an integer.
+- 🤖 ✅ `equals` is exact.
 
-**Pros.** Unifies three things (structural matching, type checks, value guards) into
-one mechanism; the "type system" is user-extensible with ordinary functions; nothing
-new to learn beyond `?`. **Cons.** All checking is dynamic; no static guarantees; a
-predicate is run at match time, with a cost; expressing relational guards requires the
-"parent container" idiom (see 1.7).
+### Alternatives
 
----
+- 🤖 💭 A single number type (all floats, or arbitrary precision).
+- 🤖 💭 A full numeric tower.
 
-### 1.7 No sibling scope in patterns; relational guards go on a parent — 🧑
+### Pros
 
-**Decision.** All bindings in a clause are produced simultaneously. A `?` predicate
-sees only the value matched by the pattern it is attached to, never a sibling binding.
-To compare several captured values, attach the predicate to the enclosing container.
+- Matches JSON's practical number usage.
+- Integer results stay integers.
 
-**Alternatives.** Left-to-right binding so later predicates can see earlier bindings
-(explicitly rejected); allowing predicates to reference the whole clause's bindings.
+### Cons
 
-**Pros.** Matching is a pure structural walk with no scope-threading; predicates can be
-checked in any order or in parallel; the rule is trivially simple to state. **Cons.**
-Relational conditions (`a < b` across two bindings) need the slightly awkward
-"attach `?` to `[a, b]` and re-destructure inside the predicate" idiom.
+- Two kinds to reason about.
+- `Integer` vs. `Float` predicates can surprise (e.g. `2.0` is a `Float`, not an `Integer`).
+- Equality across kinds is not automatic.
 
 ---
 
-### 1.8 The error value `!`, distinct from `null` — 🧑 (concept) / 🤖 (propagation semantics)
+## 1.4 Member/index access failures yield `!`
 
-**Decision (🧑).** Introduce a distinct error mode `!`, separate from `null`.
-`null` = legitimate absence; `!` = failure. A function is made *strict* by ending with
-`_ => !` (error on no match) and is otherwise *lenient* (returns `null` on no match).
-Total predicates end with `_ => false`. Built-in operations return `!` on bad input;
-built-in predicates return `false`. (At this stage, `!` is opaque — see 1.22 for
-the payload extension.)
+### Decisions
 
-**Decision (🤖).** `!` matches **only** the literal `!` pattern (not `_`, not a
-binder), and **applying any function to `!` returns `!` unless that function has an
-explicit `! =>` clause.** Error propagation is thus a property of application itself,
-independent of strictness.
+- 🤖 ✅ `x.key` on a missing key or non-object, and `x[i]` out of range or on a wrong type, yield `!` (not `null`).
 
-**Why the implementer had to decide the second half.** The original spec claimed
-"strict ⇔ error-propagating," reasoning that the `_ => !` clause would re-emit an
-incoming error. The interpreter falsified this: since `_` was (correctly) made to
-reject `!`, a strict function's `_ => !` clause could not fire on an `!` input, so the
-function fell through to `null` instead of propagating. The two rules contradicted
-each other. The fix — propagation in `apply` itself — made the model simpler and
-uniform, and decoupled "strict" (error on no match) from "propagating" (automatic).
+### Why the implementer decided this
 
-**Alternatives.** Overload `null` for both meanings (rejected: conflates absence and
-failure); make the *pipe operator* short-circuit on `!` with a dedicated `catch`
-built-in as the only handler (rejected: needs new mechanism; the emergent
-"explicit `! =>` clause catches" rule reuses existing matching); give `!` a payload to
-distinguish error kinds (deferred — see roadmap).
+- The spec flagged this as an open question made pressing by object-bundle access (`@lib.map`).
+- Choosing `!` means a typo'd member (`@lib.fitler`) fails loudly rather than silently becoming `null` and propagating as a mystery later.
 
-**Pros.** `Result`/exception-style short-circuiting with no new syntax; absence and
-failure are cleanly separated; strictness is opt-in per function. **Cons.** `_` no
-longer means "literally anything" (it excludes `!`), a subtle asymmetry; an uncaught
-error can travel far from its origin, which can make debugging harder (mitigated by
-`FUSION_DEBUG`). Originally, `!` was opaque — all failures looked alike — which was
-the dominant ergonomic complaint and led to the later redesign in **1.22**, where
-`!` was made to carry a payload.
+### Alternatives
+
+- 🤖 ❌ Return `null` for missing keys (treat objects as open maps).
+
+### Pros
+
+- Catches typos and shape errors at the access site.
+- Consistent with "`!` = something went wrong."
+
+### Cons
+
+- Cannot use `x.maybeMissing` as a convenient "absent → null" probe.
+- Callers wanting optionality must catch the `!`.
 
 ---
 
-### 1.9 Non-exhaustive match: `null` for normal inputs, propagate for errors — 🧑
+# 2. Functions and errors
 
-**Decision.** If no clause matches and the input is not an error, the result is
-`null`. Strictness (`_ => !`) is opt-in. **If the input is an error and no
-clause matched, the original error propagates** (it is never silently turned
-into `null`). This was a refinement: early implementation defaulted to `null`
-in both cases, but that meant a function with error clauses that only matched
-*some* error shapes would silently swallow the others — exactly the kind of
-"loud failure quietly disappears" bug the error model is designed to prevent.
+## 2.1 Functions: one input, one output, ordered pattern-matching clauses
 
-**Alternatives.** Make non-exhaustive matching an error by default
-(strict-by-default), with leniency opt-in; or unify "no match" handling
-(always `null` regardless of input kind).
+### Decisions
 
-**Pros.** Forgiving during exploration and prototyping; base cases read
-naturally for non-error inputs; errors are *never* silently swallowed, so a
-partially-matching error handler still preserves the original failure for
-diagnosis. **Cons.** A typo'd or incomplete function silently yields `null`
-on non-error inputs, which can hide bugs several layers deep; the safer
-strict behavior must be remembered and added.
+- 🧑 ✅ Every function takes exactly one argument and returns one value.
+- 🧑 ✅ A function literal is `(pattern => result, pattern => result, ...)`.
+- 🧑 ✅ Clauses are tried top to bottom; the first match wins.
 
----
+### Alternatives
 
-### 1.10 No operator sugar (deferred) — 🧑
+- 🤖 💭 Multi-argument functions.
+- 🤖 💭 Unordered/guarded clause sets.
+- 🤖 💭 A separate `match`/`case` construct distinct from function definition.
 
-**Decision.** No infix `+ - * / == < && …`. Arithmetic, comparison, and boolean
-operations are built-in functions applied to a pair, e.g. `[a, b] | @add`. Sugar is
-explicitly deferred, not rejected.
+### Pros
 
-**Alternatives.** Provide infix operators as sugar desugaring to the built-ins
-immediately.
+- Application has a single uniform shape (see 2.3).
+- Matching and dispatch are one mechanism.
+- Multi-argument needs are met by passing arrays/objects, which are themselves first-class data.
 
-**Pros.** Keeps the core grammar tiny and uniform while semantics are being settled;
-everything is visibly "just application." **Cons.** Arithmetic-heavy code is verbose
-and harder to read (`[n, [n, 1] | @subtract | @fact] | @multiply` vs. `n * fact(n-1)`).
+### Cons
+
+- Verbose arithmetic and multi-argument calls.
+- Currying must be written explicitly as nested functions.
 
 ---
 
-### 1.11 A file contains exactly one value — 🧑
+## 2.2 Bare identifiers are "holes"
 
-**Decision.** A `.fsn` file contains exactly one expression, which is its value. A
-file is *executable* if that value is a function; the runtime computes
-`STDIN | thatFunction`. No top-level statement list, no top-level bindings.
+### Decisions
 
-**Alternatives (all earlier drafts, then dropped).** A program as a list of
-`name = value` bindings executed top-to-bottom; bindings plus a trailing "main"
-expression with mutually-recursive (`letrec`) scope.
+- 🧑 ✅ Patterns and results are mirror images using the same names — values captured by a pattern are re-inserted in the result.
+- 🤖 ✅ A bare (unquoted) identifier is the binder/hole: it binds in a pattern and reads in an expression (Claude's choice to use JSON's one unused syntactic slot, rather than a sigil).
 
-**Pros.** The outermost layer is the same kind of thing as every inner layer (a
-value); eliminates a whole second sub-language and its scoping rules; makes the module
-system fall out for free (see 1.12). **Cons.** No place for local definitions; a
-recursive *helper* has nowhere to live but its own file (the recurring "anonymous
-local recursion" tension); arithmetic/glue code can become many tiny files.
+### Alternatives
 
----
+- 🤖 ❌ A sigil for binders (e.g. `$x`).
+- 🤖 💭 Explicit binding keywords.
+- 🤖 💭 Separate syntaxes for destructuring vs. construction.
 
-### 1.12 File references `@path` as the module system — 🧑
+### Pros
 
-**Decision.** `@a` evaluates to the value in `a.fsn`; `@dir/a` into a subdirectory;
-`@../a` up a directory. A bare `@` is the current file. This is the entire module
-system; there is no `import` primitive, and resolution is relative to the referencing
-file. Recursion is written with a bare `@` (self-reference). The full resolution rules
-(including how built-ins and the standard library now share this namespace) were
-revised later — see 1.21.
+- Exploits JSON's one unused syntactic slot.
+- Produces a striking pattern/result symmetry.
+- Destructuring reads as correspondence, not procedure.
 
-**Alternatives.** An explicit `import`/`use` construct with a namespace table;
-content-addressed or URL-based imports; a single global namespace.
+### Cons
 
-**Pros.** A file is a value, so importing is just referencing a value — one mechanism
-covers top-level structure, modules, and stdlib delivery; the directory tree is the
-namespace; relocatable like Node relative `require`. **Cons.** Couples module identity
-to filesystem layout; deep relative paths can be unwieldy; reaching outside the
-project (`@../../../x`) is possible and needs runtime sandboxing (a runtime concern).
+- 🩹 A name in pattern position silently shadows a built-in of the same name (e.g. a pattern `add` binds, it does not match the function `add`).
+- No visual marker distinguishes a binder from a literal at a glance.
 
 ---
 
-### 1.13 References are lazy and memoized — 🧑 (intent) / 🤖 (confirmed load-bearing)
+## 2.3 Application by pipe: `value | function`
 
-**Decision.** A reference resolves when used, not when its file loads, and each path is
-evaluated once per run and cached.
+### Decisions
 
-**Why it matters (confirmed in implementation).** Laziness is what makes self- and
-mutual recursion possible: an eager resolver would loop forever resolving a file that
-references itself. The interpreter confirmed self-recursion (a bare `@` meaning "this
-file") and cross-file mutual recursion (`@even`/`@odd`) both work precisely because
-resolution is deferred to application time.
+- 🧑 ✅ Function application is written `value | function`, left-associative.
 
-**Alternatives.** Eager resolution at load (incompatible with self-reference);
-no caching (re-evaluates shared dependencies redundantly).
+### Alternatives
 
-**Pros.** Enables recursion with no special construct; unused references never load;
-shared/diamond dependencies load once. **Cons.** Evaluation order is less obvious; data
-cycles are possible (handled — see 1.14).
+- 🤖 💭 Conventional `f(x)`.
+- 🤖 💭 Reverse-pipe `f <| x`.
+- 🤖 💭 Method-style `x.f()`.
 
----
+### Pros
 
-### 1.14 Data-cycle handling — 🤖
+- Pipelines read left-to-right like a sentence.
+- Composes naturally with the one-argument rule.
+- No call-syntax or arity.
 
-**Decision.** A non-productive data cycle (files whose values reference each other as
-data, not through a function boundary) yields `!` at the point of the cyclic
-self-reference, while surrounding productive structure is preserved. Example:
-`cyclicA = [1, @cyclicB]`, `cyclicB = [2, @cyclicA]` evaluates to `[1, [2, !]]`.
+### Cons
 
-**Why the implementer decided this.** The spec said only "detect a cycle → `!`." The
-running thunk-forcing logic naturally produced something more precise and more useful:
-the error lands exactly where the cycle closes, and the rest of the value survives.
-
-**Alternatives.** Blanket top-level `!` for the whole value (less informative); allow
-cycles as lazy infinite data (would require a lazy/streaming value model).
-
-**Pros.** Maximally informative failure; localizes the problem. **Cons.** A partially-
-`!` data structure can be surprising if not expected.
+- Unfamiliar to those expecting `f(x)`.
+- Deeply nested non-linear data flow can require parentheses that reduce the pipeline's readability.
 
 ---
 
-### 1.15 Member/index access failures yield `!` — 🤖
+## 2.4 Refinement via `?`; types are predicates
 
-**Decision.** `x.key` on a missing key or non-object, and `x[i]` out of range or on a
-wrong type, yield `!` (not `null`).
+### Decisions
 
-**Why the implementer decided this.** The spec flagged this as an open question made
-pressing by object-bundle access (`@lib.map`). Choosing `!` means a typo'd member
-(`@lib.fitler`) fails loudly rather than silently becoming `null` and propagating as a
-mystery later.
+- 🧑 ✅ A pattern may be refined by appending `? predicate`
+- 🧑 ✅ Predicate functions double as a runtime type system: the built-in "types" (`Integer`, `String`, …) are ordinary predicate functions, so `a ? @Integer` matches only integers (inspired by the Ruby gem "literal").
+- 🔢 ✅ The `?` refinement may follow *any* pattern, not just a lone binder; the clause then matches iff the pattern matches structurally **and** the matched value piped into the predicate yields `true` (Claude offered a restrictive per-binder form vs. this permissive any-pattern form; the designer chose permissive).
+- 🧑 ✅ The predicate is any function.
 
-**Alternatives.** Return `null` for missing keys (treat objects as open maps).
+### Alternatives
 
-**Pros.** Catches typos and shape errors at the access site; consistent with "`!` =
-something went wrong." **Cons.** Cannot use `x.maybeMissing` as a convenient "absent →
-null" probe; callers wanting optionality must catch the `!`.
+- 🤖 ❌ A dedicated type-annotation syntax.
+- 🤖 ❌ Typed pattern keywords (`n: int`).
+- 🤖 💭 A separate static type system.
+- 🤖 ❌ `if`-style guards with arbitrary boolean expressions.
 
----
+### Pros
 
-### 1.16 Runtime I/O contract — 🧑 (shape) / 🤖 (edge cases)
+- Unifies three things (structural matching, type checks, value guards) into one mechanism.
+- The "type system" is user-extensible with ordinary functions.
+- Nothing new to learn beyond `?`.
 
-**Decision (🧑).** Read stdin as JSON → value `v`; compute `v | program`; print the
-result as JSON; a final `!` produces a nonzero exit code.
+### Cons
 
-**Decision (🤖).** Empty stdin is treated as `null`; non-JSON stdin yields `!`.
-
-**Alternatives.** NDJSON/streaming input mapping the program over each line (deferred);
-a richer error report on stderr instead of a bare nonzero exit.
-
-**Pros.** Fusion programs are first-class Unix filters; `!` maps onto exit status for
-free. **Cons.** No streaming; whole input must be buffered and parsed; a bare `!` with
-nonzero exit gives little diagnostic detail (mitigated by `FUSION_DEBUG`).
+- All checking is dynamic; no static guarantees.
+- A predicate is run at match time, with a cost.
+- Expressing relational guards requires the "parent container" idiom (see 2.5).
 
 ---
 
-### 1.17 Numeric int/float distinction — 🧑 (literals) / 🤖 (operation behavior)
+## 2.5 No sibling scope in patterns; relational guards go on a parent
 
-**Decision.** Integers and floats are distinct kinds. `divide` returns an integer when
-evenly divisible and a float otherwise; `floor` returns an integer; `equals` is exact.
+### Decisions
 
-**Alternatives.** A single number type (all floats, or arbitrary precision); a full
-numeric tower.
+- 🧑 ✅ All bindings in a clause are produced simultaneously.
+- 🧑 ✅ A `?` predicate sees only the value matched by the pattern it is attached to, never a sibling binding.
+- 🔢 ✅ To compare several captured values, attach the predicate to the enclosing container (Claude's "permissive" option; the designer selected it).
 
-**Pros.** Matches JSON's practical number usage; integer results stay integers.
-**Cons.** Two kinds to reason about; `Integer` vs. `Float` predicates can surprise
-(e.g. `2.0` is a `Float`, not an `Integer`); equality across kinds is not automatic.
+### Alternatives
 
----
+- 🤖 ❌ Left-to-right binding so later predicates can see earlier bindings (Claude leaned toward it; the designer rejected it).
+- 🤖 💭 Allowing predicates to reference the whole clause's bindings.
 
-### 1.18 Standard library as one-function-per-file `.fsn` — 🧑
+### Pros
 
-**Decision.** The standard library is a directory of `.fsn` files, each typically one
-function, written in Fusion and reached via `@name`. Only true primitives that
-cannot be written in Fusion are built into the interpreter.
+- Matching is a pure structural walk with no scope-threading.
+- Predicates can be checked in any order or in parallel.
+- The rule is trivially simple to state.
 
-**Alternatives.** A single bundled stdlib object/file; built-ins for everything common.
+### Cons
 
-**Pros.** Fine-grained loading (use one function, load one file); dogfoods the
-language; proves expressiveness (if `map` can't be written in Fusion, that's a red
-flag). **Cons.** Many small files; a function bundled into an object loses
-relocatability because it must reference itself/siblings by the file's external name.
+- Relational conditions (`a < b` across two bindings) need the slightly awkward "attach `?` to `[a, b]` and re-destructure inside the predicate" idiom.
 
 ---
 
-### 1.19 Built-in primitive set (Tier 0) — 🧑 (catalogue) / 🤖 (exact roster implemented)
+## 2.6 The error mode `!`, distinct from `null`
 
-**Decision.** The interpreter provides these primitives: arithmetic (`add`,
-`subtract`, `multiply`, `divide`, `mod`, `negate`, `floor`); comparison (`equals`,
-`lessThan`); boolean (`and`, `or`, `not`); bridges (`length`, `concat`, `chars`,
-`join`, `toString`, `parseNumber`, `keys`, `values`); predicates (`Integer`, `Float`,
-`Number`, `String`, `Boolean`, `Array`, `Object`, `Null`).
+### Decisions
 
-**Notable inclusion.** `keys` must be a primitive: pattern matching can pull *known*
-object keys but cannot enumerate *unknown* ones, so iterating an object of unknown
-shape is impossible without it.
+- 🧑 ✅ Introduce a distinct error mode `!`, separate from `null`.
+- 🧑 ✅ `null` = legitimate absence; `!` = failure.
+- 🧑 ✅ A function is made *strict* by ending with `_ => !` (error on no match) and is otherwise *lenient* (returns `null` on no match).
+- 🧑 ✅ Total predicates end with `_ => false`.
+- 🤖 ✅ Built-in operations return `!` on bad input; built-in predicates return `false`.
+- 🧑 ✅ The form of `!` (always carrying a payload) is fixed by 2.8.
+- 🤖 ✅ `!` matches **only** error patterns (not `_`, not a binder).
+- 🔢 ✅ Applying any function to `!` returns `!` unless that function has a clause whose pattern catches it (Claude offered auto-propagation-with-a-`catch`-builtin vs. this "matching `!` is ordinary" option; the designer chose the latter).
+- 🤖 ✅ Error propagation is thus a property of application itself, independent of strictness — "strict" means only "error on no match," and propagation is automatic.
 
-**Alternatives.** Derive `lessThan`'s siblings as built-ins too (chose to leave
-`lessEq`/`greaterThan`/etc. to the library); omit `values` (derivable from `keys`).
+### Alternatives
 
-**Pros.** Small, principled core; clear "can't be written in Fusion" inclusion test.
-**Cons.** Boundary cases (`floor`, `values`) are judgment calls; the Tier 1 library
-that would sit on top is only partially populated in the prototype.
+- 🧑 ⏪ Overload `null` for both meanings (the original "no match → `null`" rule, superseded once `!` split absence from failure).
+- 🤖 ❌ Make the *pipe operator* short-circuit on `!` with a dedicated `catch` built-in as the only handler (rejected: needs new mechanism; the existing pattern-matching machinery already expresses catches via an error pattern).
+- 🤖 ⏪ Couple propagation to strictness so that only strict functions propagate (initially accepted as "a strict function is exactly one that propagates," then revised in implementation: `_` rejecting `!` and `_ => !` re-emitting `!` contradict each other, so propagation was decoupled from strictness and made a property of application).
 
----
+### Pros
 
-### 1.20 Object-bundle access `@file.key` needs no new syntax — 🧑
+- `Result`/exception-style short-circuiting with no new syntax.
+- Absence and failure are cleanly separated.
+- Strictness is opt-in per function.
 
-**Decision.** Accessing a function bundled in a file-object, `@lib.map`, requires no
-new grammar: it is `(@lib)` (a primary) followed by `.map` (postfix member access),
-and `.` binds tighter than `|` so `xs | @lib.map` parses correctly.
+### Cons
 
-**Trade-off identified.** Bundling functions into one object file sacrifices
-relocatability: a bundled function must refer to itself and its siblings through the
-file's external name (`@lib.map`), so renaming the file breaks internal references.
-One-function-per-file does not have this problem.
-
-**Pros.** Two library-organization styles (directory of files, or one object file)
-with no extra syntax. **Cons.** The two styles are not equivalent; bundling trades
-relocatability and load granularity for cohesion.
+- `_` does not mean "literally anything" (it excludes `!`), a subtle asymmetry.
+- 🩹 An uncaught error can travel far from its origin, which can make debugging harder (mitigated by `FUSION_DEBUG`, by the payload from 2.8, and by potential future diagnostics tracked in the roadmap).
 
 ---
 
-### 1.21 Unified `@` namespace with per-file shadowing — 🧑
+## 2.7 Non-exhaustive match: `null` for normal inputs, propagate for errors
 
-**Decision (a later redesign of access).** All access goes through `@`:
+### Decisions
 
-- **Built-ins require `@`.** `@add`, `@Integer`, etc. A bare identifier is now *only*
-  a pattern hole; it never denotes a built-in. This means built-ins can no longer be
-  shadowed by a clause's bindings — they live in a different namespace entirely.
-- **The standard library dropped its `std/` prefix.** `@map` reaches it directly.
-- **A bare `@name` (no `/`, no `../`) resolves: sibling file → built-in → stdlib
-  file → `!`.** First match wins. Consequently siblings can shadow a built-in or a
-  stdlib function, but only for files in that directory (never globally).
-- **Built-in/stdlib fallback is gated on `../`, not on `/`.** Downward paths
-  (`@dir/a`, `@math/sqrt`) remain eligible for the built-in/stdlib fallback; only
-  upward paths (`@../a`) are file-only and never fall back.
-- **A bare `@`** (nothing after it) means the current file — recursion is written
-  this way rather than by repeating the file's own name.
-- **`@ENV`** is a built-in evaluating to an object of environment variables (all
-  string values, no parsing); read with member access (`@ENV.CI`).
-- **`@load`** is a built-in taking a filename **verbatim** (no `.fsn` appended),
-  resolved relative to the referencing file, for runtime/non-identifier filenames.
-  Both `@ENV` and `@load` resolve in the `@name` chain, so both are shadowable by a
-  sibling file of that name.
+- 🧑 ✅ If no clause matches and the input is not an error, the result is `null`.
+- 🧑 ✅ Strictness (`_ => !`) is opt-in.
+- 🧑 ✅ If the input is an error and no clause matched, the original error propagates (it is never silently turned into `null`).
+- 🧑 ✅ The split matters because a function with error clauses matching *some* error shapes (e.g. `(!42 => "got 42", _ => "ok")`) and receiving an error of a different shape must still propagate that error — anything else would silently swallow failures that no clause acknowledged.
 
-**Why "self/ENV/load shadowable, and `../` is the only fallback gate."** During
-implementation it was cleaner to give *every* bare `@name` one uniform precedence
-(sibling → builtin → stdlib) than to carve out reserved names; `ENV` and `load` simply
-live in the builtin tier. And the original "a `/` makes it a pure path" rule was too
-strong — it wrongly excluded downward paths from the stdlib — so the gate was narrowed
-to `../` only.
+### Alternatives
 
-**Alternatives.** Keep built-ins as bare globals (rejected: they could be shadowed by
-any same-named binding, and the `@`-everything story is more uniform); keep an
-`@std/` prefix (rejected: extra ceremony, and a magic prefix); make `@ENV`/`@load`
-reserved/unshadowable (rejected: less uniform); gate fallback on any `/` (rejected:
-breaks stdlib subdirectories).
+- 🤖 ❌ Make non-exhaustive matching an error by default (strict-by-default), with leniency opt-in.
+- 🤖 ⏪ Unify "no match" handling so that *all* non-matches return `null` regardless of input kind (the interpreter initially did this and swallowed unmatched errors to `null`; revised so partial error handlers preserve the propagation model).
 
-**Pros.** One uniform access sigil for files, built-ins, stdlib, self, env, and
-dynamic load; built-ins can no longer be accidentally shadowed by bindings; safe,
-*per-directory* shadowing of built-ins/stdlib; downward stdlib packages (`@math/...`)
-work. **Cons.** Built-ins are now verbose (`@add` everywhere); shadowing is invisible
-at the call site (whether `@map` is yours or the stdlib's depends on directory
-contents); a bare word that *looks* like a function reference is silently just a hole
-(reading an unbound one yields an error).
+### Pros
+
+- Forgiving during exploration and prototyping.
+- Base cases read naturally for non-error inputs.
+- Errors are *never* silently swallowed, so a partially-matching error handler still preserves the original failure for diagnosis.
+
+### Cons
+
+- A typo'd or incomplete function silently yields `null` on non-error inputs, which can hide bugs several layers deep.
+- The safer strict behavior must be remembered and added.
 
 ---
 
-### 1.22 Payloaded errors — 🧑 (concept and motivation) / 🤖 (predicate/equality/literal subtleties)
+## 2.8 Payloaded errors
 
-**Decision (🧑).** Replace the opaque `!` of 1.8 with a compound error value: every
-error is `!` followed by a **payload**, which may be any Fusion value (`!42`,
-`!"divide by zero"`, `!{"kind":"missing_key","key":"id"}`, `!null`). Bare `!` is
-shorthand for `!null`, preserving the look of existing code. In expression position,
-`!expr` is a prefix operator that wraps a value as an error; in pattern position,
-`!pat` matches an error and destructures its payload (bare `!` and `!_` match any
-error). Propagation preserves the *same* error (payload intact), so by the time you
-reach a catch site you still know what happened. The CLI prints the payload (as
-JSON) to stderr on failure and exits `1`, leaving stdout empty.
+### Decisions
 
-**Decision (🤖).** Three subtleties emerged from implementation that needed to be
-nailed down for the model to hold together coherently:
+- 🧑 ✅ Every error is `!` followed by a **payload**, which may be any Fusion value (`!42`, `!"divide by zero"`, `!{"kind":"missing_key","key":"id"}`, `!null`).
+- 🧑 ✅ Bare `!` in expression position is shorthand for `!null`.
+- 🧑 ✅ In expression position, `!expr` is a prefix operator that wraps a value as an error; in pattern position, `!pat` matches an error and destructures its payload (bare `!` matches any error without binding; `!_` does the same but admits a `?` predicate).
+- 🧑 ✅ Propagation preserves the *same* error (payload intact), so by the time you reach a catch site you still know what happened.
+- 🧑 ✅ The CLI prints the payload (as JSON) to stderr on failure and exits `1`, leaving stdout empty.
+- 🧑 ✅ **Errors propagate uniformly — they are not values.** At any moment of execution there is either a value or an error in motion, never both. Built-ins (including `@equals` and the type predicates), array and object literals, `?` predicates, and the function-value position of a pipe all propagate an encountered error. The only way to do anything with an error besides letting it propagate is to catch it in an `!pat` clause, which yields a normal value (the payload).
+- 🧑 ✅ **No nested errors.** When `!expr` is evaluated and `expr` itself produces an error, that inner error propagates and the outer `!` is a no-op. This preserves the "never more than one error simultaneously" invariant — there is no `!!` value, ever.
+- 🧑 ✅ **Partial matching propagates the unmatched error.** A function with error clauses that match *some* error shapes (e.g. `!42 => ...`) but not the one it receives (e.g. `!"oops"`) propagates the unmatched error rather than turning it into `null`. The "no match → null" lenient default from 2.7 applies only to non-error inputs.
+- 🧑 ✅ **`!pat` is a top-level prefix in the clause grammar.** `!` is a prefix on the *clause pattern*, not on any sub-pattern: array elements, object members, and the payload of another `!` all recurse into the non-`!` pattern production. This grammar shape simultaneously enforces two things with no special-case parsing flag: (i) nested error patterns (`[!a, b]`, `{"err": !x}`, `!!42`, `!{"k": !v}`) are syntax errors, matching the runtime invariant that errors never sit inside other values; and (ii) `!pat ? pred` parses as `!(pat ? pred)`, so the `?` binds *inside* the `!`. The runtime payoff is that the predicate of `!a ? pred` naturally sees the payload, with no special case needed in `PGuard`.
+- 🧑 ✅ **Predicate-errors bubble up to the function level.** If a `?` predicate evaluates to an error (it crashed, or it was itself an error value), that error becomes the function's result immediately, without trying later clauses. The alternative — treating a predicate-error as "no match" and continuing — would silently hide bugs in the predicate.
 
-- **Errors propagate uniformly — they are not values.** At any moment of
-  execution there is either a value or an error in motion, never both.
-  Built-ins (including `@equals` and the type predicates), array and object
-  literals, `?` predicates, and the function-value position of a pipe all
-  propagate an encountered error. The only way to do anything with an error
-  besides letting it propagate is to catch it in an `!pat` clause, which
-  yields a normal value (the payload). An earlier prototype made errors
-  "first-class values" (storable in collections, examined by predicates,
-  comparable with `@equals`); the user rejected this — it created exactly the
-  kind of carve-outs the rest of the language is designed to avoid, and was
-  reverted before any external code grew.
-- **No nested errors.** When `!expr` is evaluated and `expr` itself produces an
-  error, that inner error propagates and the outer `!` is a no-op. This
-  preserves the "never more than one error simultaneously" invariant — there
-  is no `!!` value, ever.
-- **Partial matching propagates the unmatched error.** A function with error
-  clauses that match *some* error shapes (e.g. `!42 => ...`) but not the one
-  it receives (e.g. `!"oops"`) must still propagate the unmatched error,
-  not turn it into `null`. The simpler "lenient default" rule from 1.9 was
-  refined to: on no clause matching, return `null` only if the input is not
-  an error; otherwise propagate the error. This prevents the silent-swallow
-  bug where a partial error handler would erase the original failure.
-- **`!pat` is a top-level prefix in the clause grammar.** `!` is a prefix on
-  the *clause pattern*, not on any sub-pattern: array elements, object
-  members, and the payload of another `!` all recurse into the non-`!`
-  pattern production. This grammar shape simultaneously enforces two things
-  with no special-case parsing flag: (i) nested error patterns
-  (`[!a, b]`, `{"err": !x}`, `!!42`, `!{"k": !v}`) are syntax errors,
-  matching the runtime invariant that errors never sit inside other values;
-  and (ii) `!pat ? pred` parses as `!(pat ? pred)`, so the `?` binds *inside*
-  the `!`. The runtime payoff is that the predicate of `!a ? pred` naturally
-  sees the payload (because by the time the guard runs, the value at hand is
-  already the payload), removing what would otherwise be a special case in
-  `PGuard`. An earlier implementation parsed `!pat ? pred` as
-  `(!pat) ? pred` and special-cased `PGuard` to inspect its inner for `PErr`;
-  the user pointed out the parse shape was wrong, and switching to the
-  cleaner grammar dropped both that runtime special case and the per-context
-  parser flag (`allow_err`) in one change.
-- **Predicate-errors bubble up to the function level.** If a `?` predicate
-  evaluates to an error (it crashed, or it was itself an error value), that
-  error becomes the function's result immediately, without trying later
-  clauses. The alternative — treating a predicate-error as "no match" and
-  continuing — would silently hide bugs in the predicate.
+### Alternatives
 
-**Alternatives.** Keep `!` opaque, with a separate logging channel for
-diagnostics (rejected: the payload carries debugging context exactly where it's
-needed); use a `Result`-style two-variant `Ok | Err` (rejected: needs new
-machinery; payloaded errors with propagation give the same ergonomics with two
-rules); make payloads always strings (rejected: built-in mechanics like missing
-keys benefit from structured payloads); make errors first-class values that can
-be stored, compared, and inspected directly (rejected by the user: creates
-carve-outs in propagation that contradict the "never more than one error"
-invariant).
+- 🧑 ⏪ Keep `!` opaque with no payload (the original error model, superseded because it was too hard to debug).
+- 🤖 💭 Use a `Result`-style two-variant `Ok | Err` (hypothetical: needs new machinery; payloaded errors with propagation give the same ergonomics with two rules).
+- 🤖 ❌ Make payloads always strings (Claude's first payload sketch, e.g. `!"divide by zero"`; rejected because built-in mechanics like missing keys benefit from structured payloads).
+- 🤖 ⏪ Make errors first-class values that can be stored in collections, compared with `@equals`, and inspected by predicates (Claude implemented this reading; the designer corrected it because it creates carve-outs in propagation that contradict the "never more than one error" invariant).
+- 🤖 ⏪ Parse `!pat ? pred` as `(!pat) ? pred` so the predicate refines the whole error rather than the payload (Claude parsed it this way; the designer corrected it to `!(pat ? pred)` so the predicate sees the payload, matching its sibling binders).
 
-**Pros.** Vastly improved debuggability — a propagated error tells you both
-*that* something failed and *what*; the catch site can dispatch on the error
-kind (`(!{"kind":"missing_key"} => ..., !msg => !msg)`); construction and
-matching are syntactically symmetric (`!42` builds on the right of `=>`,
-matches on the left); propagation remains uniform, with no carve-outs to
-remember. **Cons.** The payload format is now part of the language's surface
-— built-ins currently use string payloads (`"divide: division by zero"`)
-while runtime mechanics use structured object payloads (`{"kind": ...}`), an
-inconsistency worth resolving (see 2.2); a payload that itself contains
-sensitive data becomes part of the program's stderr stream; the bare-`!`-means-
-`!null` rule preserves source compatibility but means a careless `_ => !`
-clause gives a maximally unhelpful error; inspecting an error's payload now
-requires a small catch-and-rebind (`(!a => a)`) rather than direct comparison.
+### Pros
+
+- Vastly improved debuggability — a propagated error tells you both *that* something failed and *what*.
+- The catch site can dispatch on the error kind (`(!{"kind":"missing_key"} => ..., !msg => !msg)`).
+- Construction and matching are syntactically symmetric (`!42` builds on the right of `=>`, matches on the left).
+- Propagation remains uniform, with no carve-outs to remember.
+
+### Cons
+
+- The payload format is part of the language's surface — built-ins use string payloads (`"divide: division by zero"`) while runtime mechanics use structured object payloads (`{"kind": ...}`), an inconsistency tracked in the roadmap.
+- A payload that itself contains sensitive data becomes part of the program's stderr stream.
+- The bare-`!`-means-`!null` rule preserves a simple expression form but means a careless `_ => !` clause gives a maximally unhelpful error.
+- Inspecting an error's payload requires a small catch-and-rebind (`(!a => a)`) rather than direct comparison.
 
 ---
 
-## Part 2 — Roadmap and open questions
+# 3. @ references
 
-### 2.1 Ergonomics: the most-wanted improvements
+## 3.1 A file contains exactly one value
 
-**Operator sugar (planned).** Reintroduce infix `+ - * / % == != < <= > >= && || !`
-and string `++`, desugaring to the existing built-ins over pairs. Pure ergonomics,
-no semantic change. This is the single biggest readability win available and was
-always intended. Open question: exact precedence table and how it interleaves with
-`|` and `=>`.
+### Decisions
 
-**A local binding form (the recurring tension).** "Anonymous local recursion is
-awkward" has surfaced three times: recursion needs a name; bundled functions need to
-name themselves; multi-name imports have nowhere to bind. A single `let`-style form
-(binding names within an expression, mutually recursive) would resolve all three. It
-would be the **first genuinely new construct** in the language, so it is being resisted
-until the need is undeniable. Sub-questions: syntax that doesn't clash with JSON;
-whether it implies giving up "one value per file" framing internally.
+- 🧑 ✅ A `.fsn` file contains exactly one expression, which is its value.
+- 🧑 ✅ A file is *executable* if that value is a function; the runtime computes `STDIN | thatFunction`.
+- 🧑 ✅ No top-level statement list, no top-level bindings.
 
-**`@`-namespace resolution polish.** Decide on project-root confinement (sandboxing)
-for `@../` escapes; consider a configurable standard-library search path; consider
-tooling to surface *which* target a given `@name` resolves to in a directory (since
-shadowing is invisible at the call site). The core resolution rules (sibling →
-built-in → stdlib, `../` as the only fallback gate, `@`/`@ENV`/`@load`) are settled —
-see 1.21.
+### Alternatives (all earlier drafts, then dropped)
 
-### 2.2 Error model
+- 🧑 ⏪ A program as a list of `name = value` bindings executed top-to-bottom.
+- 🤖 ⏪ Bindings plus a trailing "main" expression with mutually-recursive (`letrec`) scope.
 
-**Payload shape consistency** *(open)*. Payloaded errors landed (see 1.22), but the
-payload *shape* is inconsistent: built-ins use bare strings (`"divide: division by
-zero"`) while runtime mechanics use structured objects (`{"kind":"missing_key",
-"key":"foo"}`). The string form is human-friendlier; the structured form is
-machine-friendlier (catchable via `!{"kind": k}`). Three plausible resolutions:
-(a) all errors get structured payloads with a `kind` and an optional `message`;
-(b) all errors get human strings, and structured matching is left to user code;
-(c) keep both, document the rule that built-in operations use strings and runtime
-mechanics use objects. This is a small but irreversible decision (it shapes how
-catch clauses are written) and should be decided before any external code grows
-that depends on the current shapes.
+### Pros
 
-**Better diagnostics.** `FUSION_DEBUG` exists for file/parse errors; extend
-principled diagnostics to runtime error origins (where did this error first
-arise?). With payloaded errors this could mean attaching a source position to the
-payload (an extra `"at": "file.fsn:L:C"` field) when `FUSION_DEBUG` is set.
+- The outermost layer is the same kind of thing as every inner layer (a value).
+- Eliminates a whole second sub-language and its scoping rules.
+- Makes the module system fall out for free (see 3.2).
 
-**Stack traces** *(deferred)*. Currently a propagated error tells you what
-happened, but not the chain of function applications it passed through. A capped
-trace (last N frames, accessible as an extra payload field, opt-in via env) would
-help in deep pipelines.
+### Cons
 
-### 2.3 Standard library completion
-
-Populate Tier 1 (written in Fusion): `filter`, `reduce`/`fold`, `reverse`, `head`,
-`tail`, `last`, `init`, `take`, `drop`, `zip`, `flatten`, `member`, `find`, `all`,
-`any`, `count`; comparison derivatives `lessEq`, `greaterThan`, `greaterEq`,
-`notEquals`; object helpers `entries`, `get`, `set`, `merge`; an `if` helper. This is
-also the best stress test of whether the language is pleasant to *write* in, not just
-to implement.
-
-### 2.4 Runtime and tooling
-
-- **Streaming I/O** (NDJSON): map a program over a stream of JSON values.
-- **Sandboxed reference resolution** confined to a project root.
-- **A real CLI** beyond the prototype (`-e`, file, stdin) with better error reporting.
-- **A faster implementation** once semantics are frozen (the current `fusion.rb` is a
-  proof of concept, not optimized).
-
-### 2.5 Open semantic questions to settle
-
-- Should `_` strictly exclude `!` (current) or match literally anything? The current
-  asymmetry is what makes propagation clean; confirm it is acceptable long-term.
-- Should `null` ever be "sticky" like `!`? (Almost certainly not — that is `!`'s job.)
-- Numeric tower: keep int/float split, or move to a single number type / arbitrary
-  precision? Affects `divide`, `floor`, `equals`, and the `Integer`/`Float` predicates.
-- Function equality: `equals` on two functions — always `false`, or `!`? (Function
-  equality is undecidable beyond trivial identity.)
-
-### 2.6 Bigger experiments
-
-**Destructuring functions (homoiconicity).** Treat a function as a list of
-`(pattern, output)` clause-pairs and pattern-match on it, enabling macros and function
-transformers with the same matching machinery. The clean path is explicit, opt-in
-reflection (`reflect : function → data`, `reify : data → function`) representing
-patterns as reflective AST objects, so normal code keeps functions opaque and "three
-ingredients" intact. High payoff (metaprogramming), moderate disruption.
-
-**Running functions backwards (relational mode).** Given an output, find an input —
-unification and search, à la Prolog/miniKanren. Clean only for invertible functions;
-hopeless for many-to-one. Would change Fusion from functional to relational and needs
-backtracking search. The most exciting and most disruptive possible direction; best
-pursued as a separate mode or sibling project rather than folded into the core.
-
-**A static checker.** Because "types" are predicates, a optional static layer could
-attempt to verify predicate-guarded clauses and exhaustiveness without changing the
-dynamic semantics. Speculative.
+- No place for local definitions.
+- Arithmetic/glue code can become many tiny files.
 
 ---
 
-## Appendix — Provenance
+## 3.2 File references as the module system
 
-The decisions above were made across an iterative design conversation followed by a
-proof-of-concept implementation. The 🧑/🤖 attribution marks whether a decision was a
-deliberate design choice by the human designer (🧑) or a choice made or forced by
-Claude while implementing and testing the interpreter (🤖), where running code often
-exposed questions or contradictions the prose specification had left implicit. The
-most consequential implementer-forced change was decoupling error propagation from
-strictness (1.8), which a contradiction in the running interpreter brought to light.
+### Decisions
+
+- 🧑 ✅ `@a` evaluates to the value in `a.fsn`; `@dir/a` into a subdirectory; `@../a` up a directory.
+- 🧑 ✅ A bare `@` is the current file.
+- 🧑 ✅ This is the entire module system; there is no `import` primitive, and resolution is relative to the referencing file.
+- 🧑 ✅ Recursion is written with a bare `@` (self-reference).
+- 🧑 ⏪ The full resolution rules (including how built-ins and the standard library now share this namespace) were revised later — see 3.6.
+
+### Alternatives
+
+- 🤖 ❌ An explicit `import`/`use` construct with a namespace table.
+- 🤖 💭 Content-addressed or URL-based imports.
+- 🤖 💭 A single global namespace.
+
+### Pros
+
+- A file is a value, so importing is just referencing a value — one mechanism covers top-level structure, modules, and stdlib delivery.
+- The directory tree is the namespace.
+- Relocatable like Node relative `require`.
+
+### Cons
+
+- Couples module identity to filesystem layout.
+- Deep relative paths can be unwieldy.
+- Reaching outside the project (`@../../../x`) is possible and needs runtime sandboxing (a runtime concern).
+
+---
+
+## 3.3 References are lazy and memoized
+
+### Decisions
+
+- 🤖 ✅ A reference resolves when used, not when its file loads, and each path is evaluated once per run and cached.
+
+### Why it matters (confirmed in implementation)
+
+- 🤖 Laziness is what makes self- and mutual recursion possible: an eager resolver would loop forever resolving a file that references itself. The interpreter confirmed self-recursion (a bare `@` meaning "this file") and cross-file mutual recursion (`@even`/`@odd`) both work precisely because resolution is deferred to application time.
+
+### Alternatives
+
+- 🤖 ❌ Eager resolution at load (incompatible with self-reference).
+- 🤖 ❌ No caching (re-evaluates shared dependencies redundantly).
+
+### Pros
+
+- Enables recursion with no special construct.
+- Unused references never load.
+- Shared/diamond dependencies load once.
+
+### Cons
+
+- Evaluation order is less obvious.
+- 🩹 Data cycles are possible (handled — see 3.4).
+
+---
+
+## 3.4 Data-cycle handling
+
+### Decisions
+
+- 🤖 ✅ A non-productive data cycle (files whose values reference each other as data, not through a function boundary) yields an error at the point of the cyclic self-reference.
+- 🤖 ⏪ The surrounding data structure is preserved. Example: `cyclicA = [1, @cyclicB]`, `cyclicB = [2, @cyclicA]` evaluates to `[1, [2, !]]`. Superseded by 2.8 as errors now immediately bubble to the top of each data structure.
+
+### Why the implementer decided this
+
+- The spec said only "detect a cycle → `!`."
+- The running thunk-forcing logic naturally produced something more precise and more useful: the error lands exactly where the cycle closes, and the rest of the value survives.
+
+### Alternatives
+
+- 🤖 ❌ Blanket top-level `!` for the whole value (less informative).
+- 🤖 ❌ Allow cycles as lazy infinite data (would require a lazy/streaming value model).
+
+### Pros
+
+- Maximally informative failure.
+- Localizes the problem.
+
+### Cons
+
+- 🩹 A partially-`!` data structure can be surprising if not expected.
+
+---
+
+## 3.5 Object-bundle access `@file.key` needs no new syntax
+
+### Decisions
+
+- 🧑 ✅ Accessing a function bundled in a file-object, `@lib.map`, requires no new grammar: it is `(@lib)` (a primary) followed by `.map` (postfix member access), and `.` binds tighter than `|` so `xs | @lib.map` parses correctly.
+- 🧑 ✅ A bundled function refers to itself and its siblings through `@.map` (a bare `@` for the current file, then a `.member` access), so it never has to name its own file and stays relocatable when the file is renamed.
+
+### Pros
+
+- Two library-organization styles (directory of files, or one object file) with no extra syntax.
+
+### Cons
+
+- The two styles are not equivalent.
+- Bundling loads the whole file to reach one member (coarser load granularity), trading that for cohesion.
+
+---
+
+## 3.6 Unified `@` namespace with per-file shadowing
+
+### Decisions
+
+All access goes through `@`:
+
+- 🧑 ✅ **Built-ins require `@`.** `@add`, `@Integer`, etc. A bare identifier is *only* a pattern hole; it never denotes a built-in. Built-ins cannot be shadowed by a clause's bindings — they live in a different namespace entirely.
+- 🧑 ✅ **The standard library has no prefix.** `@map` reaches it directly.
+- 🧑 ✅ **An `@name` reference (without leading `../`) resolves: sibling file → built-in → stdlib file → error.** First match wins. Consequently siblings can shadow a built-in or a stdlib function, but only for files in that directory (never globally).
+- 🧑 ✅ **Built-in/stdlib fallback is gated on `../`, not on `/`.** Downward paths (`@dir/a`, `@math/sqrt`) remain eligible for the built-in/stdlib fallback; only upward paths (`@../a`) are file-only and never fall back.
+- 🧑 ✅ **A bare `@`** (nothing after it) means the current file — recursion is written this way rather than by repeating the file's own name.
+- 🧑 ✅ **`@ENV`** is a built-in evaluating to an object of environment variables (all string values, no parsing); read with member access (`@ENV.CI`).
+- 🧑 ✅ **`@load`** is a built-in taking a filename **verbatim** (no `.fsn` appended), resolved relative to the referencing file, for runtime/non-identifier filenames. Both `@ENV` and `@load` resolve in the `@name` chain, so both are shadowable by a sibling file of that name.
+
+### Why a single uniform chain
+
+- Every bare `@name` follows one precedence order (sibling → builtin → stdlib), so there are no reserved names to remember and no parser carve-outs.
+- `ENV` and `load` live in the builtin tier like everything else.
+- Gating fallback on `../` rather than on the presence of any `/` keeps downward paths (`@math/sqrt`) eligible for the stdlib, which is what stdlib subpackaging needs.
+
+### Alternatives
+
+- 🤖 ⏪ Keep built-ins as bare globals (the prototype's original scheme, revised so built-ins require `@` and can't be shadowed by bindings).
+- 🤖 ⏪ Add an `@std/` prefix for the standard library (used in the early prototype, e.g. `@std/map`; the designer removed it so stdlib has no prefix).
+- 🤖 ❌ Reserve `@ENV`/`@load` as unshadowable (Claude raised it as a question; the designer chose to make both shadowable like any built-in).
+- 🤖 ⏪ Gate fallback on any `/` (Claude's first implementation; the designer corrected it to gate on `../` only, so downward stdlib subdirectories still work).
+
+### Pros
+
+- One uniform access sigil for files, built-ins, stdlib, self, env, and dynamic load.
+- Built-ins cannot be accidentally shadowed by bindings.
+- Safe, *per-directory* shadowing of built-ins/stdlib.
+- Downward stdlib packages (`@math/...`) work.
+
+### Cons
+
+- Built-ins are verbose (`@add` everywhere).
+- Shadowing is invisible at the call site (whether `@map` is yours or the stdlib's depends on directory contents).
+- A bare word that *looks* like a function reference is silently just a hole (reading an unbound one yields an error).
+
+---
+
+# 4. Runtime and CLI
+
+## 4.1 Runtime I/O contract
+
+### Decisions
+
+- 🧑 ✅ Read stdin as JSON → value `v`; compute `v | program`; print the result as JSON.
+- 🧑 ✅ A final `!` produces a nonzero exit code.
+- 🤖 ✅ Empty stdin is treated as `null`.
+- 🤖 ✅ Non-JSON stdin yields `!`.
+
+### Alternatives
+
+- 🤖 ❌ NDJSON/streaming input mapping the program over each line (deferred).
+- 🤖 ⏪ A richer error report on stderr instead of a bare nonzero exit.
+
+### Pros
+
+- Fusion programs are first-class Unix filters.
+- `!` maps onto exit status for free.
+
+### Cons
+
+- No streaming; whole input must be buffered and parsed.
+- 🩹 A bare `!` with nonzero exit gives little diagnostic detail (mitigated by `FUSION_DEBUG`).
+
+---
+
+# 5. Misc
+
+## 5.1 No operator sugar (deferred)
+
+### Decisions
+
+- 🧑 ✅ No infix `+ - * / == < && …`.
+- 🧑 ✅ Arithmetic, comparison, and boolean operations are built-in functions applied to a pair, e.g. `[a, b] | @add`.
+- 🧑 ✅ Sugar is explicitly deferred, not rejected.
+
+### Alternatives
+
+- 🤖 ⏪ Provide infix operators as sugar desugaring to the built-ins immediately.
+
+### Pros
+
+- Keeps the core grammar tiny and uniform while semantics are being settled.
+- Everything is visibly "just application."
+
+### Cons
+
+- Arithmetic-heavy code is verbose and harder to read (`[n, [n, 1] | @subtract | @fact] | @multiply` vs. `n * fact(n-1)`).
+
+---
+
+## 5.2 Standard library as one-function-per-file `.fsn`
+
+### Decisions
+
+- 🧑 ✅ The standard library is a directory of `.fsn` files reached via `@name` (the designer's file-reference scheme — "this should also solve how we build our standard library").
+- 🤖 ✅ Each stdlib file is typically one function written in Fusion; only true primitives that cannot be written in Fusion are built into the interpreter.
+
+### Alternatives
+
+- 🤖 💭 A single bundled stdlib object/file.
+- 🤖 ❌ Built-ins for everything common (Claude argued against this: include a built-in only if it can't be written in Fusion).
+
+### Pros
+
+- Fine-grained loading (use one function, load one file).
+- Dogfoods the language.
+- Proves expressiveness (if `map` can't be written in Fusion, that's a red flag).
+
+### Cons
+
+- Many small files.
+
+---
+
+## 5.3 Built-in primitive set (Tier 0)
+
+### Decisions
+
+- 🤖 ✅ Only things that can't be built in Fusion itself become a builtin. Other frequently used functions become part of the standard library.
+- 🤖 ✅ The interpreter provides these builtins:
+  - arithmetic (`add`, `subtract`, `multiply`, `divide`, `mod`, `negate`, `floor`);
+  - comparison (`equals`, `lessThan`);
+  - boolean (`and`, `or`, `not`);
+  - bridges (`length`, `concat`, `chars`, `join`, `toString`, `parseNumber`, `keys`, `values`);
+  - predicates (`Integer`, `Float`, `Number`, `String`, `Boolean`, `Array`, `Object`, `Null`).
+- 🤖 ✅ `keys` must be a builtin: pattern matching can pull *known* object keys but cannot enumerate *unknown* ones, so iterating an object of unknown shape is impossible without it.
+
+### Alternatives
+
+- 🤖 ❌ Derive `lessThan`'s siblings as built-ins too (chose to leave `lessEq`/`greaterThan`/etc. to the library).
+- 🤖 ❌ Omit `values` (derivable from `keys`).
+
+### Pros
+
+- Small, principled core.
+- Clear "can't be written in Fusion" inclusion test.
+
+### Cons
+
+- Boundary cases (`floor`, `values`) are judgment calls.
+- The Tier 1 library that would sit on top is only partially populated in the prototype.
