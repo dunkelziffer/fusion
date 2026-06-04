@@ -1,0 +1,10 @@
+(n ? @Integer =>
+  [ [[n, 15] | @mod, 0] | @equals,
+    [[n, 3]  | @mod, 0] | @equals,
+    [[n, 5]  | @mod, 0] | @equals ] | (
+    [true, _, _] => "FizzBuzz",
+    [_, true, _] => "Fizz",
+    [_, _, true] => "Buzz",
+    _            => n
+  )
+)

@@ -2,18 +2,18 @@
 # frozen_string_literal: true
 
 # Test suite for the Fusion interpreter.
-# Loads fusion.rb as a library (its CLI block is guarded by $PROGRAM_NAME == __FILE__,
-# so requiring it does not run the CLI).
+# Loads lib/fusion.rb as a library (the CLI lives in exe/fusion, so requiring
+# the library does not run the CLI).
 #
-# Run:  ruby test.rb
+# Run:  ruby spec/test.rb
 
-require_relative "fusion"
+require_relative "../lib/fusion"
 
 HERE   = File.dirname(File.expand_path(__FILE__))
-STDLIB = File.join(HERE, "stdlib")
-EX     = File.join(HERE, "examples")
+STDLIB = File.join(HERE, "../stdlib")
+EX     = File.join(HERE, "fixtures")
 
-# Run an example file from examples/ against a JSON input string.
+# Run an example file from spec/fixtures/ against a JSON input string.
 def run_file(relpath, input_json)
   interp = Fusion::Interpreter.new(stdlib_dir: STDLIB)
   fn = interp.load_file(File.join(EX, relpath)).force
@@ -23,7 +23,7 @@ def run_file(relpath, input_json)
 end
 
 # Run inline source against a JSON input string. __dir__ is set to EX so that
-# any @refs in the snippet resolve like an examples/ file would.
+# any @refs in the snippet resolve like a spec/fixtures/ file would.
 def run_src(src, input_json)
   interp = Fusion::Interpreter.new(stdlib_dir: STDLIB)
   ast = Fusion::Parser.parse_file(src)

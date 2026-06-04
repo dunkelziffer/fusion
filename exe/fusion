@@ -1,0 +1,57 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+# Fusion CLI entrypoint.
+#
+# A file contains exactly one value. A file is "executable" if that value is a
+# function; the runtime computes  STDIN | thatFunction  and prints the result.
+#
+# Usage:
+#   echo '[1,2,3]' | fusion path/to/main.fsn
+#   fusion path/to/main.fsn '<json-input>'        # input as an argument
+#   fusion -e '(n => [n,2] | @multiply)' '21'     # inline program
+
+require_relative "../lib/fusion"
+
+args = ARGV.dup
+inline = nil
+if args[0] == "-e"
+  inline = args[1]
+  program_path = nil
+  explicit_input = args[2]
+else
+  program_path = args[0]
+  explicit_input = args[1]
+end
+
+stdlib = File.expand_path("../stdlib", __dir__)
+interp = Fusion::Interpreter.new(stdlib_dir: (Dir.exist?(stdlib) ? stdlib : nil))
+
+# Determine the program function value.
+program_value =
+  if inline
+    ast = Fusion::Parser.parse_file(inline)
+    env = interp.root_env.child
+    env.define("__dir__", Dir.pwd)
+    interp.eval_expr(ast, env)
+  else
+    abort("usage: fusion <file.fsn> [json-input]   or   fusion -e '<src>' [json-input]") unless program_path
+    interp.load_file(File.expand_path(program_path)).force
+  end
+
+# Read input: explicit arg wins, else stdin.
+input_text = explicit_input || ($stdin.tty? ? "" : $stdin.read)
+input_text = "null" if input_text.nil? || input_text.strip.empty?
+input_value = Fusion::JsonInput.parse(input_text)
+
+result = interp.apply(program_value, input_value)
+
+if Fusion.error?(result)
+  # Print only the payload (as JSON) to stderr; stdout stays empty so that
+  # shell pipelines can rely on "stdout has the result, or there isn't one".
+  $stderr.puts Fusion::Serializer.to_json(result.payload)
+  exit 1
+else
+  puts Fusion::Serializer.to_json(result)
+  exit 0
+end

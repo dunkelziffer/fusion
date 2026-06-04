@@ -14,12 +14,12 @@ resolution* — typically a missing file or a parse error in an `@`-referenced f
 enable extra diagnostics:
 
 ```sh
-FUSION_DEBUG=1 ruby fusion.rb program.fsn '...'
+FUSION_DEBUG=1 fusion program.fsn '...'
 ```
 
 With `FUSION_DEBUG` set, the interpreter prints to stderr the exact path it failed
-to find or the parse error it hit. The most common cause is that `examples/` and
-`stdlib/` are not sitting next to `fusion.rb`, so `@`-references can't be resolved.
+to find or the parse error it hit. The most common cause is that the `stdlib/`
+folder is not where the interpreter expects it, so `@`-references can't be resolved.
 
 ---
 

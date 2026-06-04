@@ -4,13 +4,13 @@
 # Tests for payloaded errors: !payload construction, !pat matching, propagation,
 # and the ?-predicate-error bubbling rule.
 #
-# Run:  ruby error_test.rb
+# Run:  ruby spec/error_test.rb
 
-require_relative "fusion"
+require_relative "../lib/fusion"
 
 HERE   = File.dirname(File.expand_path(__FILE__))
-STDLIB = File.join(HERE, "stdlib")
-EX     = File.join(HERE, "examples")
+STDLIB = File.join(HERE, "../stdlib")
+EX     = File.join(HERE, "fixtures")
 
 def run(src, input_json)
   interp = Fusion::Interpreter.new(stdlib_dir: STDLIB)
