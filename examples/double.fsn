@@ -1,1 +1,4 @@
-(n => [n, 2] | @multiply)
+(
+  [] => [],
+  [first, ...rest] => [[first, first] | @add, ...rest | @]
+)

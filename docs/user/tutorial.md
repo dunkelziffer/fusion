@@ -4,9 +4,9 @@
 every example. By the end you will have written a recursive program and understood how
 Fusion's pieces fit together.*
 
-> **What you need:** Ruby installed, and the interpreter package (`fusion.rb` plus
-> the `examples/` and `stdlib/` folders). All commands below are run from inside the
-> interpreter directory.
+> **What you need:** Ruby installed and the `fusion` interpreter available on your
+> `PATH` (along with its bundled `stdlib/` folder). All commands below can be run
+> from any directory containing your `.fsn` files.
 
 ---
 
@@ -22,7 +22,7 @@ create our first program. Create a file `lesson.fsn` containing exactly:
 Now run it:
 
 ```sh
-echo '21' | ruby fusion.rb lesson.fsn
+echo '21' | fusion lesson.fsn
 ```
 
 You should see `42`. Take a moment to notice three things you just used without
@@ -58,10 +58,10 @@ in parentheses. When you apply it, the clauses are tried top to bottom and the
 )
 ```
 
-Run `echo '1' | ruby fusion.rb lesson.fsn` and you get `"one"`. The pattern `1`
+Run `echo '1' | fusion lesson.fsn` and you get `"one"`. The pattern `1`
 is a *literal* — it matches only the value `1`.
 
-Now try an input no clause matches: `echo '5' | ruby fusion.rb lesson.fsn`. You get
+Now try an input no clause matches: `echo '5' | fusion lesson.fsn`. You get
 `null`. **A function with no matching clause returns `null`.** Remember this; it is a
 deliberate, important rule.
 
@@ -78,7 +78,7 @@ The same bare word in the result **reads** that captured value back out. Try:
 ```
 
 ```sh
-echo '[1, 2]' | ruby fusion.rb lesson.fsn
+echo '[1, 2]' | fusion lesson.fsn
 ```
 
 You get `[2, 1]`. The pattern `[a, b]` matches a two-element array and binds its
@@ -103,7 +103,7 @@ file with a function that pulls a name out of a person object:
 ```
 
 ```sh
-echo '{"name": "Ada", "age": 36}' | ruby fusion.rb lesson.fsn
+echo '{"name": "Ada", "age": 36}' | fusion lesson.fsn
 ```
 
 You get `"Ada"`. Two new things here:
@@ -136,8 +136,8 @@ number's absolute value:
 Run it on `-5` and on `5`:
 
 ```sh
-echo '-5' | ruby fusion.rb lesson.fsn    # => 5
-echo '5'  | ruby fusion.rb lesson.fsn    # => 5
+echo '-5' | fusion lesson.fsn    # => 5
+echo '5'  | fusion lesson.fsn    # => 5
 ```
 
 Read the middle line carefully: `[n, 0] | @lessThan` produces `true` or `false`. That
@@ -166,7 +166,7 @@ To make recursion easier, `@` always means *the current file*. Create a new file
 ```
 
 ```sh
-echo '[1, 2, 3, 4]' | ruby fusion.rb sum.fsn    # => 10
+echo '[1, 2, 3, 4]' | fusion sum.fsn    # => 10
 ```
 
 Walk through what happened:
@@ -202,7 +202,7 @@ Let's compute the factorial:
 )
 ```
 
-Save it as `fact.fsn` and run `echo '5' | ruby fusion.rb fact.fsn` → `120`.
+Save it as `fact.fsn` and run `echo '5' | fusion fact.fsn` → `120`.
 
 `n ? @Integer` reads as "bind `n`, but only if `n` is an integer." And here is the
 beautiful part: `@Integer` is not a keyword. It is just a built-in function that
@@ -236,7 +236,7 @@ a sibling file. The classic `map` is in the standard library. Create `doubler.fs
 ```
 
 ```sh
-echo '[1, 2, 3]' | ruby fusion.rb doubler.fsn    # => [2, 4, 6]
+echo '[1, 2, 3]' | fusion doubler.fsn    # => [2, 4, 6]
 ```
 
 Because every Fusion function takes exactly one argument, `map` takes an *object*
@@ -268,7 +268,7 @@ wrong? Try dividing by zero. Save as `boom.fsn`:
 ```
 
 ```sh
-echo '5' | ruby fusion.rb boom.fsn
+echo '5' | fusion boom.fsn
 ```
 
 You will see no output on stdout, a message like `"divide: division by zero"` on
@@ -309,7 +309,7 @@ Here's `safeDivide` that returns `null` instead of failing:
 (p => p | @divide | (! => null, n => n))
 ```
 
-Run `echo '[10, 0]' | ruby fusion.rb safeDivide.fsn` and you get `null` rather than an
+Run `echo '[10, 0]' | fusion safeDivide.fsn` and you get `null` rather than an
 error. Notice how matching `!` is symmetric with constructing it: in expression
 position, `!42` *builds* an error with payload 42; in pattern position, `!42`
 *matches* an error with payload 42. The same syntax means "construct" on the right

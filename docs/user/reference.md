@@ -496,8 +496,8 @@ computes `v | programFunction`, and prints the result on standard output as JSON
 ### 9.4 Command-line interface
 
 ```
-ruby fusion.rb <file.fsn> [json-input]
-ruby fusion.rb -e '<source>' [json-input]
+fusion <file.fsn> [json-input]
+fusion -e '<source>' [json-input]
 ```
 
 Input comes from the `[json-input]` argument if present, otherwise from standard

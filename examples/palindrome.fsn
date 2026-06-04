@@ -1,4 +1,6 @@
+# Check, whether input string or array is a palindrome
 (
+  s ? @String => s | @chars | @,
   []  => "palindrome",
   [_] => "palindrome",
   [_, ...rest, _] ? ([first, ..., last] => [first, last] | @equals) => rest | @,
