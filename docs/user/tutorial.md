@@ -281,12 +281,12 @@ An error is always written as `!` followed by a **payload** — any regular JSON
 The built-ins above produced `!"divide: division by zero"` (an error whose payload
 is a string). You can construct your own:
 
-```fusion
-!42                                     // error with payload 42
-!"could not parse"                      // error carrying a message
-!{"kind": "bad_input", "got": 99}       // structured error
-!                                       // shorthand for !null
-```
+| Example                             | Meaning                  |
+| ----------------------------------- | ------------------------ |
+| `!42`                               | Error with payload 42    |
+| `!"could not parse"`                | Error carrying a message |
+| `!{"kind": "bad_input", "got": 99}` | Structured error         |
+| `!`                                 | Shorthand for `!null`    |
 
 Errors **propagate** through pipelines automatically. If any step in
 `a | f | g | h` produces an error, the rest is skipped and the error becomes the
@@ -294,8 +294,13 @@ final result — *unless* you write a clause that explicitly catches an error.
 Catching is done with an error pattern:
 
 ```fusion
-(! => "recovered", x => x)              // matches any error, returns "recovered"
-(!msg => msg, x => "ok")                // binds the payload to msg for further processing
+# Matches any error, returns "recovered"
+(! => "recovered", x => x)
+```
+
+```fusion
+# Binds the payload to "msg" for further processing
+(!msg => msg, x => "ok")
 ```
 
 Here's `safeDivide` that returns `null` instead of failing:

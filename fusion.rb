@@ -81,7 +81,7 @@ module Fusion
       c = peek
       return Token.new(:eof, nil, start) if c.nil?
 
-      # "=>" and "..." and "//" handled specially
+      # "=>" and "..." handled specially ("#" line comments handled in skip_trivia)
       if c == "=" && peek(1) == ">"
         @i += 2
         return Token.new(:arrow, "=>", start)
@@ -115,17 +115,21 @@ module Fusion
         c = peek
         if c == " " || c == "\t" || c == "\n" || c == "\r"
           @i += 1
-        elsif c == "/" && peek(1) == "/"
-          @i += 2
+        elsif c == "#" && at_line_start?
+          # A line is a comment iff its first non-whitespace char is "#".
+          # This also covers shebang lines (#!) for free.
           @i += 1 until peek.nil? || peek == "\n"
-        elsif c == "/" && peek(1) == "*"
-          @i += 2
-          @i += 1 until peek.nil? || (peek == "*" && peek(1) == "/")
-          @i += 2 unless peek.nil?
         else
           break
         end
       end
+    end
+
+    # True when only whitespace precedes @i on the current physical line.
+    def at_line_start?
+      j = @i - 1
+      j -= 1 while j >= 0 && (@src[j] == " " || @src[j] == "\t")
+      j < 0 || @src[j] == "\n" || @src[j] == "\r"
     end
 
     def lex_string(start)
@@ -155,6 +159,8 @@ module Fusion
                    raise ParseError, "Bad escape \\#{e}"
                  end
           @i += 1
+        elsif c == "\n" || c == "\r"
+          raise ParseError, "Raw newline in string starting at #{start}; use \\n"
         else
           buf << c
           @i += 1

@@ -146,7 +146,8 @@ uses yours; files elsewhere still get the built-in.
 nothing is auto-parsed). Read one with member access:
 
 ```fusion
-(_ => @ENV.CI)        // with CI=1 in the environment, yields the string "1"
+# with CI=1 in the environment, yields the string "1"
+(_ => @ENV.CI)
 ```
 
 A missing variable (`@ENV.NOPE`) yields `!`. Note `@ENV` is itself shadowable: a
@@ -162,8 +163,13 @@ plain identifier (e.g. contains a `.`), use the `@load` built-in. It takes a fil
 **verbatim** — no extension is added — resolved relative to the current file:
 
 ```fusion
-("data.config.fsn" | @load)      // loads exactly that file, returns its value
-(name => name | @load)           // load a file chosen at runtime
+# Load a file with exactly the given name. Don't append ".fsn".
+("data.config.json" | @load)
+```
+
+```fusion
+# Load a file chosen at runtime.
+(name => name | @load)
 ```
 
 A missing file yields an error.
@@ -178,7 +184,8 @@ dangles. Refer to the current file with a bare `@` ("this file", whatever it hap
 to be called) instead:
 
 ```fusion
-(0 => 1, n ? @Integer => [n, [n, 1] | @subtract | @] | @multiply)   // factorial
+# factorial
+(0 => 1, n ? @Integer => [n, [n, 1] | @subtract | @] | @multiply)
 ```
 
 If the file evaluates to an **object** and a recursive *helper* lives inside it as a

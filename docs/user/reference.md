@@ -63,9 +63,14 @@ expression, not a function.
 
 Array elements and object members may be **spread** with `...`:
 
+```fusion
+# Splice an array's elements in place
+[1, ...other, 9]
 ```
-[1, ...other, 9]            // splice an array's elements in place
-{"a": 1, ...other}          // merge another object's keys in place
+
+```fusion
+# Merge another object's keys in place
+{"a": 1, ...other}
 ```
 
 In a result, `...expr` requires `expr` to be an array (in an array literal) or an
@@ -73,7 +78,17 @@ object (in an object literal); otherwise the literal evaluates to `!`.
 
 ### 2.4 Comments
 
-`// line comment` to end of line, and `/* block comment */`.
+Fusion only has **whole-line comments**. A line is a comment iff its first non-whitespace
+character is `#`. Comments can be stripped without parsing the language, because string
+literals cannot span physical lines:
+
+```bash
+# Canonical specification of comment stripping
+grep -v '^[[:space:]]*#' program.fsn
+```
+
+A shebang line needs no special treatment — `#!/usr/bin/env fusion` is just a comment
+by the same rule.
 
 ### 2.5 Grammar (EBNF)
 
@@ -119,7 +134,7 @@ number      = int_lit | float_lit ;
 int_lit     = [ "-" ] digit { digit } ;
 float_lit   = int_lit "." digit { digit } [ exp ] | int_lit exp ;
 exp         = ("e" | "E") [ "+" | "-" ] digit { digit } ;
-string      = '"' { char | escape } '"' ;
+string      = '"' { char | escape } '"' ;       (* char excludes raw newline; use \n *)
 ```
 
 ---
