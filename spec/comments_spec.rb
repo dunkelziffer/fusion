@@ -1,0 +1,62 @@
+# frozen_string_literal: true
+
+# Comment syntax: whole-line "#" only, no inline comments; raw newlines in
+# strings are forbidden.
+RSpec.describe "comments" do
+  describe "accepted forms" do
+    it "ignores a full-line # comment" do
+      expect_pipe
+        .in("✅", "null")
+        .code("# this is a comment\n(_ => 1)")
+        .out("✅", "1")
+    end
+
+    it "ignores an indented # comment" do
+      expect_pipe
+        .in("✅", "null")
+        .code("\t   # indented comment\n(_ => 1)")
+        .out("✅", "1")
+    end
+
+    it "treats a shebang line as a comment" do
+      expect_pipe
+        .in("✅", "null")
+        .code("#!/usr/bin/env fusion\n(_ => 1)")
+        .out("✅", "1")
+    end
+
+    it "ignores a comment between tokens" do
+      expect_pipe
+        .in("✅", "null")
+        .code("(_ =>\n# pick one\n1)")
+        .out("✅", "1")
+    end
+
+    it "treats # inside a string as a literal character" do
+      expect_pipe
+        .in("✅", "null")
+        .code('(_ => "#notacomment")')
+        .out("✅", '"#notacomment"')
+    end
+  end
+
+  describe "rejected forms" do
+    it "rejects a trailing inline comment" do
+      expect_pipe
+        .code("(_ => 1) # nope")
+        .raises(Fusion::ParseError)
+    end
+
+    it "rejects a mid-line # comment" do
+      expect_pipe
+        .code("(_ => 1 # nope\n)")
+        .raises(Fusion::ParseError)
+    end
+
+    it "rejects a raw newline inside a string" do
+      expect_pipe
+        .code("(_ => \"line1\nline2\")")
+        .raises(Fusion::ParseError)
+    end
+  end
+end
