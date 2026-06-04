@@ -1,0 +1,35 @@
+# frozen_string_literal: true
+
+# === CLI internals ===
+#
+# Input: JSON
+# Output: Interpreter runtime value
+
+require "json"
+
+module Fusion
+  module CLI
+    module Parser
+      extend self
+
+      def parse(json)
+        ruby_value = JSON.parse(json)
+        convert(ruby_value)
+      rescue JSON::ParserError
+        Interpreter::ErrorVal.new({"kind" => "stdin_not_json"})
+      end
+
+      private
+
+      # returns a runtime value
+      def convert(ruby_value)
+        case ruby_value
+        when nil then Interpreter::NULL
+        when Array then ruby_value.map { |item| convert(item) }
+        when Hash then ruby_value.transform_values { |value| convert(value) }
+        else ruby_value
+        end
+      end
+    end
+  end
+end

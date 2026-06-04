@@ -42,16 +42,16 @@ program_value =
 # Read input: explicit arg wins, else stdin.
 input_text = explicit_input || ($stdin.tty? ? "" : $stdin.read)
 input_text = "null" if input_text.nil? || input_text.strip.empty?
-input_value = Fusion::JsonInput.parse(input_text)
+input_value = Fusion::CLI.parse(input_text)
 
 result = interp.apply(program_value, input_value)
 
-if Fusion.error?(result)
+if result.is_a?(Fusion::Interpreter::ErrorVal)
   # Print only the payload (as JSON) to stderr; stdout stays empty so that
   # shell pipelines can rely on "stdout has the result, or there isn't one".
-  $stderr.puts Fusion::Serializer.to_json(result.payload)
+  $stderr.puts Fusion::CLI.serialize(result.payload)
   exit 1
 else
-  puts Fusion::Serializer.to_json(result)
+  puts Fusion::CLI.serialize(result)
   exit 0
 end
