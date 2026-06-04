@@ -151,6 +151,37 @@ check_contains("@../subtract is file-only (no builtin fallback) -> !",
                run_nf("sub/usesDotDotBuiltin.fsn", "null"),
                '"kind":"file_not_found"', 'subtract.fsn')
 
+# --- Comments (whole-line "#", no inline; raw newlines in strings forbidden) ---
+def check_raises(desc, &blk)
+  blk.call
+  $results << false
+  puts "[FAIL] #{desc}"
+  puts "        expected: ParseError, but no error was raised"
+rescue Fusion::ParseError
+  $results << true
+  puts "[ok  ] #{desc}"
+end
+
+check("full-line # comment is ignored",
+      run_src("# this is a comment\n(_ => 1)", "null"), "1")
+check("indented # comment is ignored",
+      run_src("\t   # indented comment\n(_ => 1)", "null"), "1")
+check("shebang line is just a comment",
+      run_src("#!/usr/bin/env fusion\n(_ => 1)", "null"), "1")
+check("comment between tokens",
+      run_src("(_ =>\n# pick one\n1)", "null"), "1")
+check("# inside a string is literal, not a comment",
+      run_src('(_ => "#notacomment")', "null"), '"#notacomment"')
+check_raises("trailing inline comment is a syntax error") do
+  run_src("(_ => 1) # nope", "null")
+end
+check_raises("mid-line # is a syntax error") do
+  run_src("(_ => 1 # nope\n)", "null")
+end
+check_raises("raw newline in string is rejected") do
+  run_src("(_ => \"line1\nline2\")", "null")
+end
+
 passed = $results.count(true)
 total  = $results.length
 puts

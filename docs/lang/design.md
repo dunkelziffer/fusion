@@ -68,7 +68,9 @@ Future work and open questions are tracked separately in our [Roadmap](./roadmap
 ### Cons
 
 - Object keys must be quoted strings, which is verbose for record-like use.
-- JSON's lack of bare identifiers is exploited (see 2.2), but JSON's other constraints (no comments natively, string-only keys) carry over.
+- JSON's lack of bare identifiers is exploited (see 2.2), but JSON's other constraints carry over:
+  - Objects only support string keys
+  - 🩹 No comments (Comments are added back as whole-line `#` comments — see reference §2.4.)
 
 ---
 
@@ -638,3 +640,35 @@ All access goes through `@`:
 
 - Boundary cases (`floor`, `values`) are judgment calls.
 - The Tier 1 library that would sit on top is only partially populated in the prototype.
+
+---
+
+## 5.4 Whole-line `#` comments
+
+### Decisions
+
+- 🧑 ✅ Comments are whole lines only: a line is a comment iff its first non-whitespace character is `#`. There are no inline or trailing comments.
+- 🧑 ✅ Shebang lines (`#!/usr/bin/env fusion`) are supported, but need no special case, since a `#!` line is already a comment by the rule above.
+- 🔢 ✅ Raw newlines inside string literals are forbidden (write `\n` instead), matching strict JSON. Claude flagged that the easy-strip guarantee depends on this.
+- 🔢 ✅ The previous `// line` and `/* block */` syntax is removed, not kept as an alias
+
+### Why the implementer flagged the string constraint
+
+- The headline goal was "comments can be stripped without understanding the grammar." That holds for a per-line stripper (`grep -v '^[[:space:]]*#'`) **only if** a `#` at line-start can never be inside a string — i.e. strings cannot span physical lines. The old lexer accepted raw newlines in strings, which would have silently broken the guarantee, so the constraint was made explicit.
+
+### Alternatives
+
+- 🤖 ❌ Keep inline/trailing comments (e.g. `x | f  # note`). Rejected: a trailing comment reintroduces the string-vs-comment ambiguity (`"#"` in a string), defeating grammar-free stripping.
+- 🤖 ❌ Keep `//` and `/* */` as aliases. Rejected for the same reason — `//` inside a string (`"http://…"`) breaks naive stripping.
+- 🤖 💭 Allow multi-line strings and have the stripper track string state. Rejected: that is exactly the "understand the grammar" cost the design set out to avoid.
+
+### Pros
+
+- Comments are strippable by a one-line filter with no parser, and the rule is trivial to state.
+- Shebang support falls out for free; the lexer treats `#!` as an ordinary comment.
+- Fits the "functional JSON / Unix filter" idiom (shell, Python, YAML, TOML, Make all use `#`).
+
+### Cons
+
+- No way to annotate a single token mid-line; an explanatory comment must occupy its own line above the code.
+- A breaking change from the earlier `//` / `/* */` syntax (acceptable at this Alpha stage).
