@@ -40,6 +40,18 @@ one input and one output and work by pattern-matching.
 - `@ENV` allows read access to environment variables.
 - `name | @load` loads a file by name. Useful for dynamic file access or file names with special characters.
 
+## Installation
+
+To use **Fusion** as a real scripting language, install it globally on your system:
+```bash
+gem install fusion-lang
+```
+
+To use any `Fusion` modules from another Ruby program, add it to your `Gemfile`:
+```ruby
+gem "fusion-lang", require: "fusion"
+```
+
 ## How to run your code
 
 ```sh
@@ -57,3 +69,11 @@ fusion -e '(n => [n,2] | @multiply)' 21         # => 42 (inline program)
 ## Documentation
 
 Refer to the [Documentation](docs/index.md) for further information.
+
+## Development
+
+After checking out the repo, run `bin/setup` to install dependencies. Run `bin/console` for an interactive prompt that will allow you to experiment.
+
+## License
+
+The gem is available as open source under the terms of the [MIT License](https://opensource.org/licenses/MIT).

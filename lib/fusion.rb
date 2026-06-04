@@ -19,6 +19,8 @@
 #   object -> Hash (String keys, insertion-ordered as Ruby preserves)
 #   func   -> Func (closure over an Env)
 
+require_relative "fusion/version"
+
 module Fusion
   # ---- Special singletons -------------------------------------------------
   NULL  = :null
