@@ -17,9 +17,9 @@ EX     = File.join(HERE, "fixtures")
 def run_file(relpath, input_json)
   interp = Fusion::Interpreter.new(stdlib_dir: STDLIB)
   fn = interp.load_file(File.join(EX, relpath)).force
-  val = Fusion::JsonInput.parse(input_json)
+  val = Fusion::CLI.parse(input_json)
   res = interp.apply(fn, val)
-  Fusion::Serializer.to_json(res)
+  Fusion::CLI.serialize(res)
 end
 
 # Run inline source against a JSON input string. __dir__ is set to EX so that
@@ -30,8 +30,8 @@ def run_src(src, input_json)
   env = interp.root_env.child
   env.define("__dir__", EX)
   fn = interp.eval_expr(ast, env)
-  res = interp.apply(fn, Fusion::JsonInput.parse(input_json))
-  Fusion::Serializer.to_json(res)
+  res = interp.apply(fn, Fusion::CLI.parse(input_json))
+  Fusion::CLI.serialize(res)
 end
 
 $results = []
@@ -121,7 +121,7 @@ NF = File.join(EX, "newfeat")
 def run_nf(relpath, input_json, env_vars = nil)
   interp = Fusion::Interpreter.new(stdlib_dir: STDLIB, env_vars: env_vars)
   fn = interp.load_file(File.join(NF, relpath)).force
-  Fusion::Serializer.to_json(interp.apply(fn, Fusion::JsonInput.parse(input_json)))
+  Fusion::CLI.serialize(interp.apply(fn, Fusion::CLI.parse(input_json)))
 end
 
 check("sibling add.fsn shadows builtin @add", run_nf("usesAdd.fsn", "null"), '"shadowed-add"')

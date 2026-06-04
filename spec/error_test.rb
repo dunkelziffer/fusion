@@ -18,7 +18,7 @@ def run(src, input_json)
   env = interp.root_env.child
   env.define("__dir__", EX)
   fn = interp.eval_expr(ast, env)
-  Fusion::Serializer.to_json(interp.apply(fn, Fusion::JsonInput.parse(input_json)))
+  Fusion::CLI.serialize(interp.apply(fn, Fusion::CLI.parse(input_json)))
 end
 
 $results = []
