@@ -13,9 +13,6 @@ module Fusion
       end
 
       def define(name, value)
-        # BUG: binding the same identifier twice in one scope silently overwrites
-        # the earlier binding instead of raising a binding_error. A clause like
-        # ([a, a] => ...) should reject the duplicate `a`, but currently does not.
         @vars[name] = value
         self
       end

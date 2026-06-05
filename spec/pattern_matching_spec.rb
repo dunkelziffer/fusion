@@ -41,6 +41,43 @@ RSpec.describe "pattern matching" do
     end
   end
 
+  describe "duplicate binders" do
+    it "rejects a repeated binder in an array pattern" do
+      expect_pipe
+        .in("✅", "[1,2]")
+        .code("([a, a] => a)")
+        .out("❌", '{"kind":"binding_error","location":"code <inline>","operation":"binding identifier a","input":"a","message":"identifier already bound"}')
+    end
+
+    it "rejects a repeated binder across object members" do
+      expect_pipe
+        .in("✅", '{"x":1,"y":2}')
+        .code('({"x": v, "y": v} => v)')
+        .out("❌", '{"kind":"binding_error","location":"code <inline>","operation":"binding identifier v","input":"v","message":"identifier already bound"}')
+    end
+
+    it "rejects a binder that collides with a rest binder" do
+      expect_pipe
+        .in("✅", "[1,2,3]")
+        .code("([a, ...a] => a)")
+        .out("❌", '{"kind":"binding_error","location":"code <inline>","operation":"binding identifier a","input":"a","message":"identifier already bound"}')
+    end
+
+    it "does not reject the duplicate when the clause's shape does not match (clause simply does not apply)" do
+      expect_pipe
+        .in("✅", "[1,2,3]")
+        .code("([a, a] => a)")
+        .out("✅", "null")
+    end
+
+    it "still allows distinct binders" do
+      expect_pipe
+        .in("✅", "[1,2]")
+        .code("([a, b] => [b, a])")
+        .out("✅", "[2,1]")
+    end
+  end
+
   describe "guards (?)" do
     it "matches when the type guard holds" do
       expect_pipe

@@ -283,8 +283,8 @@ module Fusion
         !value.is_a?(ErrorVal)
       when Pattern::PBind
         return false if value.is_a?(ErrorVal)    # binders never capture an error
-        bindings[pattern.name] = value
-        true
+        e = bind(bindings, pattern.name, value, env)
+        e.nil? ? true : e
       when Pattern::PArr
         match_array(pattern, value, bindings, env)
       when Pattern::PObj
@@ -338,7 +338,8 @@ module Fusion
         rest_name = elems[rest_index][1]
         if rest_name
           mid = value[before.length...(value.length - after.length)]
-          bindings[rest_name] = mid
+          e = bind(bindings, rest_name, mid, env)
+          return e if e
         end
         true
       end
@@ -362,9 +363,23 @@ module Fusion
       end
       if rest_name != :__none__ && rest_name
         remaining = value.reject { |k, _| matched_keys.include?(k) }
-        bindings[rest_name] = remaining
+        e = bind(bindings, rest_name, remaining, env)
+        return e if e
       end
       true
+    end
+
+    # Record a pattern binding, or return a binding_error if `name` is already
+    # bound in this clause. Duplicate binders (e.g. `[a, a]`) are rejected, not
+    # treated as a non-linear "must be equal" match. Returns nil on success.
+    def bind(bindings, name, value, env)
+      if bindings.key?(name)
+        return ErrorVal.internal(kind: "binding_error", location: code_location(env),
+                                 operation: "binding identifier #{name}", input: name,
+                                 message: "identifier already bound")
+      end
+      bindings[name] = value
+      nil
     end
 
     # ---- Equality & helpers ----------------------------------------------

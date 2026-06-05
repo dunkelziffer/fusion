@@ -379,9 +379,9 @@ Future work and open questions are tracked separately in our [Roadmap](./roadmap
 - 🤖 ✅ Conversion happens deep (so an error is a catchable Fusion `!` where possible) *and* at a top-level net (so nothing escapes): each builtin call is wrapped (e.g. `floor` of a non-finite number → `math_error`), file reads rescue `SystemCallError` (→ `reference_error`), `Parser.parse_file` rescues every lexer/parser `ParseError` at that one entry point and returns a `parse_error` value (so files, inline `-e`, and the test harness all get a payload, never a raised error), a function result is reported as `serialization_error`, and a final `rescue Exception` in `exe/fusion` converts anything else — notably `SystemStackError` from unbounded recursion (→ `stack_error`, `location: "interpreter"`). The net must rescue `Exception`, not just `StandardError`, because `SystemStackError` is not a `StandardError`.
 - 🤖 ✅ The **two internal-invariant asserts** (`FusionError` "Cannot evaluate node" / "Unknown pattern") are the deliberate exception: reaching them is an interpreter bug, not a user-facing error, so they are allowed to raise. The top-level net re-raises a non-parse `FusionError` rather than masking the bug.
 
-### Known gap (not yet an error)
+### Duplicate binders
 
-- 🤖 ✅ Binding the same identifier twice in one scope (e.g. `([a, a] => ...)`) silently overwrites rather than raising a `binding_error`. Marked as a BUG in `Env#define`; a future fix would make it a `binding_error`.
+- 🤖 ✅ Binding the same identifier twice in one clause (e.g. `([a, a] => ...)`, `({"x": v, "y": v} => ...)`, or a binder colliding with a `...rest` name) is a `binding_error`, not a non-linear "must be equal" match. It is detected in `match` as the binding is produced, so it surfaces only when the clause's shape otherwise matches (a non-matching shape just means the clause does not apply).
 
 ### Alternatives
 
