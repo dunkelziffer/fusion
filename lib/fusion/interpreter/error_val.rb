@@ -13,6 +13,21 @@ module Fusion
         @payload = payload
       end
 
+      # Build a standardized, interpreter-produced error (as opposed to a
+      # user-constructed `!expr`). Every such payload shares one shape — see
+      # docs/lang/design.md §2.9 for the field meanings and the closed `kind`
+      # and `location` sets.
+      def self.internal(kind:, location:, operation:, input:, message: nil)
+        payload = {
+          "kind" => kind,
+          "location" => location,
+          "operation" => operation,
+          "input" => input,
+        }
+        payload["message"] = message if message
+        new(payload)
+      end
+
       def inspect
         "!#{payload.inspect}"
       end

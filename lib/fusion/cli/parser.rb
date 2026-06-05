@@ -16,7 +16,7 @@ module Fusion
         ruby_value = JSON.parse(json)
         convert(ruby_value)
       rescue JSON::ParserError
-        Errors.make(kind: "parse_error", location: "input", operation: "parsing input as JSON",
+        Interpreter::ErrorVal.internal(kind: "parse_error", location: "input", operation: "parsing input as JSON",
                     input: json, message: "input is not valid JSON")
       end
 

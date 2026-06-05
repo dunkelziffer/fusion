@@ -19,7 +19,6 @@
 #   func   -> Func (closure over an Env)
 
 require_relative "ast"
-require_relative "errors"
 require_relative "interpreter/null"
 require_relative "interpreter/error_val"
 require_relative "interpreter/func"
@@ -80,13 +79,13 @@ module Fusion
       eval_expr(ast, env)
     rescue Errno::ENOENT
       warn "[fusion] file not found: #{abspath}" if ENV["FUSION_DEBUG"]
-      Errors.make(kind: "reference_error", location: loc, operation: "reading file", input: abspath, message: "file not found")
+      ErrorVal.internal(kind: "reference_error", location: loc, operation: "reading file", input: abspath, message: "file not found")
     rescue SystemCallError => err # EISDIR, EACCES, ... — file-system access failures
       warn "[fusion] cannot read #{abspath}: #{err.message}" if ENV["FUSION_DEBUG"]
-      Errors.make(kind: "reference_error", location: loc, operation: "reading file", input: abspath, message: err.message)
+      ErrorVal.internal(kind: "reference_error", location: loc, operation: "reading file", input: abspath, message: err.message)
     rescue ParseError => err
       warn "[fusion] parse error in #{abspath}: #{err.message}" if ENV["FUSION_DEBUG"]
-      Errors.make(kind: "parse_error", location: loc, operation: "parsing file", input: abspath, message: err.message)
+      ErrorVal.internal(kind: "parse_error", location: loc, operation: "parsing file", input: abspath, message: err.message)
     end
 
     # Resolve a bare "@name": sibling file > builtin (incl. load, ENV) > stdlib > !.
@@ -102,9 +101,9 @@ module Fusion
         # loads a VERBATIM filename (no ".fsn" appended) so arbitrary names work.
         d = dir
         return NativeFunc.new("load", lambda do |v|
-          next Errors.make(kind: "type_error", location: "builtin load", operation: "@load", input: v, message: "expected a string") unless v.is_a?(String)
+          next ErrorVal.internal(kind: "type_error", location: "builtin load", operation: "@load", input: v, message: "expected a string") unless v.is_a?(String)
           target = File.expand_path(v, d)
-          next Errors.make(kind: "reference_error", location: "builtin load", operation: "@load", input: v, message: "file not found") unless File.exist?(target)
+          next ErrorVal.internal(kind: "reference_error", location: "builtin load", operation: "@load", input: v, message: "file not found") unless File.exist?(target)
           load_file(target).force
         end)
       end
@@ -113,7 +112,7 @@ module Fusion
         std = File.join(@stdlib_dir, name + ".fsn")
         return load_file(std).force if File.exist?(std)
       end
-      Errors.make(kind: "reference_error", location: location, operation: "resolving @#{name}", input: name, message: "unresolved reference")
+      ErrorVal.internal(kind: "reference_error", location: location, operation: "resolving @#{name}", input: name, message: "unresolved reference")
     end
 
     # Resolve a pure path "@dir/a" or "@../a": file only, never builtin/stdlib.
@@ -137,7 +136,7 @@ module Fusion
         end
       when Expression::Ident
         v = env.lookup(node.name)
-        v == :__unbound__ ? Errors.make(kind: "binding_error", location: code_location(env), operation: "reading identifier #{node.name}", input: node.name, message: "unbound identifier") : v
+        v == :__unbound__ ? ErrorVal.internal(kind: "binding_error", location: code_location(env), operation: "reading identifier #{node.name}", input: node.name, message: "unbound identifier") : v
       when Expression::FileRef
         dir = env.lookup("__dir__")
         dir = Dir.pwd if dir == :__unbound__
@@ -147,7 +146,7 @@ module Fusion
           # current file, so `@` is unresolvable there today — but it *should*
           # refer to the whole inline program (tracked as a gap).
           f = env.lookup("__file__")
-          f == :__unbound__ ? Errors.make(kind: "reference_error", location: code_location(env), operation: "resolving @", input: NULL, message: "no current file for self-reference") : load_file(f).force
+          f == :__unbound__ ? ErrorVal.internal(kind: "reference_error", location: code_location(env), operation: "resolving @", input: NULL, message: "no current file for self-reference") : load_file(f).force
         when :name
           resolve_name(node.path, dir, code_location(env))
         else # :path
@@ -172,7 +171,7 @@ module Fusion
         v = eval_expr(expr, env)
         return v if v.is_a?(ErrorVal)
         if kind == :spread
-          return Errors.make(kind: "type_error", location: code_location(env), operation: "[...] array spread", input: v, message: "expected an array") unless v.is_a?(Array)
+          return ErrorVal.internal(kind: "type_error", location: code_location(env), operation: "[...] array spread", input: v, message: "expected an array") unless v.is_a?(Array)
           out.concat(v)
         else
           out << v
@@ -187,7 +186,7 @@ module Fusion
         if m[0] == :spread
           v = eval_expr(m[1], env)
           return v if v.is_a?(ErrorVal)
-          return Errors.make(kind: "type_error", location: code_location(env), operation: "{...} object spread", input: v, message: "expected an object") unless v.is_a?(Hash)
+          return ErrorVal.internal(kind: "type_error", location: code_location(env), operation: "{...} object spread", input: v, message: "expected an object") unless v.is_a?(Hash)
           out.merge!(v)
         else
           _, key, expr = m
@@ -209,8 +208,8 @@ module Fusion
       obj = eval_expr(node.obj, env)
       return obj if obj.is_a?(ErrorVal)
       loc = code_location(env)
-      return Errors.make(kind: "type_error", location: loc, operation: ".#{node.key}", input: [obj, node.key], message: "expected an object") unless obj.is_a?(Hash)
-      return Errors.make(kind: "access_error", location: loc, operation: ".#{node.key}", input: [obj, node.key], message: "missing key") unless obj.key?(node.key)
+      return ErrorVal.internal(kind: "type_error", location: loc, operation: ".#{node.key}", input: [obj, node.key], message: "expected an object") unless obj.is_a?(Hash)
+      return ErrorVal.internal(kind: "access_error", location: loc, operation: ".#{node.key}", input: [obj, node.key], message: "missing key") unless obj.key?(node.key)
       obj[node.key]
     end
 
@@ -223,12 +222,12 @@ module Fusion
       if obj.is_a?(Array) && idx.is_a?(Integer)
         i = idx >= 0 ? idx : obj.length + idx
         return obj[i] if i >= 0 && i < obj.length
-        return Errors.make(kind: "access_error", location: loc, operation: "[#{idx}]", input: [obj, idx], message: "index out of range")
+        return ErrorVal.internal(kind: "access_error", location: loc, operation: "[#{idx}]", input: [obj, idx], message: "index out of range")
       elsif obj.is_a?(Hash) && idx.is_a?(String)
         return obj[idx] if obj.key?(idx)
-        return Errors.make(kind: "access_error", location: loc, operation: "[#{idx.inspect}]", input: [obj, idx], message: "missing key")
+        return ErrorVal.internal(kind: "access_error", location: loc, operation: "[#{idx.inspect}]", input: [obj, idx], message: "missing key")
       end
-      Errors.make(kind: "type_error", location: loc, operation: "[index]", input: [obj, idx], message: "bad index type")
+      ErrorVal.internal(kind: "type_error", location: loc, operation: "[index]", input: [obj, idx], message: "bad index type")
     end
 
     # ---- Application & matching ------------------------------------------
@@ -247,11 +246,12 @@ module Fusion
         begin
           return f.fn.call(v)
         rescue StandardError => err
-          return Errors.from_exception(err, location: "builtin #{f.name}", operation: f.name, input: v)
+          kind = (err.is_a?(FloatDomainError) || err.is_a?(ZeroDivisionError)) ? "math_error" : "type_error"
+          return ErrorVal.internal(kind: kind, location: "builtin #{f.name}", operation: f.name, input: v, message: err.message)
         end
       end
       unless f.is_a?(Func)
-        return Errors.make(kind: "type_error", location: location, operation: "|", input: [v, f], message: "applied a non-function")
+        return ErrorVal.internal(kind: "type_error", location: location, operation: "|", input: [v, f], message: "applied a non-function")
       end
       f.clauses.each do |pattern, body|
         bindings = {}
