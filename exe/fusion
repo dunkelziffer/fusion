@@ -44,16 +44,14 @@ begin
   # Determine the program function value.
   program_value =
     if inline
-      ast =
-        begin
-          Fusion::Parser.parse_file(inline)
-        rescue Fusion::ParseError => err
-          emit_error(Fusion::Interpreter::ErrorVal.internal(kind: "parse_error", location: "code <inline>",
-                                                            operation: "parsing", input: inline, message: err.message).payload)
-        end
-      env = interp.root_env.child
-      env.define("__dir__", Dir.pwd)
-      interp.eval_expr(ast, env)
+      ast = Fusion::Parser.parse_file(inline, location: "code <inline>")
+      if ast.is_a?(Fusion::Interpreter::ErrorVal)
+        ast # a parse error becomes the program value and propagates below
+      else
+        env = interp.root_env.child
+        env.define("__dir__", Dir.pwd)
+        interp.eval_expr(ast, env)
+      end
     else
       abort("usage: fusion <file.fsn> [json-input]   or   fusion -e '<src>' [json-input]") unless program_path
       interp.load_file(File.expand_path(program_path)).force

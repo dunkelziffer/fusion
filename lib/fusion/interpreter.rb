@@ -69,8 +69,9 @@ module Fusion
       loc = file_location(abspath)
       ast = (@ast_cache[abspath] ||= begin
         src = File.read(abspath)
-        Parser.parse_file(src)
+        Parser.parse_file(src, location: loc)
       end)
+      return ast if ast.is_a?(ErrorVal) # a parse error (already a payloaded value)
       # A file's value is evaluated in a fresh env whose parent is root (builtins),
       # plus knowledge of its own directory for resolving @refs.
       env = @root_env.child
@@ -83,9 +84,6 @@ module Fusion
     rescue SystemCallError => err # EISDIR, EACCES, ... — file-system access failures
       warn "[fusion] cannot read #{abspath}: #{err.message}" if ENV["FUSION_DEBUG"]
       ErrorVal.internal(kind: "reference_error", location: loc, operation: "reading file", input: abspath, message: err.message)
-    rescue ParseError => err
-      warn "[fusion] parse error in #{abspath}: #{err.message}" if ENV["FUSION_DEBUG"]
-      ErrorVal.internal(kind: "parse_error", location: loc, operation: "parsing file", input: abspath, message: err.message)
     end
 
     # Resolve a bare "@name": sibling file > builtin (incl. load, ENV) > stdlib > !.

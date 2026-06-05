@@ -44,19 +44,19 @@ RSpec.describe "comments" do
     it "rejects a trailing inline comment" do
       expect_pipe
         .code("(_ => 1) # nope")
-        .raises(Fusion::ParseError)
+        .out("❌", a_string_including('"kind":"parse_error"', '"location":"code <inline>"'))
     end
 
     it "rejects a mid-line # comment" do
       expect_pipe
         .code("(_ => 1 # nope\n)")
-        .raises(Fusion::ParseError)
+        .out("❌", a_string_including('"kind":"parse_error"', '"location":"code <inline>"'))
     end
 
     it "rejects a raw newline inside a string" do
       expect_pipe
         .code("(_ => \"line1\nline2\")")
-        .raises(Fusion::ParseError)
+        .out("❌", a_string_including('"kind":"parse_error"', '"location":"code <inline>"'))
     end
   end
 end
