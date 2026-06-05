@@ -16,5 +16,10 @@ module Fusion
     def self.serialize(runtime_value)
       Serializer.to_json(runtime_value)
     end
+
+    # whether a value can be faithfully emitted as a program result
+    def self.serializable?(runtime_value)
+      Serializer.serializable?(runtime_value)
+    end
   end
 end

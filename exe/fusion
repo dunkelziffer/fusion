@@ -10,48 +10,83 @@
 #   echo '[1,2,3]' | fusion path/to/main.fsn
 #   fusion path/to/main.fsn '<json-input>'        # input as an argument
 #   fusion -e '(n => [n,2] | @multiply)' '21'     # inline program
+#
+# The CLI contract uses stdout for the result and stderr for the error payload
+# only. There is no channel for raw Ruby errors, so every failure is converted to
+# a standardized payloaded error (see docs/lang/design.md §2.9) and printed as
+# JSON to stderr with exit 1. The lone exception is an internal-invariant assert
+# (a FusionError that is not a parse error) — reaching it is an interpreter bug,
+# so it is allowed to surface as a Ruby error.
 
 require_relative "../lib/fusion"
 
-args = ARGV.dup
-inline = nil
-if args[0] == "-e"
-  inline = args[1]
-  program_path = nil
-  explicit_input = args[2]
-else
-  program_path = args[0]
-  explicit_input = args[1]
+# Print an error payload (a runtime value) to stderr and exit 1.
+def emit_error(payload)
+  $stderr.puts Fusion::CLI.serialize(payload)
+  exit 1
 end
 
-stdlib = File.expand_path("../stdlib", __dir__)
-interp = Fusion::Interpreter.new(stdlib_dir: (Dir.exist?(stdlib) ? stdlib : nil))
-
-# Determine the program function value.
-program_value =
-  if inline
-    ast = Fusion::Parser.parse_file(inline)
-    env = interp.root_env.child
-    env.define("__dir__", Dir.pwd)
-    interp.eval_expr(ast, env)
+begin
+  args = ARGV.dup
+  inline = nil
+  if args[0] == "-e"
+    inline = args[1]
+    program_path = nil
+    explicit_input = args[2]
   else
-    abort("usage: fusion <file.fsn> [json-input]   or   fusion -e '<src>' [json-input]") unless program_path
-    interp.load_file(File.expand_path(program_path)).force
+    program_path = args[0]
+    explicit_input = args[1]
   end
 
-# Read input: explicit arg wins, else stdin.
-input_text = explicit_input || ($stdin.tty? ? "" : $stdin.read)
-input_text = "null" if input_text.nil? || input_text.strip.empty?
-input_value = Fusion::CLI.parse(input_text)
+  stdlib = File.expand_path("../stdlib", __dir__)
+  interp = Fusion::Interpreter.new(stdlib_dir: (Dir.exist?(stdlib) ? stdlib : nil))
 
-result = interp.apply(program_value, input_value)
+  # Determine the program function value.
+  program_value =
+    if inline
+      ast =
+        begin
+          Fusion::Parser.parse_file(inline)
+        rescue Fusion::ParseError => err
+          emit_error(Fusion::Errors.make(kind: "parse_error", location: "code <inline>",
+                                         operation: "parsing", input: inline, message: err.message).payload)
+        end
+      env = interp.root_env.child
+      env.define("__dir__", Dir.pwd)
+      interp.eval_expr(ast, env)
+    else
+      abort("usage: fusion <file.fsn> [json-input]   or   fusion -e '<src>' [json-input]") unless program_path
+      interp.load_file(File.expand_path(program_path)).force
+    end
 
-if result.is_a?(Fusion::Interpreter::ErrorVal)
-  # Print only the payload (as JSON) to stderr; stdout stays empty so that
-  # shell pipelines can rely on "stdout has the result, or there isn't one".
-  $stderr.puts Fusion::CLI.serialize(result.payload)
-  exit 1
-else
-  puts Fusion::CLI.serialize(result)
-  exit 0
+  # Read input: explicit arg wins, else stdin.
+  input_text = explicit_input || ($stdin.tty? ? "" : $stdin.read)
+  input_text = "null" if input_text.nil? || input_text.strip.empty?
+  input_value = Fusion::CLI.parse(input_text)
+
+  result = interp.apply(program_value, input_value)
+
+  if result.is_a?(Fusion::Interpreter::ErrorVal)
+    # Print only the payload (as JSON) to stderr; stdout stays empty so that
+    # shell pipelines can rely on "stdout has the result, or there isn't one".
+    emit_error(result.payload)
+  elsif !Fusion::CLI.serializable?(result)
+    # A function (anywhere in the value) cannot be emitted as JSON.
+    emit_error(Fusion::Errors.make(kind: "serialization_error", location: "output",
+                                   operation: "serializing result", input: result,
+                                   message: "cannot serialize a function").payload)
+  else
+    puts Fusion::CLI.serialize(result)
+    exit 0
+  end
+rescue SystemExit
+  raise # let exit()/abort() through untouched
+rescue Fusion::FusionError
+  raise # internal-invariant assert — a bug; allowed to surface as a Ruby error
+rescue Exception => err # rubocop:disable Lint/RescueException
+  # Final safety net: SystemStackError and any other escaped Ruby error become a
+  # payloaded error rather than a raw backtrace on stderr.
+  emit_error(Fusion::Errors.from_exception(err, location: "interpreter",
+                                           operation: "running the program",
+                                           input: Fusion::Interpreter::NULL).payload)
 end

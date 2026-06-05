@@ -20,7 +20,9 @@ module Fusion
         when :forcing
           # We are already evaluating this file and were asked for it again
           # without any intervening function boundary => non-productive data cycle.
-          ErrorVal.new({"kind" => "data_cycle", "path" => @abspath})
+          Errors.make(kind: "reference_error", location: @loader.file_location(@abspath),
+                      operation: "forcing a file reference", input: @abspath,
+                      message: "non-productive data cycle")
         else
           @state = :forcing
           @value = @loader.evaluate_file(@abspath)

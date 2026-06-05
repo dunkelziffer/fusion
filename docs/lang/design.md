@@ -355,10 +355,50 @@ Future work and open questions are tracked separately in our [Roadmap](./roadmap
 
 ### Cons
 
-- The payload format is part of the language's surface — built-ins use string payloads (`"divide: division by zero"`) while runtime mechanics use structured object payloads (`{"kind": ...}`), an inconsistency tracked in the roadmap.
+- 🩹 The payload format is part of the language's surface — built-ins originally used string payloads (`"divide: division by zero"`) while runtime mechanics used structured object payloads (`{"kind": ...}`). This inconsistency is resolved in 2.9: every error now carries the same structured payload.
 - A payload that itself contains sensitive data becomes part of the program's stderr stream.
 - The bare-`!`-means-`!null` rule preserves a simple expression form but means a careless `_ => !` clause gives a maximally unhelpful error.
 - Inspecting an error's payload requires a small catch-and-rebind (`(!a => a)`) rather than direct comparison.
+
+---
+
+## 2.9 Standardized error payloads; no raw Ruby errors
+
+### Decisions
+
+- 🧑 ✅ Every error payload produced by the language has the **same shape**: an object with required fields `"kind"`, `"location"`, `"operation"`, `"input"`, and an optional `"message"`. This supersedes the 2.8 split where built-ins used bare-string payloads and runtime mechanics used `{"kind": ...}` objects.
+- 🧑 ✅ **`kind`** is one of a closed set: `parse_error`, `reference_error`, `type_error`, `argument_error`, `binding_error`, `access_error`, `math_error`, `conversion_error`, `stack_error`, `serialization_error`.
+- 🧑 ✅ **`location`** names where the failing operation lives: `"builtin X"`, `"stdlib X"`, `"code X"`, `"input"`, `"output"`, or `"interpreter"`. `input`/`output` refer to the data channels (stdin/CLI-arg in, stdout out), **never** to the program source — code always reports as `"code X"` (or `"code <inline>"` for a `-e` program).
+- 🧑 ✅ **`operation`** describes the operation that failed (`"|"`, `".name"`, `"add"`, `"parsing a guardpat"`); **`input`** lists the operands it received; **`message`** carries optional human detail (`"expected an object"`).
+- 🔢 ✅ `argument_error` means a *wrong number* (the input is not the pair/shape the operation needs); `type_error` means *expected X* / a type mismatch. The pair-builtins therefore split a non-pair (→ `argument_error`) from a pair of the wrong element types (→ `type_error`); `equals`, which constrains only shape, only ever raises `argument_error`.
+- 🤖 ✅ Member/index access reserves `access_error` for exactly `missing key` and `index out of range`; accessing a member of a non-object or indexing with a wrong-typed key is a `type_error`. File-system access failures (missing file, a directory, permission denied) are `reference_error`, not `access_error`.
+
+### No raw Ruby errors reach the user
+
+- 🧑 ✅ The CLI contract already spends stdout (the result) and stderr (the error payload). There is **no third channel**, so a raw Ruby backtrace on stderr would corrupt the contract. Fusion therefore **catches every Ruby error a program can trigger and converts it to a standardized payload**.
+- 🤖 ✅ Conversion happens deep (so an error is a catchable Fusion `!` where possible) *and* at a top-level net (so nothing escapes): each builtin call is wrapped (e.g. `floor` of a non-finite number → `math_error`), file reads rescue `SystemCallError` (→ `reference_error`), the lexer range-checks `\u` escapes (→ `parse_error`), inline `-e` source is parsed under rescue, a function result is reported as `serialization_error`, and a final `rescue Exception` in `exe/fusion` converts anything else — notably `SystemStackError` from unbounded recursion (→ `stack_error`, `location: "interpreter"`). The net must rescue `Exception`, not just `StandardError`, because `SystemStackError` is not a `StandardError`.
+- 🤖 ✅ The **two internal-invariant asserts** (`FusionError` "Cannot evaluate node" / "Unknown pattern") are the deliberate exception: reaching them is an interpreter bug, not a user-facing error, so they are allowed to raise. The top-level net re-raises a non-parse `FusionError` rather than masking the bug.
+
+### Known gap (not yet an error)
+
+- 🤖 ✅ Binding the same identifier twice in one scope (e.g. `([a, a] => ...)`) silently overwrites rather than raising a `binding_error`. Marked as a BUG in `Env#define`; a future fix would make it a `binding_error`.
+
+### Alternatives
+
+- 🔢 ❌ Keep both payload shapes and document the rule (built-ins → strings, runtime → objects) — rejected in favor of one uniform shape, since catch clauses (`!{"kind": k}`) want a single dispatchable form.
+- 🤖 ❌ A top-level net only — rejected because a mid-program Ruby error would then become a final result rather than a catchable `!`.
+- 🤖 💭 An `internal_error` kind for the invariant asserts — declined; they stay as raised Ruby errors.
+
+### Pros
+
+- One payload shape: every catch site dispatches on `kind` the same way, and the five fields make an error self-describing (what failed, where, on what input).
+- The CLI contract holds unconditionally — a program can crash the interpreter's host language and the user still gets a clean JSON payload and exit 1.
+
+### Cons
+
+- Payloads are more verbose than the old bare strings (`{"kind":"math_error", ...}` vs `"divide: division by zero"`).
+- Some converted Ruby messages still leak host detail (e.g. an `Errno` message), pending per-case cleanup.
+- The `location` for a stack overflow is only `"interpreter"` (no single owning file is knowable at that point).
 
 ---
 

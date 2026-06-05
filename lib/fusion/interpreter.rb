@@ -19,6 +19,7 @@
 #   func   -> Func (closure over an Env)
 
 require_relative "ast"
+require_relative "errors"
 require_relative "interpreter/null"
 require_relative "interpreter/error_val"
 require_relative "interpreter/func"
@@ -48,7 +49,25 @@ module Fusion
       @file_cache[abspath] ||= FileThunk.new(self, abspath)
     end
 
+    # The `location` string for code at `abspath`: "stdlib X" for stdlib files,
+    # "code X" for everything else.
+    def file_location(abspath)
+      if @stdlib_dir && abspath.start_with?(@stdlib_dir + File::SEPARATOR)
+        "stdlib #{File.basename(abspath)}"
+      else
+        "code #{File.basename(abspath)}"
+      end
+    end
+
+    # The `location` for code being evaluated under `env`. Inline (`-e`) programs
+    # have no file, so they report as "code <inline>".
+    def code_location(env)
+      f = env.lookup("__file__")
+      f == :__unbound__ ? "code <inline>" : file_location(f)
+    end
+
     def evaluate_file(abspath)
+      loc = file_location(abspath)
       ast = (@ast_cache[abspath] ||= begin
         src = File.read(abspath)
         Parser.parse_file(src)
@@ -61,14 +80,18 @@ module Fusion
       eval_expr(ast, env)
     rescue Errno::ENOENT
       warn "[fusion] file not found: #{abspath}" if ENV["FUSION_DEBUG"]
-      ErrorVal.new({"kind" => "file_not_found", "path" => abspath})
+      Errors.make(kind: "reference_error", location: loc, operation: "reading file", input: abspath, message: "file not found")
+    rescue SystemCallError => err # EISDIR, EACCES, ... — file-system access failures
+      warn "[fusion] cannot read #{abspath}: #{err.message}" if ENV["FUSION_DEBUG"]
+      Errors.make(kind: "reference_error", location: loc, operation: "reading file", input: abspath, message: err.message)
     rescue ParseError => err
       warn "[fusion] parse error in #{abspath}: #{err.message}" if ENV["FUSION_DEBUG"]
-      ErrorVal.new({"kind" => "parse_error", "path" => abspath, "message" => err.message})
+      Errors.make(kind: "parse_error", location: loc, operation: "parsing file", input: abspath, message: err.message)
     end
 
     # Resolve a bare "@name": sibling file > builtin (incl. load, ENV) > stdlib > !.
-    def resolve_name(name, dir)
+    # `location` is the "code X" of the referencing file (for the unresolved case).
+    def resolve_name(name, dir, location)
       sib = File.expand_path(name + ".fsn", dir)
       return load_file(sib).force if File.exist?(sib)
       if name == "ENV"
@@ -79,9 +102,9 @@ module Fusion
         # loads a VERBATIM filename (no ".fsn" appended) so arbitrary names work.
         d = dir
         return NativeFunc.new("load", lambda do |v|
-          next ErrorVal.new({"kind" => "load_bad_arg", "got" => v.class.name}) unless v.is_a?(String)
+          next Errors.make(kind: "type_error", location: "builtin load", operation: "@load", input: v, message: "expected a string") unless v.is_a?(String)
           target = File.expand_path(v, d)
-          next ErrorVal.new({"kind" => "file_not_found", "path" => target}) unless File.exist?(target)
+          next Errors.make(kind: "reference_error", location: "builtin load", operation: "@load", input: v, message: "file not found") unless File.exist?(target)
           load_file(target).force
         end)
       end
@@ -90,7 +113,7 @@ module Fusion
         std = File.join(@stdlib_dir, name + ".fsn")
         return load_file(std).force if File.exist?(std)
       end
-      ErrorVal.new({"kind" => "unresolved_ref", "name" => name})
+      Errors.make(kind: "reference_error", location: location, operation: "resolving @#{name}", input: name, message: "unresolved reference")
     end
 
     # Resolve a pure path "@dir/a" or "@../a": file only, never builtin/stdlib.
@@ -114,16 +137,19 @@ module Fusion
         end
       when Expression::Ident
         v = env.lookup(node.name)
-        v == :__unbound__ ? ErrorVal.new({"kind" => "unbound", "name" => node.name}) : v
+        v == :__unbound__ ? Errors.make(kind: "binding_error", location: code_location(env), operation: "reading identifier #{node.name}", input: node.name, message: "unbound identifier") : v
       when Expression::FileRef
         dir = env.lookup("__dir__")
         dir = Dir.pwd if dir == :__unbound__
         case node.variety
         when :self
+          # Bare `@` is the current file. NOTE: inline (`-e`) programs have no
+          # current file, so `@` is unresolvable there today — but it *should*
+          # refer to the whole inline program (tracked as a gap).
           f = env.lookup("__file__")
-          f == :__unbound__ ? ErrorVal.new({"kind" => "no_current_file"}) : load_file(f).force
+          f == :__unbound__ ? Errors.make(kind: "reference_error", location: code_location(env), operation: "resolving @", input: NULL, message: "no current file for self-reference") : load_file(f).force
         when :name
-          resolve_name(node.path, dir)
+          resolve_name(node.path, dir, code_location(env))
         else # :path
           resolve_path(node.path, dir)
         end
@@ -146,7 +172,7 @@ module Fusion
         v = eval_expr(expr, env)
         return v if v.is_a?(ErrorVal)
         if kind == :spread
-          return ErrorVal.new({"kind" => "spread_non_array", "got" => v.class.name}) unless v.is_a?(Array)
+          return Errors.make(kind: "type_error", location: code_location(env), operation: "[...] array spread", input: v, message: "expected an array") unless v.is_a?(Array)
           out.concat(v)
         else
           out << v
@@ -161,7 +187,7 @@ module Fusion
         if m[0] == :spread
           v = eval_expr(m[1], env)
           return v if v.is_a?(ErrorVal)
-          return ErrorVal.new({"kind" => "spread_non_object", "got" => v.class.name}) unless v.is_a?(Hash)
+          return Errors.make(kind: "type_error", location: code_location(env), operation: "{...} object spread", input: v, message: "expected an object") unless v.is_a?(Hash)
           out.merge!(v)
         else
           _, key, expr = m
@@ -176,14 +202,15 @@ module Fusion
     def eval_pipe(node, env)
       v = eval_expr(node.left, env)
       f = eval_expr(node.right, env)
-      apply(f, v)
+      apply(f, v, code_location(env))
     end
 
     def eval_member(node, env)
       obj = eval_expr(node.obj, env)
       return obj if obj.is_a?(ErrorVal)
-      return ErrorVal.new({"kind" => "member_on_non_object", "key" => node.key}) unless obj.is_a?(Hash)
-      return ErrorVal.new({"kind" => "missing_key", "key" => node.key}) unless obj.key?(node.key)
+      loc = code_location(env)
+      return Errors.make(kind: "type_error", location: loc, operation: ".#{node.key}", input: [obj, node.key], message: "expected an object") unless obj.is_a?(Hash)
+      return Errors.make(kind: "access_error", location: loc, operation: ".#{node.key}", input: [obj, node.key], message: "missing key") unless obj.key?(node.key)
       obj[node.key]
     end
 
@@ -192,29 +219,39 @@ module Fusion
       return obj if obj.is_a?(ErrorVal)
       idx = eval_expr(node.idx, env)
       return idx if idx.is_a?(ErrorVal)
+      loc = code_location(env)
       if obj.is_a?(Array) && idx.is_a?(Integer)
         i = idx >= 0 ? idx : obj.length + idx
         return obj[i] if i >= 0 && i < obj.length
-        return ErrorVal.new({"kind" => "index_out_of_range", "index" => idx, "length" => obj.length})
+        return Errors.make(kind: "access_error", location: loc, operation: "[#{idx}]", input: [obj, idx], message: "index out of range")
       elsif obj.is_a?(Hash) && idx.is_a?(String)
         return obj[idx] if obj.key?(idx)
-        return ErrorVal.new({"kind" => "missing_key", "key" => idx})
+        return Errors.make(kind: "access_error", location: loc, operation: "[#{idx.inspect}]", input: [obj, idx], message: "missing key")
       end
-      ErrorVal.new({"kind" => "bad_index", "obj" => obj.class.name, "idx" => idx.class.name})
+      Errors.make(kind: "type_error", location: loc, operation: "[index]", input: [obj, idx], message: "bad index type")
     end
 
     # ---- Application & matching ------------------------------------------
-    def apply(f, v)
+    # `location` is the "code X" where the `|` lives, used if `f` is not a
+    # function. It defaults to "interpreter" for apply calls with no code context
+    # (e.g. the CLI applying the whole program).
+    def apply(f, v, location = "interpreter")
       # An errored function value propagates as-is (more useful than a generic
       # "applied a non-function" wrapper).
       return f if f.is_a?(ErrorVal)
       if f.is_a?(NativeFunc)
         # Uniform propagation: built-ins never receive errors as inputs.
         return v if v.is_a?(ErrorVal)
-        return f.fn.call(v)
+        # Safety net: a builtin that raises a Ruby error (e.g. a domain error)
+        # becomes a payloaded error rather than a raw backtrace on stderr.
+        begin
+          return f.fn.call(v)
+        rescue StandardError => err
+          return Errors.from_exception(err, location: "builtin #{f.name}", operation: f.name, input: v)
+        end
       end
       unless f.is_a?(Func)
-        return ErrorVal.new({"kind" => "apply_non_function", "got" => f.class.name})
+        return Errors.make(kind: "type_error", location: location, operation: "|", input: [v, f], message: "applied a non-function")
       end
       f.clauses.each do |pattern, body|
         bindings = {}
@@ -264,7 +301,7 @@ module Fusion
         # already the right value because `!pat ? pred` parses as
         # PErr(PGuard(pat, pred)) — by the time PGuard runs, the value is
         # already the payload.
-        r = apply(pred, value)
+        r = apply(pred, value, code_location(env))
         return r if r.is_a?(ErrorVal)             # predicate raised during application
         r == true
       else
