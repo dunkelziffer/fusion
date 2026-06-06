@@ -185,6 +185,18 @@ RSpec.describe "error kinds" do
         .out("❌", '{"kind":"serialization_error","location":"output","operation":"serializing result","input":"<Infinity>","message":"cannot serialize a non-finite number"}')
     end
 
+    it "a -Infinity result" do
+      expect_pipe
+        .code("(_ => [1e400, -1] | @multiply)")
+        .out("❌", '{"kind":"serialization_error","location":"output","operation":"serializing result","input":"<-Infinity>","message":"cannot serialize a non-finite number"}')
+    end
+
+    it "a NaN result (Infinity - Infinity)" do
+      expect_pipe
+        .code("(_ => [1e400, 1e400] | @subtract)")
+        .out("❌", '{"kind":"serialization_error","location":"output","operation":"serializing result","input":"<NaN>","message":"cannot serialize a non-finite number"}')
+    end
+
     # A user error (`!expr`) is serialized strictly, just like a plain result: a
     # payload with no JSON form is itself a serialization_error.
     it "a user error whose payload is a function" do

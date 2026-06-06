@@ -32,6 +32,9 @@ module Fusion
         define.call("parseNumber", method(:parse_number))
         define.call("keys", method(:keys))
         define.call("values", method(:values))
+        define.call("get", method(:get))
+        define.call("set", method(:set))
+        define.call("toObject", method(:to_object))
 
         # type predicates: return false on any non-matching value, never an error
         define.call("Integer", method(:integer?))
@@ -42,6 +45,8 @@ module Fusion
         define.call("Array", method(:array?))
         define.call("Object", method(:object?))
         define.call("Null", method(:null?))
+        define.call("Function", method(:function?))
+        define.call("NonFinite", method(:non_finite?))
       end
 
       # --- arithmetic ---
@@ -239,6 +244,35 @@ module Fusion
         v.values
       end
 
+      def get(v)
+        return v if v.is_a?(ErrorVal)
+        return error("argument_error", "get", v, "expected [_, _]") unless pair?(v)
+        return error("type_error", "get", v, "expected an object") unless v[0].is_a?(Hash)
+        return error("type_error", "get", v, "expected a string key") unless v[1].is_a?(String)
+        return error("access_error", "get", v, "missing key") unless v[0].key?(v[1])
+
+        v[0][v[1]]
+      end
+
+      def set(v)
+        return v if v.is_a?(ErrorVal)
+        return error("argument_error", "set", v, "expected [_, _, _]") unless v.is_a?(Array) && v.length == 3
+        return error("type_error", "set", v, "expected an object") unless v[0].is_a?(Hash)
+        return error("type_error", "set", v, "expected a string key") unless v[1].is_a?(String)
+
+        v[0].merge(v[1] => v[2])
+      end
+
+      def to_object(v)
+        return v if v.is_a?(ErrorVal)
+        return error("type_error", "toObject", v, "expected an array") unless v.is_a?(Array)
+        unless v.all? { |entry| pair?(entry) && entry[0].is_a?(String) }
+          return error("type_error", "toObject", v, "expected [string, value] entries")
+        end
+
+        v.to_h
+      end
+
       private
 
       # Type predicates, also reused as internal guards.
@@ -273,6 +307,10 @@ module Fusion
 
       def null?(v)
         v == NULL
+      end
+
+      def function?(v)
+        v.is_a?(Func) || v.is_a?(NativeFunc)
       end
 
       def pair?(v)

@@ -426,11 +426,18 @@ for the standard library, derivable from `equals` and `lessThan`.
 | `parseNumber` | string                      | integer or float; `!` if not numeric    |
 | `keys`        | object                      | array of key strings                    |
 | `values`      | object                      | array of values                         |
+| `get`         | `[object, string-key]`      | the value at that key; `!` if missing   |
+| `set`         | `[object, string-key, value]`| a **new** object with that key set     |
+| `toObject`    | `[[string-key, value], …]`  | object built from entries; later duplicate keys win |
 
 ### 7.5 Type predicates (predicates)
 
-`Integer`, `Float`, `Number`, `String`, `Boolean`, `Array`, `Object`, `Null`. Each
-takes any value and returns a boolean. `Number` is true for integers and floats.
+`Integer`, `Float`, `Number`, `String`, `Boolean`, `Array`, `Object`, `Null`,
+`Function`, `NonFinite`. Each takes any value and returns a boolean. `Number` is
+true for integers and floats. `Function` is true for any function (built-in or
+user). `NonFinite` is true for a non-finite number (`Infinity` / `-Infinity` /
+`NaN`) and false for everything else, including finite numbers and non-numbers;
+together with `Function` it identifies the values that have no JSON form (§9.3).
 
 ### 7.6 Special built-ins: `ENV` and `load`
 

@@ -663,6 +663,103 @@ RSpec.describe "builtins" do
     end
   end
 
+  describe "@get" do
+    it "reads a key's value" do
+      expect_pipe
+        .in("✅", '{"a":1,"b":2}')
+        .code('(o => [o, "b"] | @get)')
+        .out("✅", "2")
+    end
+
+    it "errors with access_error on a missing key" do
+      expect_pipe
+        .in("✅", '{"a":1}')
+        .code('(o => [o, "z"] | @get)')
+        .out("❌", '{"kind":"access_error","location":"builtin get","operation":"get","input":[{"a":1},"z"],"message":"missing key"}')
+    end
+
+    it "errors with type_error on a non-object" do
+      expect_pipe
+        .in("✅", "5")
+        .code('(o => [o, "b"] | @get)')
+        .out("❌", '{"kind":"type_error","location":"builtin get","operation":"get","input":[5,"b"],"message":"expected an object"}')
+    end
+
+    it "errors with argument_error on a non-pair" do
+      expect_pipe
+        .in("✅", "[1,2,3]")
+        .code("(o => o | @get)")
+        .out("❌", '{"kind":"argument_error","location":"builtin get","operation":"get","input":[1,2,3],"message":"expected [_, _]"}')
+    end
+  end
+
+  describe "@set" do
+    it "adds a new key, returning a new object" do
+      expect_pipe
+        .in("✅", '{"a":1}')
+        .code('(o => [o, "b", 2] | @set)')
+        .out("✅", '{"a":1,"b":2}')
+    end
+
+    it "overwrites an existing key" do
+      expect_pipe
+        .in("✅", '{"a":1}')
+        .code('(o => [o, "a", 9] | @set)')
+        .out("✅", '{"a":9}')
+    end
+
+    it "errors with argument_error when not a triple" do
+      expect_pipe
+        .in("✅", '{"a":1}')
+        .code('(o => [o, "b"] | @set)')
+        .out("❌", '{"kind":"argument_error","location":"builtin set","operation":"set","input":[{"a":1},"b"],"message":"expected [_, _, _]"}')
+    end
+
+    it "errors with type_error on a non-object" do
+      expect_pipe
+        .in("✅", "5")
+        .code('(o => [o, "b", 2] | @set)')
+        .out("❌", '{"kind":"type_error","location":"builtin set","operation":"set","input":[5,"b",2],"message":"expected an object"}')
+    end
+  end
+
+  describe "@toObject" do
+    it "builds an object from [key, value] entries" do
+      expect_pipe
+        .in("✅", '[["a",1],["b",2]]')
+        .code("(es => es | @toObject)")
+        .out("✅", '{"a":1,"b":2}')
+    end
+
+    it "is empty for no entries" do
+      expect_pipe
+        .in("✅", "[]")
+        .code("(es => es | @toObject)")
+        .out("✅", "{}")
+    end
+
+    it "keeps the last value for a duplicate key" do
+      expect_pipe
+        .in("✅", '[["a",1],["a",9]]')
+        .code("(es => es | @toObject)")
+        .out("✅", '{"a":9}')
+    end
+
+    it "errors with type_error on a non-array" do
+      expect_pipe
+        .in("✅", "5")
+        .code("(es => es | @toObject)")
+        .out("❌", '{"kind":"type_error","location":"builtin toObject","operation":"toObject","input":5,"message":"expected an array"}')
+    end
+
+    it "errors with type_error on a malformed entry" do
+      expect_pipe
+        .in("✅", '[["a",1],5]')
+        .code("(es => es | @toObject)")
+        .out("❌", '{"kind":"type_error","location":"builtin toObject","operation":"toObject","input":[["a",1],5],"message":"expected [string, value] entries"}')
+    end
+  end
+
   describe "type predicates" do
     it "@Integer is true for an integer" do
       expect_pipe
@@ -787,6 +884,41 @@ RSpec.describe "builtins" do
       expect_pipe
         .in("✅", "0")
         .code("(x => x | @Null)")
+        .out("✅", "false")
+    end
+
+    it "@Function is true for a function" do
+      expect_pipe
+        .in("✅", "null")
+        .code("(_ => (y => y) | @Function)")
+        .out("✅", "true")
+    end
+
+    it "@Function is false for a non-function" do
+      expect_pipe
+        .in("✅", "5")
+        .code("(x => x | @Function)")
+        .out("✅", "false")
+    end
+
+    it "@NonFinite is true for an overflowed float" do
+      expect_pipe
+        .in("✅", "null")
+        .code("(_ => 1e400 | @NonFinite)")
+        .out("✅", "true")
+    end
+
+    it "@NonFinite is false for a finite number" do
+      expect_pipe
+        .in("✅", "2.5")
+        .code("(x => x | @NonFinite)")
+        .out("✅", "false")
+    end
+
+    it "@NonFinite is false for a non-number" do
+      expect_pipe
+        .in("✅", '"hi"')
+        .code("(x => x | @NonFinite)")
         .out("✅", "false")
     end
   end

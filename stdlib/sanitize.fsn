@@ -1,0 +1,12 @@
+# Render a value safe to embed in an error payload, mirroring the interpreter's
+# lenient serialization (docs/user/reference.md §9.3): a function becomes
+# "<function>" and a non-finite number becomes "<Infinity>" / "<-Infinity>" /
+# "<NaN>". Arrays and objects are sanitized recursively; everything else is
+# returned unchanged.
+(
+  v ? @Function => "<function>",
+  v ? @NonFinite => [["<", v | @toString] | @concat, ">"] | @concat,
+  v ? @Array => {"f": @sanitize, "xs": v} | @map,
+  v ? @Object => {"f": @sanitize, "object": v} | @mapValues,
+  v => v
+)
