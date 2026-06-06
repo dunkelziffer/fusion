@@ -14,12 +14,14 @@ module Fusion
         @internal = false
       end
 
+      # Whether this is an interpreter-produced error (vs. a user-constructed
+      # `!expr`). Governs serialization — see docs/user/reference.md §9.3.
       def internal_error?
         @internal
       end
 
-      # Build an interpreter-produced error (as opposed to a user-constructed `!expr`)
-      # with a standardized shape.
+      # Build an interpreter-produced error with the standardized payload shape
+      # documented in docs/user/reference.md §6.5.
       def self.internal(kind:, location:, operation:, input:, message: nil)
         error = new(
           "kind" => kind,

@@ -10,6 +10,8 @@ module Fusion
     module Serializer
       extend self
 
+      # Serialize a runtime value into [exit_code, json] per the CLI/serialization
+      # contract in docs/user/reference.md §9.3.
       def to_json(runtime_value)
         message = catch(:unserializable) do
           if runtime_value.is_a?(Interpreter::ErrorVal)
