@@ -30,9 +30,7 @@ module FusionHelpers
     PipeExpectation.new(self)
   end
 
-  # Chainable builder; see the module comment for usage. Each builder step may be
-  # used at most once, and the code/file_path slot can be filled only once —
-  # misuse raises immediately rather than silently last-wins.
+  # Chainable builder
   class PipeExpectation
     def initialize(example)
       @example  = example
