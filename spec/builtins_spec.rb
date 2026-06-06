@@ -678,11 +678,11 @@ RSpec.describe "builtins" do
         .out("❌", '{"kind":"access_error","location":"builtin get","operation":"get","input":[{"a":1},"z"],"message":"missing key"}')
     end
 
-    it "errors with type_error on a non-object" do
+    it "errors with type_error (bad index type) on a string key into a non-object" do
       expect_pipe
         .in("✅", "5")
         .code('(o => [o, "b"] | @get)')
-        .out("❌", '{"kind":"type_error","location":"builtin get","operation":"get","input":[5,"b"],"message":"expected an object"}')
+        .out("❌", '{"kind":"type_error","location":"builtin get","operation":"get","input":[5,"b"],"message":"bad index type"}')
     end
 
     it "errors with argument_error on a non-pair" do
@@ -690,6 +690,34 @@ RSpec.describe "builtins" do
         .in("✅", "[1,2,3]")
         .code("(o => o | @get)")
         .out("❌", '{"kind":"argument_error","location":"builtin get","operation":"get","input":[1,2,3],"message":"expected [_, _]"}')
+    end
+
+    it "reads an array element by integer index" do
+      expect_pipe
+        .in("✅", "[10,20,30]")
+        .code("(a => [a, 1] | @get)")
+        .out("✅", "20")
+    end
+
+    it "reads an array element by negative index (from the end)" do
+      expect_pipe
+        .in("✅", "[10,20,30]")
+        .code("(a => [a, -1] | @get)")
+        .out("✅", "30")
+    end
+
+    it "errors with access_error when an array index is out of range" do
+      expect_pipe
+        .in("✅", "[10,20]")
+        .code("(a => [a, 5] | @get)")
+        .out("❌", '{"kind":"access_error","location":"builtin get","operation":"get","input":[[10,20],5],"message":"index out of range"}')
+    end
+
+    it "errors with type_error (bad index type) on a string index into an array" do
+      expect_pipe
+        .in("✅", "[1,2]")
+        .code('(a => [a, "x"] | @get)')
+        .out("❌", '{"kind":"type_error","location":"builtin get","operation":"get","input":[[1,2],"x"],"message":"bad index type"}')
     end
   end
 
@@ -715,11 +743,32 @@ RSpec.describe "builtins" do
         .out("❌", '{"kind":"argument_error","location":"builtin set","operation":"set","input":[{"a":1},"b"],"message":"expected [_, _, _]"}')
     end
 
-    it "errors with type_error on a non-object" do
+    it "errors with type_error (bad index type) on a string key into a non-object" do
       expect_pipe
         .in("✅", "5")
         .code('(o => [o, "b", 2] | @set)')
-        .out("❌", '{"kind":"type_error","location":"builtin set","operation":"set","input":[5,"b",2],"message":"expected an object"}')
+        .out("❌", '{"kind":"type_error","location":"builtin set","operation":"set","input":[5,"b",2],"message":"bad index type"}')
+    end
+
+    it "replaces an array element by integer index, returning a new array" do
+      expect_pipe
+        .in("✅", "[10,20,30]")
+        .code("(a => [a, 1, 99] | @set)")
+        .out("✅", "[10,99,30]")
+    end
+
+    it "replaces an array element by negative index" do
+      expect_pipe
+        .in("✅", "[10,20,30]")
+        .code("(a => [a, -1, 99] | @set)")
+        .out("✅", "[10,20,99]")
+    end
+
+    it "errors with access_error when setting an out-of-range array index" do
+      expect_pipe
+        .in("✅", "[10,20]")
+        .code("(a => [a, 5, 99] | @set)")
+        .out("❌", '{"kind":"access_error","location":"builtin set","operation":"set","input":[[10,20],5,99],"message":"index out of range"}')
     end
   end
 

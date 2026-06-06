@@ -244,23 +244,45 @@ module Fusion
         v.values
       end
 
+      # Read from an array (integer index, negative counts from the end) or an
+      # object (string key) — mirroring the `[]` operator (reference §8).
       def get(v)
         return v if v.is_a?(ErrorVal)
         return error("argument_error", "get", v, "expected [_, _]") unless pair?(v)
-        return error("type_error", "get", v, "expected an object") unless v[0].is_a?(Hash)
-        return error("type_error", "get", v, "expected a string key") unless v[1].is_a?(String)
-        return error("access_error", "get", v, "missing key") unless v[0].key?(v[1])
 
-        v[0][v[1]]
+        container, key = v
+        if container.is_a?(Array) && key.is_a?(Integer)
+          i = key.negative? ? container.length + key : key
+          return container[i] if i >= 0 && i < container.length
+
+          error("access_error", "get", v, "index out of range")
+        elsif container.is_a?(Hash) && key.is_a?(String)
+          return container[key] if container.key?(key)
+
+          error("access_error", "get", v, "missing key")
+        else
+          error("type_error", "get", v, "bad index type")
+        end
       end
 
+      # Return a new array/object with one entry set. An array index must already
+      # exist (arrays are not extended); an object key may be new. Addressing
+      # mirrors `@get` (array by integer index, object by string key).
       def set(v)
         return v if v.is_a?(ErrorVal)
         return error("argument_error", "set", v, "expected [_, _, _]") unless v.is_a?(Array) && v.length == 3
-        return error("type_error", "set", v, "expected an object") unless v[0].is_a?(Hash)
-        return error("type_error", "set", v, "expected a string key") unless v[1].is_a?(String)
 
-        v[0].merge(v[1] => v[2])
+        container, key, value = v
+        if container.is_a?(Array) && key.is_a?(Integer)
+          i = key.negative? ? container.length + key : key
+          return error("access_error", "set", v, "index out of range") unless i >= 0 && i < container.length
+
+          container.dup.tap { |copy| copy[i] = value }
+        elsif container.is_a?(Hash) && key.is_a?(String)
+          container.merge(key => value)
+        else
+          error("type_error", "set", v, "bad index type")
+        end
       end
 
       def to_object(v)

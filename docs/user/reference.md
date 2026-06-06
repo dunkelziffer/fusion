@@ -426,8 +426,8 @@ for the standard library, derivable from `equals` and `lessThan`.
 | `parseNumber` | string                      | integer or float; `!` if not numeric    |
 | `keys`        | object                      | array of key strings                    |
 | `values`      | object                      | array of values                         |
-| `get`         | `[object, string-key]`      | the value at that key; `!` if missing   |
-| `set`         | `[object, string-key, value]`| a **new** object with that key set     |
+| `get`         | `[array, int]` or `[object, string-key]` | element at that index/key (like `[]`, §8); `!` if out of range / missing |
+| `set`         | `[array, int, value]` or `[object, string-key, value]` | a **new** array/object with that entry set; an array index must already exist, an object key may be new |
 | `toObject`    | `[[string-key, value], …]`  | object built from entries; later duplicate keys win |
 
 ### 7.5 Type predicates (predicates)
