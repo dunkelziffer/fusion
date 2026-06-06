@@ -250,19 +250,8 @@ RSpec.describe "error kinds" do
     end
   end
 
-  describe "stack_error" do
-    it "is observable only at the CLI boundary" do
-      skip <<~WHY
-        Unbounded recursion raises Ruby's SystemStackError, which is NOT a
-        StandardError and is converted to a stack_error payload only by the
-        top-level `rescue Exception` net in exe/fusion. The in-process harness
-        calls Interpreter#apply directly (it does not replicate that net), so a
-        stack overflow here would raise a real SystemStackError and tear down the
-        test runner rather than yield a payload. It is exercised against the real
-        binary instead — see spec/cli_spec.rb ("converts a stack overflow").
-      WHY
-    end
-  end
+  # NOTE: observable only at the CLI boundary, tested in cli_spec.rb
+  describe "stack_error"
 
   # The interpreter keeps two internal-invariant guards that raise a Ruby
   # Fusion::Unreachable instead of producing a payload (design §2.9, the one deliberate
