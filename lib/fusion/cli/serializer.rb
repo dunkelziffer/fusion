@@ -21,20 +21,20 @@ module Fusion
           end
         end
 
-        payload = Interpreter::ErrorVal.internal(
+        internal_error = Interpreter::ErrorVal.internal(
           kind: "serialization_error",
           location: "output",
           operation: "serializing result",
           input: runtime_value,
           message: message
-        ).payload
+        )
 
-        [1, convert(payload, lenient: true).to_json]
+        to_json(internal_error)
       end
 
       private
 
-      # Use "lenient: true" only for best-effort serialization of error "input" content.
+      # Use "lenient: true" only for best-effort serialization of internal errors.
       def convert(runtime_value, lenient: false)
         case runtime_value
         when Interpreter::NULL
@@ -45,9 +45,9 @@ module Fusion
 
           runtime_value.to_s # "Infinity" / "-Infinity" / "NaN"
         when Array
-          runtime_value.map { |item| convert(item, lenient: lenient) }
+          runtime_value.map { |item| convert(item, lenient:) }
         when Hash
-          runtime_value.transform_values { |value| convert(value, lenient: lenient) }
+          runtime_value.transform_values { |value| convert(value, lenient:) }
         when Interpreter::Func, Interpreter::NativeFunc
           throw(:unserializable, "cannot serialize a function") unless lenient
 
@@ -56,7 +56,7 @@ module Fusion
           runtime_value
         when Interpreter::ErrorVal
           if lenient
-            "!#{convert(runtime_value.payload, lenient: lenient)}"
+            "!#{convert(runtime_value.payload, lenient:)}"
           else
             raise Unreachable, "ErrorVal should have been handled at the top level of convert"
           end
