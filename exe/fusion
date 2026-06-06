@@ -15,7 +15,7 @@
 # only. There is no channel for raw Ruby errors, so every failure is converted to
 # a standardized payloaded error (see docs/lang/design.md §2.9) and printed as
 # JSON to stderr with exit 1. The lone exception is an internal-invariant assert
-# (a FusionError that is not a parse error) — reaching it is an interpreter bug,
+# (an "Unreachable" that is not a parse error) — reaching it is an interpreter bug,
 # so it is allowed to surface as a Ruby error.
 
 require_relative "../lib/fusion"
@@ -65,7 +65,7 @@ begin
   emit(interp.apply(program_value, input_value))
 rescue SystemExit
   raise # let exit()/abort() through untouched
-rescue Fusion::FusionError
+rescue Fusion::Unreachable
   raise # internal-invariant assert — a bug; allowed to surface as a Ruby error
 rescue Exception => err # rubocop:disable Lint/RescueException
   # Final safety net: SystemStackError and any other escaped Ruby error become a

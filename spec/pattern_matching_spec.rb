@@ -106,5 +106,14 @@ RSpec.describe "pattern matching" do
         .code('([a,b] ? ([x,y] => [x,y] | @lessThan) => "asc", _ => "not")')
         .out("✅", '"not"')
     end
+
+    it "does not let the predicate expression see the pattern's sibling binders" do
+      # `a` in the predicate position resolves in the clause's lexical env, not
+      # against the sibling binder `a`, so it is unbound.
+      expect_pipe
+        .in("✅", "[1,2]")
+        .code("([a, b ? a] => \"matched\")")
+        .out("❌", '{"kind":"binding_error","location":"code <inline>","operation":"reading identifier a","input":"a","message":"unbound identifier"}')
+    end
   end
 end

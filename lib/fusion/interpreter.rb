@@ -154,7 +154,7 @@ module Fusion
       when Expression::Pipe then eval_pipe(node, env)
       when Expression::Member then eval_member(node, env)
       when Expression::Index then eval_index(node, env)
-      else raise FusionError, "Cannot evaluate node #{node.class}"
+      else raise Unreachable, "Cannot evaluate node #{node.class}"
       end
     end
 
@@ -250,13 +250,24 @@ module Fusion
         return ErrorVal.internal(kind: "type_error", location: location, operation: "|", input: [v, f], message: "applied a non-function")
       end
       f.clauses.each do |pattern, body|
-        bindings = {}
-        m = match(pattern, v, bindings, f.env)
+        # Bindings are inserted directly into a fresh child env as the pattern
+        # matches; a duplicate binder (e.g. `[a, a]`) trips Env#bind, which we
+        # convert to a binding_error here. A failed/abandoned clause just drops
+        # its env, so partial bindings never leak.
+        clause_env = f.env.child
+        m =
+          begin
+            match(pattern, v, clause_env)
+          rescue Env::DuplicateBinding => e
+            return ErrorVal.internal(kind: "binding_error", location: code_location(clause_env),
+                                     operation: "binding identifier #{e.name}", input: e.name,
+                                     message: "identifier already bound")
+          end
         # A `?` predicate raised an error during matching: bubble it up as the
         # function's return value (no further clauses are tried).
         return m if m.is_a?(ErrorVal)
         if m
-          return eval_expr(body, f.env.child(bindings))
+          return eval_expr(body, clause_env)
         end
       end
       # No clause matched. If the input was an error, it keeps propagating
@@ -265,8 +276,10 @@ module Fusion
       v.is_a?(ErrorVal) ? v : NULL
     end
 
-    # Returns true (match), false (no match), or an ErrorVal (predicate errored).
-    def match(pattern, value, bindings, env)
+    # Binds matched sub-values into `env` as it goes. Returns true (match),
+    # false (no match), or an ErrorVal (predicate errored). A duplicate binder
+    # raises Env::DuplicateBinding, caught in #apply.
+    def match(pattern, value, env)
       case pattern
       when Pattern::PLit
         deep_equal?(pattern.value, value)
@@ -275,37 +288,42 @@ module Fusion
         # payload. The inner is always a non-`!` pattern (the parser ensures
         # that), so for a bare `!` we synthesized PWild as the inner.
         return false unless value.is_a?(ErrorVal)
-        match(pattern.inner, value.payload, bindings, env)
+        match(pattern.inner, value.payload, env)
       when Pattern::PWild
         # `_` matches anything EXCEPT an error value.
         !value.is_a?(ErrorVal)
       when Pattern::PBind
         return false if value.is_a?(ErrorVal)    # binders never capture an error
-        e = bind(bindings, pattern.name, value, env)
-        e.nil? ? true : e
+        env.bind(pattern.name, value)
+        true
       when Pattern::PArr
-        match_array(pattern, value, bindings, env)
+        match_array(pattern, value, env)
       when Pattern::PObj
-        match_object(pattern, value, bindings, env)
+        match_object(pattern, value, env)
       when Pattern::PGuard
-        inner_res = match(pattern.inner, value, bindings, env)
+        inner_res = match(pattern.inner, value, env)
         return inner_res if inner_res.is_a?(ErrorVal)
         return false unless inner_res
-        pred = eval_expr(pattern.pred_expr, env)
+        # The predicate evaluates in the clause's lexical env — `env.parent`, not
+        # `env` — so it cannot see the pattern's own binders (including the one it
+        # refines). `env` is the clause env created in #apply, threaded through
+        # matching unchanged, so its parent is always that lexical env.
+        lexical_env = env.parent
+        pred = eval_expr(pattern.pred_expr, lexical_env)
         return pred if pred.is_a?(ErrorVal)       # predicate expression itself errored
         # The predicate sees whatever value reached this PGuard, which is
         # already the right value because `!pat ? pred` parses as
         # PErr(PGuard(pat, pred)) — by the time PGuard runs, the value is
         # already the payload.
-        r = apply(pred, value, code_location(env))
+        r = apply(pred, value, code_location(lexical_env))
         return r if r.is_a?(ErrorVal)             # predicate raised during application
         r == true
       else
-        raise FusionError, "Unknown pattern #{pattern.class}"
+        raise Unreachable, "Unknown pattern #{pattern.class}"
       end
     end
 
-    def match_array(pattern, value, bindings, env)
+    def match_array(pattern, value, env)
       return false unless value.is_a?(Array)
       elems = pattern.elems
       rest_index = elems.index { |e| e[0] == :rest }
@@ -313,7 +331,7 @@ module Fusion
       if rest_index.nil?
         return false unless value.length == elems.length
         elems.each_with_index do |(_, p), i|
-          r = match(p, value[i], bindings, env)
+          r = match(p, value[i], env)
           return r if r.is_a?(ErrorVal)
           return false unless r
         end
@@ -323,27 +341,26 @@ module Fusion
         after  = elems[(rest_index + 1)..]
         return false if value.length < before.length + after.length
         before.each_with_index do |(_, p), i|
-          r = match(p, value[i], bindings, env)
+          r = match(p, value[i], env)
           return r if r.is_a?(ErrorVal)
           return false unless r
         end
         after.each_with_index do |(_, p), k|
           vi = value.length - after.length + k
-          r = match(p, value[vi], bindings, env)
+          r = match(p, value[vi], env)
           return r if r.is_a?(ErrorVal)
           return false unless r
         end
         rest_name = elems[rest_index][1]
         if rest_name
           mid = value[before.length...(value.length - after.length)]
-          e = bind(bindings, rest_name, mid, env)
-          return e if e
+          env.bind(rest_name, mid)
         end
         true
       end
     end
 
-    def match_object(pattern, value, bindings, env)
+    def match_object(pattern, value, env)
       return false unless value.is_a?(Hash)
       matched_keys = []
       rest_name = :__none__
@@ -353,7 +370,7 @@ module Fusion
         else
           _, key, p = m
           return false unless value.key?(key)
-          r = match(p, value[key], bindings, env)
+          r = match(p, value[key], env)
           return r if r.is_a?(ErrorVal)
           return false unless r
           matched_keys << key
@@ -361,23 +378,9 @@ module Fusion
       end
       if rest_name != :__none__ && rest_name
         remaining = value.reject { |k, _| matched_keys.include?(k) }
-        e = bind(bindings, rest_name, remaining, env)
-        return e if e
+        env.bind(rest_name, remaining)
       end
       true
-    end
-
-    # Record a pattern binding, or return a binding_error if `name` is already
-    # bound in this clause. Duplicate binders (e.g. `[a, a]`) are rejected, not
-    # treated as a non-linear "must be equal" match. Returns nil on success.
-    def bind(bindings, name, value, env)
-      if bindings.key?(name)
-        return ErrorVal.internal(kind: "binding_error", location: code_location(env),
-                                 operation: "binding identifier #{name}", input: name,
-                                 message: "identifier already bound")
-      end
-      bindings[name] = value
-      nil
     end
 
     # ---- Equality & helpers ----------------------------------------------

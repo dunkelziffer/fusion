@@ -52,8 +52,16 @@ module Fusion
           throw(:unserializable, "cannot serialize a function") unless lenient
 
           "<function>"
-        else
+        when true, false, String, Numeric
           runtime_value
+        when Interpreter::ErrorVal
+          if lenient
+            "!#{convert(runtime_value.payload, lenient: lenient)}"
+          else
+            raise Unreachable, "ErrorVal should have been handled at the top level of convert"
+          end
+        else
+          raise Unreachable, "Unhandled type in convert: #{runtime_value.class}"
         end
       end
     end

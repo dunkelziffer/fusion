@@ -184,6 +184,43 @@ RSpec.describe "error kinds" do
         .code("(_ => [1e308, 10] | @multiply)")
         .out("❌", '{"kind":"serialization_error","location":"output","operation":"serializing result","input":"Infinity","message":"cannot serialize a non-finite number"}')
     end
+
+    # A user error (`!expr`) is serialized strictly, just like a plain result: a
+    # payload with no JSON form is itself a serialization_error.
+    it "a user error whose payload is a function" do
+      expect_pipe
+        .code("(_ => !(y => y))")
+        .out("❌", '{"kind":"serialization_error","location":"output","operation":"serializing result","input":"!<function>","message":"cannot serialize a function"}')
+    end
+
+    it "a user error whose payload is a non-finite number" do
+      expect_pipe
+        .code("(_ => !1e400)")
+        .out("❌", '{"kind":"serialization_error","location":"output","operation":"serializing result","input":"!Infinity","message":"cannot serialize a non-finite number"}')
+    end
+  end
+
+  # An interpreter-produced error is serialized leniently: a value with no JSON
+  # form sitting in its `input` (often the very value that caused the failure) is
+  # rendered best-effort rather than masking the error behind a serialization_error.
+  describe "internal errors render their input leniently" do
+    it "renders a function in input as \"<function>\"" do
+      expect_pipe
+        .code("(_ => (y => y) | @floor)")
+        .out("❌", '{"kind":"type_error","location":"builtin floor","operation":"floor","input":"<function>","message":"expected a number"}')
+    end
+
+    it "renders a function nested in input as \"<function>\"" do
+      expect_pipe
+        .code("(_ => [(y => y), 1] | @add)")
+        .out("❌", '{"kind":"type_error","location":"builtin add","operation":"add","input":["<function>",1],"message":"expected numbers"}')
+    end
+
+    it "renders a non-finite number in input as \"Infinity\"" do
+      expect_pipe
+        .code("(_ => 1e400 | @floor)")
+        .out("❌", '{"kind":"math_error","location":"builtin floor","operation":"floor","input":"Infinity","message":"not a finite number"}')
+    end
   end
 
   describe "stack_error" do
@@ -201,7 +238,7 @@ RSpec.describe "error kinds" do
   end
 
   # The interpreter keeps two internal-invariant guards that raise a Ruby
-  # FusionError instead of producing a payload (design §2.9, the one deliberate
+  # Fusion::Unreachable instead of producing a payload (design §2.9, the one deliberate
   # exception to "no raw Ruby errors"). They are NOT reachable from Fusion source
   # — the parser only ever emits the known Expression::*/Pattern::* classes, so
   # the `else raise` branches fire only on an interpreter bug (a malformed AST
@@ -211,12 +248,12 @@ RSpec.describe "error kinds" do
 
     it "eval_expr raises on an unknown expression node" do
       expect { interp.eval_expr(Object.new, interp.root_env) }
-        .to raise_error(Fusion::FusionError, /Cannot evaluate node/)
+        .to raise_error(Fusion::Unreachable, /Cannot evaluate node/)
     end
 
     it "match raises on an unknown pattern node" do
-      expect { interp.match(Object.new, 1, {}, interp.root_env) }
-        .to raise_error(Fusion::FusionError, /Unknown pattern/)
+      expect { interp.match(Object.new, 1, interp.root_env) }
+        .to raise_error(Fusion::Unreachable, /Unknown pattern/)
     end
   end
 end

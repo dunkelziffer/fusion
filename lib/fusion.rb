@@ -15,6 +15,15 @@ require_relative "fusion/interpreter"
 require_relative "fusion/cli"
 
 module Fusion
+  # This gem's regular error taxonomy.
+  # None of these should ever bubble up to the user.
   class FusionError < StandardError; end
   class ParseError < FusionError; end
+
+  # Raise this in "unreachable" code paths, e.g. the "else" branch
+  # of a case statement that should be exhaustive.
+  class Unreachable < StandardError; end
+
+  # NOTE: There's also ErrorVal, which isn't a Ruby error, but
+  # a runtime value representing an error in Fusion.
 end
