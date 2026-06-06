@@ -79,10 +79,8 @@ module Fusion
       env.define("__file__", abspath)
       eval_expr(ast, env)
     rescue Errno::ENOENT
-      warn "[fusion] file not found: #{abspath}" if ENV["FUSION_DEBUG"]
       ErrorVal.internal(kind: "reference_error", location: loc, operation: "reading file", input: abspath, message: "file not found")
     rescue SystemCallError => err # EISDIR, EACCES, ... — file-system access failures
-      warn "[fusion] cannot read #{abspath}: #{err.message}" if ENV["FUSION_DEBUG"]
       ErrorVal.internal(kind: "reference_error", location: loc, operation: "reading file", input: abspath, message: err.message)
     end
 

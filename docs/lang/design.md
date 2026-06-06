@@ -292,7 +292,7 @@ Future work and open questions are tracked separately in our [Roadmap](./roadmap
 ### Cons
 
 - `_` does not mean "literally anything" (it excludes `!`), a subtle asymmetry.
-- 🩹 An uncaught error can travel far from its origin, which can make debugging harder (mitigated by `FUSION_DEBUG`, by the payload from 2.8, and by potential future diagnostics tracked in the roadmap).
+- 🩹 An uncaught error can travel far from its origin, which can make debugging harder. Partially mitigated by more detailed error payloads in 2.9. Could be improved further with stack traces, see roadmap.
 
 ---
 
@@ -378,6 +378,7 @@ Future work and open questions are tracked separately in our [Roadmap](./roadmap
 - 🧑 ✅ The CLI contract already spends stdout (the result) and stderr (the error payload). There is **no third channel**, so a raw Ruby backtrace on stderr would corrupt the contract. Fusion therefore **catches every Ruby error a program can trigger and converts it to a standardized payload**.
 - 🤖 ✅ Conversion happens deep (so an error is a catchable Fusion `!` where possible) *and* at a top-level net (so nothing escapes): each builtin call is wrapped (e.g. `floor` of a non-finite number → `math_error`), file reads rescue `SystemCallError` (→ `reference_error`), `Parser.parse_file` rescues every lexer/parser `ParseError` at that one entry point and returns a `parse_error` value (so files, inline `-e`, and the test harness all get a payload, never a raised error), a function result is reported as `serialization_error`, and a final `rescue Exception` in `exe/fusion` converts anything else — notably `SystemStackError` from unbounded recursion (→ `stack_error`, `location: "interpreter"`). The net must rescue `Exception`, not just `StandardError`, because `SystemStackError` is not a `StandardError`.
 - 🤖 ✅ The **two internal-invariant asserts** (`FusionError` "Cannot evaluate node" / "Unknown pattern") are the deliberate exception: reaching them is an interpreter bug, not a user-facing error, so they are allowed to raise. The top-level net re-raises a non-parse `FusionError` rather than masking the bug.
+- 🧑 ✅ The old `FUSION_DEBUG` env var (which `warn`ed file-not-found / read-failure detail to stderr during reference resolution) is **removed entirely**. It violated the contract by writing free-form text to stderr — the dedicated error-payload channel — and it added nothing: the `reference_error` payload already carries the same path (`input`/`location`) and Ruby message.
 
 ### Duplicate binders
 
@@ -600,7 +601,7 @@ All access goes through `@`:
 ### Cons
 
 - No streaming; whole input must be buffered and parsed.
-- 🩹 A bare `!` with nonzero exit gives little diagnostic detail (mitigated by `FUSION_DEBUG`).
+- 🩹 A bare `!` with nonzero exit gives little diagnostic detail. Mitigated for internal errors by more detailed error payloads in 2.9.
 
 ---
 

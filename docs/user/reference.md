@@ -501,5 +501,4 @@ fusion -e '<source>' [json-input]
 ```
 
 Input comes from the `[json-input]` argument if present, otherwise from standard
-input. Setting the environment variable `FUSION_DEBUG` causes file-not-found and
-parse errors during reference resolution to be reported on standard error.
+input.

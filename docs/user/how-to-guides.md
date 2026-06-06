@@ -8,17 +8,20 @@ basics. Scan for the problem you have and copy the solution.*
 ## Diagnose a program that returns an error unexpectedly
 
 When you run a program and see an error payload on stderr, the payload itself
-usually tells you what went wrong (e.g. `"divide: division by zero"` or
-`{"kind":"missing_key","key":"email"}`). For errors arising *during reference
-resolution* — typically a missing file or a parse error in an `@`-referenced file —
-enable extra diagnostics:
+tells you what went wrong. Every error is a JSON object with a fixed shape:
 
-```sh
-FUSION_DEBUG=1 fusion program.fsn '...'
+```json
+{"kind":"reference_error","location":"code program.fsn","operation":"reading file","input":"stdlib/map.fsn","message":"file not found"}
 ```
 
-With `FUSION_DEBUG` set, the interpreter prints to stderr the exact path it failed
-to find or the parse error it hit. The most common cause is that the `stdlib/`
+- `kind` — the error category (e.g. `reference_error`, `parse_error`, `type_error`).
+- `location` — where it arose (`builtin X`, `stdlib X`, `code X`, `input`, `output`, …).
+- `operation` — the operation that failed (e.g. `reading file`, `parsing`, `|`).
+- `input` — the value(s) the operation was applied to.
+- `message` — extra human-readable detail, when available.
+
+For a missing file or a parse error in an `@`-referenced file, `location` and
+`input` name the exact path that failed. A common cause is that the `stdlib/`
 folder is not where the interpreter expects it, so `@`-references can't be resolved.
 
 ---

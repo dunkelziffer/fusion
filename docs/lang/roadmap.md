@@ -22,11 +22,6 @@ a directory, since shadowing is invisible at the call site.
 
 ## 2. Error model
 
-**Better diagnostics.** `FUSION_DEBUG` exists for file/parse errors; extend
-principled diagnostics to runtime error origins (where did this error first
-arise?). One option: attaching a source position to the payload (an extra
-`"at": "file.fsn:L:C"` field) when `FUSION_DEBUG` is set.
-
 **Stack traces** *(deferred)*. A propagated error tells you what happened, but
 not the chain of function applications it passed through. A capped trace
 (last N frames, accessible as an extra payload field, opt-in via env) would
