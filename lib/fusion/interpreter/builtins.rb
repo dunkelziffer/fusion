@@ -5,142 +5,293 @@
 module Fusion
   class Interpreter
     module Builtins
-      def self.install(table, interp)
-        define = ->(name, fn) { table[name] = NativeFunc.new(name, fn) }
+      class << self
+        def install(table, interp)
+          @interp = interp
+          define = ->(name, fn) { table[name] = NativeFunc.new(name, fn) }
 
-        isnum = ->(x) { x.is_a?(Numeric) && !(x == true || x == false) }
-        is_pair = ->(v) { v.is_a?(Array) && v.length == 2 }
+          # operations on a pair [a, b] (or a single value)
+          define.call("add", method(:add))
+          define.call("subtract", method(:subtract))
+          define.call("multiply", method(:multiply))
+          define.call("divide", method(:divide))
+          define.call("mod", method(:mod))
+          define.call("negate", method(:negate))
+          define.call("floor", method(:floor))
+          define.call("equals", method(:equals))
+          define.call("lessThan", method(:less_than))
+          define.call("and", method(:and_))
+          define.call("or", method(:or_))
+          define.call("not", method(:not_))
+          define.call("length", method(:length))
+          define.call("concat", method(:concat))
+          define.call("chars", method(:chars))
+          define.call("join", method(:join))
+          define.call("toString", method(:to_string))
+          define.call("parseNumber", method(:parse_number))
+          define.call("keys", method(:keys))
+          define.call("values", method(:values))
 
-        # Validate a numeric pair. `argument_error` means "wrong number" (not a
-        # pair); `type_error` means a type mismatch (a pair, but not of numbers).
-        # Returns [a, b] on success or an ErrorVal.
-        num_pair = lambda do |name, v|
-          next ErrorVal.internal(kind: "argument_error", location: "builtin #{name}", operation: name, input: v, message: "expected [_, _]") unless is_pair.call(v)
-          a, b = v
-          next ErrorVal.internal(kind: "type_error", location: "builtin #{name}", operation: name, input: v, message: "expected numbers") unless isnum.call(a) && isnum.call(b)
-          [a, b]
+          # type predicates: return false on any non-matching value, never an error
+          define.call("Integer", method(:integer?))
+          define.call("Float", method(:float?))
+          define.call("Number", method(:numeric?))
+          define.call("String", method(:string?))
+          define.call("Boolean", method(:boolean?))
+          define.call("Array", method(:array?))
+          define.call("Object", method(:object?))
+          define.call("Null", method(:null?))
         end
 
-        # --- arithmetic on a pair [a, b] (or unary for negate) ---
-        define.call("add", lambda do |v|
-          p = num_pair.call("add", v); p.is_a?(ErrorVal) ? p : p[0] + p[1]
-        end)
-        define.call("subtract", lambda do |v|
-          p = num_pair.call("subtract", v); p.is_a?(ErrorVal) ? p : p[0] - p[1]
-        end)
-        define.call("multiply", lambda do |v|
-          p = num_pair.call("multiply", v); p.is_a?(ErrorVal) ? p : p[0] * p[1]
-        end)
-        define.call("divide", lambda do |v|
-          p = num_pair.call("divide", v)
-          next p if p.is_a?(ErrorVal)
-          a, b = p
-          next ErrorVal.internal(kind: "math_error", location: "builtin divide", operation: "divide", input: v, message: "division by zero") if b == 0
-          if a.is_a?(Integer) && b.is_a?(Integer) && (a % b == 0) then a / b
-          else a.to_f / b end
-        end)
-        define.call("mod", lambda do |v|
-          p = num_pair.call("mod", v)
-          next p if p.is_a?(ErrorVal)
-          a, b = p
-          next ErrorVal.internal(kind: "math_error", location: "builtin mod", operation: "mod", input: v, message: "modulo by zero") if b == 0
-          a % b
-        end)
-        define.call("negate", lambda do |v|
-          isnum.call(v) ? -v : ErrorVal.internal(kind: "type_error", location: "builtin negate", operation: "negate", input: v, message: "expected a number")
-        end)
-        define.call("floor", lambda do |v|
-          next ErrorVal.internal(kind: "type_error", location: "builtin floor", operation: "floor", input: v, message: "expected a number") unless isnum.call(v)
-          next ErrorVal.internal(kind: "math_error", location: "builtin floor", operation: "floor", input: v, message: "not a finite number") if v.is_a?(Float) && !v.finite?
+        # --- arithmetic ---
+
+        def add(v)
+          return v if v.is_a?(ErrorVal)
+          return error("argument_error", "add", v, "expected [_, _]") unless pair?(v)
+          return error("type_error", "add", v, "expected numbers") unless numeric?(v[0])
+          return error("type_error", "add", v, "expected numbers") unless numeric?(v[1])
+
+          v[0] + v[1]
+        end
+
+        def subtract(v)
+          return v if v.is_a?(ErrorVal)
+          return error("argument_error", "subtract", v, "expected [_, _]") unless pair?(v)
+          return error("type_error", "subtract", v, "expected numbers") unless numeric?(v[0])
+          return error("type_error", "subtract", v, "expected numbers") unless numeric?(v[1])
+
+          v[0] - v[1]
+        end
+
+        def multiply(v)
+          return v if v.is_a?(ErrorVal)
+          return error("argument_error", "multiply", v, "expected [_, _]") unless pair?(v)
+          return error("type_error", "multiply", v, "expected numbers") unless numeric?(v[0])
+          return error("type_error", "multiply", v, "expected numbers") unless numeric?(v[1])
+
+          v[0] * v[1]
+        end
+
+        def divide(v)
+          return v if v.is_a?(ErrorVal)
+          return error("argument_error", "divide", v, "expected [_, _]") unless pair?(v)
+          return error("type_error", "divide", v, "expected numbers") unless numeric?(v[0])
+          return error("type_error", "divide", v, "expected numbers") unless numeric?(v[1])
+          return error("math_error", "divide", v, "division by zero") if v[1] == 0
+
+          a, b = v
+          if a.is_a?(Integer) && b.is_a?(Integer) && (a % b).zero?
+            a / b
+          else
+            a.to_f / b
+          end
+        end
+
+        def mod(v)
+          return v if v.is_a?(ErrorVal)
+          return error("argument_error", "mod", v, "expected [_, _]") unless pair?(v)
+          return error("type_error", "mod", v, "expected numbers") unless numeric?(v[0])
+          return error("type_error", "mod", v, "expected numbers") unless numeric?(v[1])
+          return error("math_error", "mod", v, "modulo by zero") if v[1] == 0
+
+          v[0] % v[1]
+        end
+
+        def negate(v)
+          return v if v.is_a?(ErrorVal)
+          return error("type_error", "negate", v, "expected a number") unless numeric?(v)
+
+          -v
+        end
+
+        def floor(v)
+          return v if v.is_a?(ErrorVal)
+          return error("type_error", "floor", v, "expected a number") unless numeric?(v)
+          return error("math_error", "floor", v, "not a finite number") if non_finite?(v)
+
           v.floor
-        end)
+        end
 
         # --- comparison ---
-        define.call("equals", lambda do |v|
-          next ErrorVal.internal(kind: "argument_error", location: "builtin equals", operation: "equals", input: v, message: "expected [_, _]") unless is_pair.call(v)
-          interp.deep_equal?(v[0], v[1])
-        end)
-        define.call("lessThan", lambda do |v|
-          next ErrorVal.internal(kind: "argument_error", location: "builtin lessThan", operation: "lessThan", input: v, message: "expected [_, _]") unless is_pair.call(v)
+
+        def equals(v)
+          return v if v.is_a?(ErrorVal)
+          return error("argument_error", "equals", v, "expected [_, _]") unless pair?(v)
+
+          @interp.deep_equal?(v[0], v[1])
+        end
+
+        def less_than(v)
+          return v if v.is_a?(ErrorVal)
+          return error("argument_error", "lessThan", v, "expected [_, _]") unless pair?(v)
+
           a, b = v
-          if isnum.call(a) && isnum.call(b) then a < b
-          elsif a.is_a?(String) && b.is_a?(String) then a < b
-          else ErrorVal.internal(kind: "type_error", location: "builtin lessThan", operation: "lessThan", input: v, message: "expected two numbers or two strings") end
-        end)
+          if numeric?(a) && numeric?(b)
+            a < b
+          elsif a.is_a?(String) && b.is_a?(String)
+            a < b
+          else
+            error("type_error", "lessThan", v, "expected two numbers or two strings")
+          end
+        end
 
         # --- boolean ---
-        bool_pair = lambda do |name, v|
-          next ErrorVal.internal(kind: "argument_error", location: "builtin #{name}", operation: name, input: v, message: "expected [_, _]") unless is_pair.call(v)
-          next ErrorVal.internal(kind: "type_error", location: "builtin #{name}", operation: name, input: v, message: "expected booleans") unless v.all? { |x| x == true || x == false }
-          v
-        end
-        define.call("and", lambda do |v|
-          p = bool_pair.call("and", v); p.is_a?(ErrorVal) ? p : (p[0] && p[1])
-        end)
-        define.call("or", lambda do |v|
-          p = bool_pair.call("or", v); p.is_a?(ErrorVal) ? p : (p[0] || p[1])
-        end)
-        define.call("not", lambda do |v|
-          (v == true || v == false) ? !v : ErrorVal.internal(kind: "type_error", location: "builtin not", operation: "not", input: v, message: "expected a boolean")
-        end)
 
-        # --- strings / structure bridges ---
-        define.call("length", lambda do |v|
-          case v
-          when String, Array, Hash then v.length
-          else ErrorVal.internal(kind: "type_error", location: "builtin length", operation: "length", input: v, message: "expected a string, array, or object") end
-        end)
-        define.call("concat", lambda do |v|
-          next ErrorVal.internal(kind: "argument_error", location: "builtin concat", operation: "concat", input: v, message: "expected [_, _]") unless is_pair.call(v)
-          next ErrorVal.internal(kind: "type_error", location: "builtin concat", operation: "concat", input: v, message: "expected strings") unless v.all? { |x| x.is_a?(String) }
+        def and_(v)
+          return v if v.is_a?(ErrorVal)
+          return error("argument_error", "and", v, "expected [_, _]") unless pair?(v)
+          return error("type_error", "and", v, "expected booleans") unless boolean?(v[0])
+          return error("type_error", "and", v, "expected booleans") unless boolean?(v[1])
+
+          v[0] && v[1]
+        end
+
+        def or_(v)
+          return v if v.is_a?(ErrorVal)
+          return error("argument_error", "or", v, "expected [_, _]") unless pair?(v)
+          return error("type_error", "or", v, "expected booleans") unless boolean?(v[0])
+          return error("type_error", "or", v, "expected booleans") unless boolean?(v[1])
+
+          v[0] || v[1]
+        end
+
+        def not_(v)
+          return v if v.is_a?(ErrorVal)
+          return error("type_error", "not", v, "expected a boolean") unless boolean?(v)
+
+          !v
+        end
+
+        # --- strings and structure bridges ---
+
+        def length(v)
+          return v if v.is_a?(ErrorVal)
+          return error("type_error", "length", v, "expected a string, array, or object") unless v.is_a?(String) || v.is_a?(Array) || v.is_a?(Hash)
+
+          v.length
+        end
+
+        def concat(v)
+          return v if v.is_a?(ErrorVal)
+          return error("argument_error", "concat", v, "expected [_, _]") unless pair?(v)
+          return error("type_error", "concat", v, "expected strings") unless v[0].is_a?(String) && v[1].is_a?(String)
+
           v[0] + v[1]
-        end)
-        define.call("chars", lambda do |v|
-          v.is_a?(String) ? v.chars : ErrorVal.internal(kind: "type_error", location: "builtin chars", operation: "chars", input: v, message: "expected a string")
-        end)
-        define.call("join", lambda do |v|
-          next ErrorVal.internal(kind: "argument_error", location: "builtin join", operation: "join", input: v, message: "expected [_, _]") unless is_pair.call(v)
-          arr, sep = v
-          unless arr.is_a?(Array) && sep.is_a?(String) && arr.all? { |x| x.is_a?(String) }
-            next ErrorVal.internal(kind: "type_error", location: "builtin join", operation: "join", input: v, message: "expected [array-of-strings, separator-string]")
+        end
+
+        def chars(v)
+          return v if v.is_a?(ErrorVal)
+          return error("type_error", "chars", v, "expected a string") unless v.is_a?(String)
+
+          v.chars
+        end
+
+        def join(v)
+          return v if v.is_a?(ErrorVal)
+          return error("argument_error", "join", v, "expected [_, _]") unless pair?(v)
+
+          array, separator = v
+          unless array.is_a?(Array) && separator.is_a?(String) && array.all? { |item| item.is_a?(String) }
+            return error("type_error", "join", v, "expected [array-of-strings, separator-string]")
           end
-          arr.join(sep)
-        end)
-        define.call("toString", lambda do |v|
+
+          array.join(separator)
+        end
+
+        def to_string(v)
+          return v if v.is_a?(ErrorVal)
+
           case v
           when String then v
           when Integer, Float then v.to_s
           when true then "true"
           when false then "false"
           when NULL then "null"
-          else ErrorVal.internal(kind: "conversion_error", location: "builtin toString", operation: "toString", input: v, message: "cannot stringify this value type")
+          else error("conversion_error", "toString", v, "cannot stringify this value type")
           end
-        end)
-        define.call("parseNumber", lambda do |v|
-          next ErrorVal.internal(kind: "type_error", location: "builtin parseNumber", operation: "parseNumber", input: v, message: "expected a string") unless v.is_a?(String)
-          if v =~ /\A-?\d+\z/ then v.to_i
-          elsif v =~ /\A-?\d+(\.\d+)?([eE][+-]?\d+)?\z/ then v.to_f
-          else ErrorVal.internal(kind: "conversion_error", location: "builtin parseNumber", operation: "parseNumber", input: v, message: "not a numeric string")
+        end
+
+        def parse_number(v)
+          return v if v.is_a?(ErrorVal)
+          return error("type_error", "parseNumber", v, "expected a string") unless v.is_a?(String)
+
+          case v
+          when /\A-?\d+\z/ then v.to_i
+          when /\A-?\d+(\.\d+)?([eE][+-]?\d+)?\z/ then v.to_f
+          else error("conversion_error", "parseNumber", v, "not a numeric string")
           end
-        end)
+        end
 
         # --- object key enumeration (Tier 0: patterns can't enumerate unknown keys) ---
-        define.call("keys", lambda do |v|
-          v.is_a?(Hash) ? v.keys : ErrorVal.internal(kind: "type_error", location: "builtin keys", operation: "keys", input: v, message: "expected an object")
-        end)
-        define.call("values", lambda do |v|
-          v.is_a?(Hash) ? v.values : ErrorVal.internal(kind: "type_error", location: "builtin values", operation: "values", input: v, message: "expected an object")
-        end)
 
-        # --- type predicates (return false on any non-matching value; propagate on error like every other builtin) ---
-        define.call("Integer", ->(v) { v.is_a?(Integer) && !(v == true || v == false) })
-        define.call("Float", ->(v) { v.is_a?(Float) })
-        define.call("Number", ->(v) { isnum.call(v) })
-        define.call("String", ->(v) { v.is_a?(String) })
-        define.call("Boolean", ->(v) { v == true || v == false })
-        define.call("Array", ->(v) { v.is_a?(Array) })
-        define.call("Object", ->(v) { v.is_a?(Hash) })
-        define.call("Null", ->(v) { v == NULL })
+        def keys(v)
+          return v if v.is_a?(ErrorVal)
+          return error("type_error", "keys", v, "expected an object") unless v.is_a?(Hash)
+
+          v.keys
+        end
+
+        def values(v)
+          return v if v.is_a?(ErrorVal)
+          return error("type_error", "values", v, "expected an object") unless v.is_a?(Hash)
+
+          v.values
+        end
+
+        private
+
+        # Type predicates, also reused as internal guards.
+
+        def integer?(v)
+          v.is_a?(Integer) && !boolean?(v)
+        end
+
+        def float?(v)
+          v.is_a?(Float)
+        end
+
+        def numeric?(v)
+          v.is_a?(Numeric) && !boolean?(v)
+        end
+
+        def string?(v)
+          v.is_a?(String)
+        end
+
+        def boolean?(v)
+          v == true || v == false
+        end
+
+        def array?(v)
+          v.is_a?(Array)
+        end
+
+        def object?(v)
+          v.is_a?(Hash)
+        end
+
+        def null?(v)
+          v == NULL
+        end
+
+        def pair?(v)
+          v.is_a?(Array) && v.length == 2
+        end
+
+        def non_finite?(v)
+          v.is_a?(Float) && !v.finite?
+        end
+
+        # Build a standardized interpreter error (see docs/user/reference.md §6.5).
+        def error(kind, name, v, message)
+          ErrorVal.internal(
+            kind: kind,
+            location: "builtin #{name}",
+            operation: name,
+            input: v,
+            message: message
+          )
+        end
       end
     end
   end
