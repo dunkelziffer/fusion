@@ -51,7 +51,7 @@ RSpec.describe "CLI (exe/fusion)" do
   describe "boundary conversions also reachable in-process" do
     it "converts an inline parse error" do
       _out, err, status = run_cli("-e", "(_ => @", stdin: "null")
-      expect(err).to include('"kind":"parse_error"', '"location":"code <inline>"')
+      expect(err).to include('"kind":"syntax_error"', '"location":"code <inline>"')
       expect(status.exitstatus).to eq(1)
     end
 

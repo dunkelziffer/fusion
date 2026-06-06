@@ -216,11 +216,11 @@ RSpec.describe "payloaded errors" do
   end
 
   describe "invalid input" do
-    it "reports non-JSON input as a parse_error payload (located at the input channel)" do
+    it "reports non-JSON input as a syntax_error payload (located at the input channel)" do
       expect_pipe
         .in("✅", "not json")
         .code("(x => x)")
-        .out("❌", '{"kind":"parse_error","location":"input","operation":"parsing input as JSON","input":"not json","message":"input is not valid JSON"}')
+        .out("❌", '{"kind":"syntax_error","location":"input","operation":"parsing input as JSON","input":"not json","message":"input is not valid JSON"}')
     end
   end
 

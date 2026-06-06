@@ -22,8 +22,8 @@ module Fusion
 
     # Parse a complete program. The lexer and parser report failures by raising
     # ParseError; this single entry point rescues them and returns a standardized
-    # parse_error value, so no caller ever sees a raw Ruby error. `location` is the
-    # parse_error's "code X" / "code <inline>" context.
+    # syntax_error value, so no caller ever sees a raw Ruby error. `location` is the
+    # syntax_error's "code X" / "code <inline>" context.
     def self.parse_file(src, location:)
       toks = Lexer.new(src).tokens
       p = new(toks)
@@ -31,7 +31,7 @@ module Fusion
       p.expect(:eof)
       expr
     rescue ParseError => err
-      Interpreter::ErrorVal.internal(kind: "parse_error", location: location,
+      Interpreter::ErrorVal.internal(kind: "syntax_error", location: location,
                                      operation: "parsing", input: src, message: err.message)
     end
 

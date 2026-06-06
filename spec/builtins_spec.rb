@@ -47,14 +47,14 @@ RSpec.describe "builtins" do
       expect_pipe
         .in("✅", "[1,2,3]")
         .code("(p => p | @add)")
-        .out("❌", '{"kind":"argument_error","location":"builtin add","operation":"add","input":[1,2,3],"message":"expected a pair"}')
+        .out("❌", '{"kind":"argument_error","location":"builtin add","operation":"add","input":[1,2,3],"message":"expected [_, _]"}')
     end
 
     it "errors with argument_error on a non-array" do
       expect_pipe
         .in("✅", "5")
         .code("(p => p | @add)")
-        .out("❌", '{"kind":"argument_error","location":"builtin add","operation":"add","input":5,"message":"expected a pair"}')
+        .out("❌", '{"kind":"argument_error","location":"builtin add","operation":"add","input":5,"message":"expected [_, _]"}')
     end
   end
 
@@ -188,7 +188,7 @@ RSpec.describe "builtins" do
       expect_pipe
         .in("✅", "7")
         .code("(p => p | @mod)")
-        .out("❌", '{"kind":"argument_error","location":"builtin mod","operation":"mod","input":7,"message":"expected a pair"}')
+        .out("❌", '{"kind":"argument_error","location":"builtin mod","operation":"mod","input":7,"message":"expected [_, _]"}')
     end
 
     it "errors with type_error on a non-numeric pair" do
@@ -299,7 +299,7 @@ RSpec.describe "builtins" do
       expect_pipe
         .in("✅", "[1,2,3]")
         .code("(p => p | @equals)")
-        .out("❌", '{"kind":"argument_error","location":"builtin equals","operation":"equals","input":[1,2,3],"message":"expected a pair"}')
+        .out("❌", '{"kind":"argument_error","location":"builtin equals","operation":"equals","input":[1,2,3],"message":"expected [_, _]"}')
     end
   end
 

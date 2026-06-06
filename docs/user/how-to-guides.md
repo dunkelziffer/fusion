@@ -14,7 +14,7 @@ tells you what went wrong. Every error is a JSON object with a fixed shape:
 {"kind":"reference_error","location":"code program.fsn","operation":"reading file","input":"stdlib/map.fsn","message":"file not found"}
 ```
 
-- `kind` — the error category (e.g. `reference_error`, `parse_error`, `type_error`).
+- `kind` — the error category (e.g. `reference_error`, `syntax_error`, `type_error`).
 - `location` — where it arose (`builtin X`, `stdlib X`, `code X`, `input`, `output`, …).
 - `operation` — the operation that failed (e.g. `reading file`, `parsing`, `|`).
 - `input` — the value(s) the operation was applied to.

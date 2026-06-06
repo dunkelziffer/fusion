@@ -6,24 +6,24 @@
 # runtime-level errors and confirms each kind is reachable (or documents why a
 # given source cannot be triggered from Fusion code).
 RSpec.describe "error kinds" do
-  describe "parse_error" do
+  describe "syntax_error" do
     it "from inline source (location: code <inline>)" do
       expect_pipe
         .code("(_ => @")
-        .out("❌", a_string_including('"kind":"parse_error"', '"location":"code <inline>"'))
+        .out("❌", a_string_including('"kind":"syntax_error"', '"location":"code <inline>"'))
     end
 
     it "from a file (location: code <file>)" do
       expect_pipe
         .file_path("badsyntax.fsn")
-        .out("❌", a_string_including('"kind":"parse_error"', '"location":"code badsyntax.fsn"'))
+        .out("❌", a_string_including('"kind":"syntax_error"', '"location":"code badsyntax.fsn"'))
     end
 
     it "from non-JSON input (location: input)" do
       expect_pipe
         .in("✅", "not json")
         .code("(x => x)")
-        .out("❌", '{"kind":"parse_error","location":"input","operation":"parsing input as JSON","input":"not json","message":"input is not valid JSON"}')
+        .out("❌", '{"kind":"syntax_error","location":"input","operation":"parsing input as JSON","input":"not json","message":"input is not valid JSON"}')
     end
   end
 
@@ -144,7 +144,7 @@ RSpec.describe "error kinds" do
       expect_pipe
         .in("✅", "[1,2,3]")
         .code("(p => p | @add)")
-        .out("❌", a_string_including('"kind":"argument_error"', '"message":"expected a pair"'))
+        .out("❌", a_string_including('"kind":"argument_error"', '"message":"expected [_, _]"'))
     end
   end
 

@@ -13,7 +13,7 @@
 #
 # `.out(marker, payload)` runs the pipe and asserts the result; a matcher object
 # (e.g. a_string_including(...)) is allowed in the payload slot. A program that
-# fails to parse is not an exception — it is a payloaded parse_error, asserted
+# fails to parse is not an exception — it is a payloaded syntax_error, asserted
 # with `.out("❌", ...)` like any other failure. `.env(CI: "1")` supplies
 # variables visible to @ENV.
 #

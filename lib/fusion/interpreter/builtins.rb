@@ -15,7 +15,7 @@ module Fusion
         # pair); `type_error` means a type mismatch (a pair, but not of numbers).
         # Returns [a, b] on success or an ErrorVal.
         num_pair = lambda do |name, v|
-          next ErrorVal.internal(kind: "argument_error", location: "builtin #{name}", operation: name, input: v, message: "expected a pair") unless is_pair.call(v)
+          next ErrorVal.internal(kind: "argument_error", location: "builtin #{name}", operation: name, input: v, message: "expected [_, _]") unless is_pair.call(v)
           a, b = v
           next ErrorVal.internal(kind: "type_error", location: "builtin #{name}", operation: name, input: v, message: "expected numbers") unless isnum.call(a) && isnum.call(b)
           [a, b]
@@ -57,11 +57,11 @@ module Fusion
 
         # --- comparison ---
         define.call("equals", lambda do |v|
-          next ErrorVal.internal(kind: "argument_error", location: "builtin equals", operation: "equals", input: v, message: "expected a pair") unless is_pair.call(v)
+          next ErrorVal.internal(kind: "argument_error", location: "builtin equals", operation: "equals", input: v, message: "expected [_, _]") unless is_pair.call(v)
           interp.deep_equal?(v[0], v[1])
         end)
         define.call("lessThan", lambda do |v|
-          next ErrorVal.internal(kind: "argument_error", location: "builtin lessThan", operation: "lessThan", input: v, message: "expected a pair") unless is_pair.call(v)
+          next ErrorVal.internal(kind: "argument_error", location: "builtin lessThan", operation: "lessThan", input: v, message: "expected [_, _]") unless is_pair.call(v)
           a, b = v
           if isnum.call(a) && isnum.call(b) then a < b
           elsif a.is_a?(String) && b.is_a?(String) then a < b
@@ -70,7 +70,7 @@ module Fusion
 
         # --- boolean ---
         bool_pair = lambda do |name, v|
-          next ErrorVal.internal(kind: "argument_error", location: "builtin #{name}", operation: name, input: v, message: "expected a pair") unless is_pair.call(v)
+          next ErrorVal.internal(kind: "argument_error", location: "builtin #{name}", operation: name, input: v, message: "expected [_, _]") unless is_pair.call(v)
           next ErrorVal.internal(kind: "type_error", location: "builtin #{name}", operation: name, input: v, message: "expected booleans") unless v.all? { |x| x == true || x == false }
           v
         end
@@ -91,7 +91,7 @@ module Fusion
           else ErrorVal.internal(kind: "type_error", location: "builtin length", operation: "length", input: v, message: "expected a string, array, or object") end
         end)
         define.call("concat", lambda do |v|
-          next ErrorVal.internal(kind: "argument_error", location: "builtin concat", operation: "concat", input: v, message: "expected a pair") unless is_pair.call(v)
+          next ErrorVal.internal(kind: "argument_error", location: "builtin concat", operation: "concat", input: v, message: "expected [_, _]") unless is_pair.call(v)
           next ErrorVal.internal(kind: "type_error", location: "builtin concat", operation: "concat", input: v, message: "expected strings") unless v.all? { |x| x.is_a?(String) }
           v[0] + v[1]
         end)
@@ -99,7 +99,7 @@ module Fusion
           v.is_a?(String) ? v.chars : ErrorVal.internal(kind: "type_error", location: "builtin chars", operation: "chars", input: v, message: "expected a string")
         end)
         define.call("join", lambda do |v|
-          next ErrorVal.internal(kind: "argument_error", location: "builtin join", operation: "join", input: v, message: "expected a pair") unless is_pair.call(v)
+          next ErrorVal.internal(kind: "argument_error", location: "builtin join", operation: "join", input: v, message: "expected [_, _]") unless is_pair.call(v)
           arr, sep = v
           unless arr.is_a?(Array) && sep.is_a?(String) && arr.all? { |x| x.is_a?(String) }
             next ErrorVal.internal(kind: "type_error", location: "builtin join", operation: "join", input: v, message: "expected [array-of-strings, separator-string]")
