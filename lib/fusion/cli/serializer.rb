@@ -43,7 +43,7 @@ module Fusion
           return runtime_value if runtime_value.finite?
           throw(:unserializable, "cannot serialize a non-finite number") unless lenient
 
-          runtime_value.to_s # "Infinity" / "-Infinity" / "NaN"
+          "<#{runtime_value}>" # "<Infinity>" / "<-Infinity>" / "<NaN>"
         when Array
           runtime_value.map { |item| convert(item, lenient:) }
         when Hash
@@ -56,7 +56,7 @@ module Fusion
           runtime_value
         when Interpreter::ErrorVal
           if lenient
-            "!#{convert(runtime_value.payload, lenient:)}"
+            "!#{convert(runtime_value.payload, lenient:).to_json}"
           else
             raise Unreachable, "ErrorVal should have been handled at the top level of convert"
           end

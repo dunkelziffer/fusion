@@ -182,7 +182,7 @@ RSpec.describe "error kinds" do
     it "a non-finite number result (overflow to Infinity has no JSON form)" do
       expect_pipe
         .code("(_ => [1e308, 10] | @multiply)")
-        .out("❌", '{"kind":"serialization_error","location":"output","operation":"serializing result","input":"Infinity","message":"cannot serialize a non-finite number"}')
+        .out("❌", '{"kind":"serialization_error","location":"output","operation":"serializing result","input":"<Infinity>","message":"cannot serialize a non-finite number"}')
     end
 
     # A user error (`!expr`) is serialized strictly, just like a plain result: a
@@ -190,13 +190,28 @@ RSpec.describe "error kinds" do
     it "a user error whose payload is a function" do
       expect_pipe
         .code("(_ => !(y => y))")
-        .out("❌", '{"kind":"serialization_error","location":"output","operation":"serializing result","input":"!<function>","message":"cannot serialize a function"}')
+        .out("❌", '{"kind":"serialization_error","location":"output","operation":"serializing result","input":"!\"<function>\"","message":"cannot serialize a function"}')
     end
 
     it "a user error whose payload is a non-finite number" do
       expect_pipe
         .code("(_ => !1e400)")
-        .out("❌", '{"kind":"serialization_error","location":"output","operation":"serializing result","input":"!Infinity","message":"cannot serialize a non-finite number"}')
+        .out("❌", '{"kind":"serialization_error","location":"output","operation":"serializing result","input":"!\"<Infinity>\"","message":"cannot serialize a non-finite number"}')
+    end
+
+    # A structured payload is rendered as JSON after the `!`, so an unserializable
+    # value nested inside it shows up as a placeholder in valid JSON (not Ruby
+    # inspect syntax).
+    it "a user error whose payload is an object containing a function" do
+      expect_pipe
+        .code('(_ => !{"a": (y => y)})')
+        .out("❌", '{"kind":"serialization_error","location":"output","operation":"serializing result","input":"!{\"a\":\"<function>\"}","message":"cannot serialize a function"}')
+    end
+
+    it "a user error whose payload is an array containing a non-finite number" do
+      expect_pipe
+        .code("(_ => ![1e400])")
+        .out("❌", '{"kind":"serialization_error","location":"output","operation":"serializing result","input":"![\"<Infinity>\"]","message":"cannot serialize a non-finite number"}')
     end
   end
 
@@ -216,10 +231,10 @@ RSpec.describe "error kinds" do
         .out("❌", '{"kind":"type_error","location":"builtin add","operation":"add","input":["<function>",1],"message":"expected numbers"}')
     end
 
-    it "renders a non-finite number in input as \"Infinity\"" do
+    it "renders a non-finite number in input as \"<Infinity>\"" do
       expect_pipe
         .code("(_ => 1e400 | @floor)")
-        .out("❌", '{"kind":"math_error","location":"builtin floor","operation":"floor","input":"Infinity","message":"not a finite number"}')
+        .out("❌", '{"kind":"math_error","location":"builtin floor","operation":"floor","input":"<Infinity>","message":"not a finite number"}')
     end
   end
 
