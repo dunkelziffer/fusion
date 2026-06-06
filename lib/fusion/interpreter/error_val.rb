@@ -11,21 +11,28 @@ module Fusion
 
       def initialize(payload)
         @payload = payload
+        @internal = false
       end
 
-      # Build a standardized, interpreter-produced error (as opposed to a
-      # user-constructed `!expr`). Every such payload shares one shape — see
-      # docs/lang/design.md §2.9 for the field meanings and the closed `kind`
-      # and `location` sets.
+      def internal_error?
+        @internal
+      end
+
+      # Build an interpreter-produced error (as opposed to a user-constructed `!expr`)
+      # with a standardized shape.
       def self.internal(kind:, location:, operation:, input:, message: nil)
-        payload = {
+        error = new(
           "kind" => kind,
           "location" => location,
           "operation" => operation,
           "input" => input,
-        }
-        payload["message"] = message if message
-        new(payload)
+          **(message ? { "message" => message } : {})
+        )
+
+        # Mark as "@internal" to activate lenient serialization.
+        error.instance_variable_set(:@internal, true)
+
+        error
       end
 
       def inspect

@@ -20,10 +20,10 @@
 
 require_relative "../lib/fusion"
 
-# Print an error payload (a runtime value) to stderr and exit 1.
-def emit_error(payload)
-  $stderr.puts Fusion::CLI.serialize(payload)
-  exit 1
+def emit(runtime_value)
+  status, json = Fusion::CLI.serialize(runtime_value)
+  (status.zero? ? $stdout : $stderr).puts json
+  exit status
 end
 
 begin
@@ -62,21 +62,7 @@ begin
   input_text = "null" if input_text.nil? || input_text.strip.empty?
   input_value = Fusion::CLI.parse(input_text)
 
-  result = interp.apply(program_value, input_value)
-
-  if result.is_a?(Fusion::Interpreter::ErrorVal)
-    # Print only the payload (as JSON) to stderr; stdout stays empty so that
-    # shell pipelines can rely on "stdout has the result, or there isn't one".
-    emit_error(result.payload)
-  elsif !Fusion::CLI.serializable?(result)
-    # A function (anywhere in the value) cannot be emitted as JSON.
-    emit_error(Fusion::Interpreter::ErrorVal.internal(kind: "serialization_error", location: "output",
-                                                      operation: "serializing result", input: result,
-                                                      message: "cannot serialize a function").payload)
-  else
-    puts Fusion::CLI.serialize(result)
-    exit 0
-  end
+  emit(interp.apply(program_value, input_value))
 rescue SystemExit
   raise # let exit()/abort() through untouched
 rescue Fusion::FusionError
@@ -85,7 +71,13 @@ rescue Exception => err # rubocop:disable Lint/RescueException
   # Final safety net: SystemStackError and any other escaped Ruby error become a
   # payloaded error rather than a raw backtrace on stderr.
   kind, message = err.is_a?(SystemStackError) ? ["stack_error", "recursion too deep"] : ["type_error", err.message]
-  emit_error(Fusion::Interpreter::ErrorVal.internal(kind: kind, location: "interpreter",
-                                                    operation: "running the program",
-                                                    input: Fusion::Interpreter::NULL, message: message).payload)
+  emit(
+    Fusion::Interpreter::ErrorVal.internal(
+      kind: kind,
+      location: "interpreter",
+      operation: "running the program",
+      input: Fusion::Interpreter::NULL,
+      message: message
+    )
+  )
 end

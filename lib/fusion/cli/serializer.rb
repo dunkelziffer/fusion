@@ -3,45 +3,55 @@
 # === CLI internals ===
 #
 # Input: Interpreter runtime value
-# Output: JSON
+# Output: [exit_code, JSON]
 
 module Fusion
   module CLI
     module Serializer
       extend self
 
-      # Render a runtime value as JSON. Never raises: functions become
-      # "<function>" and non-finite floats become strings, so this is safe to use
-      # for error payloads (whose "input" field may hold such values).
       def to_json(runtime_value)
-        convert(runtime_value).to_json
-      end
-
-      # Whether a value can be faithfully emitted as a program result. A function
-      # (anywhere in the value) cannot be serialized to JSON; the CLI reports that
-      # as a serialization_error rather than emitting a "<function>" placeholder.
-      def serializable?(runtime_value)
-        case runtime_value
-        when Interpreter::Func, Interpreter::NativeFunc then false
-        when Array then runtime_value.all? { |item| serializable?(item) }
-        when Hash then runtime_value.values.all? { |value| serializable?(value) }
-        else true
+        message = catch(:unserializable) do
+          if runtime_value.is_a?(Interpreter::ErrorVal)
+            return [1, convert(runtime_value.payload, lenient: runtime_value.internal_error?).to_json]
+          else
+            return [0, convert(runtime_value).to_json]
+          end
         end
+
+        payload = Interpreter::ErrorVal.internal(
+          kind: "serialization_error",
+          location: "output",
+          operation: "serializing result",
+          input: runtime_value,
+          message: message
+        ).payload
+
+        [1, convert(payload, lenient: true).to_json]
       end
 
       private
 
-      # returns a JSON-like Ruby value
-      def convert(runtime_value)
+      # Use "lenient: true" only for best-effort serialization of error "input" content.
+      def convert(runtime_value, lenient: false)
         case runtime_value
-        when Interpreter::NULL then nil
-        when Interpreter::Func, Interpreter::NativeFunc then "<function>"
+        when Interpreter::NULL
+          nil
         when Float
-          # Infinity / NaN are not valid JSON; render best-effort as a string.
-          runtime_value.finite? ? runtime_value : runtime_value.to_s
-        when Array then runtime_value.map { |item| convert(item) }
-        when Hash then runtime_value.transform_values { |value| convert(value) }
-        else runtime_value
+          return runtime_value if runtime_value.finite?
+          throw(:unserializable, "cannot serialize a non-finite number") unless lenient
+
+          runtime_value.to_s # "Infinity" / "-Infinity" / "NaN"
+        when Array
+          runtime_value.map { |item| convert(item, lenient: lenient) }
+        when Hash
+          runtime_value.transform_values { |value| convert(value, lenient: lenient) }
+        when Interpreter::Func, Interpreter::NativeFunc
+          throw(:unserializable, "cannot serialize a function") unless lenient
+
+          "<function>"
+        else
+          runtime_value
         end
       end
     end

@@ -78,17 +78,8 @@ module FusionHelpers
     def run
       interp = Fusion::Interpreter.new(stdlib_dir: STDLIB, env_vars: @env_vars)
       value = interp.apply(program(interp), input_value)
-      if value.is_a?(Fusion::Interpreter::ErrorVal)
-        [ERR, Fusion::CLI.serialize(value.payload)]
-      elsif !Fusion::CLI.serializable?(value)
-        # Mirror exe/fusion: a function result can't be emitted as JSON.
-        payload = Fusion::Interpreter::ErrorVal.internal(kind: "serialization_error", location: "output",
-                                                         operation: "serializing result", input: value,
-                                                         message: "cannot serialize a function").payload
-        [ERR, Fusion::CLI.serialize(payload)]
-      else
-        [OK, Fusion::CLI.serialize(value)]
-      end
+      status, json = Fusion::CLI.serialize(value)
+      [status.zero? ? OK : ERR, json]
     end
 
     private

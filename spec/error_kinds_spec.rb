@@ -178,6 +178,12 @@ RSpec.describe "error kinds" do
         .code("(_ => [(x => x)])")
         .out("❌", '{"kind":"serialization_error","location":"output","operation":"serializing result","input":["<function>"],"message":"cannot serialize a function"}')
     end
+
+    it "a non-finite number result (overflow to Infinity has no JSON form)" do
+      expect_pipe
+        .code("(_ => [1e308, 10] | @multiply)")
+        .out("❌", '{"kind":"serialization_error","location":"output","operation":"serializing result","input":"Infinity","message":"cannot serialize a non-finite number"}')
+    end
   end
 
   describe "stack_error" do
