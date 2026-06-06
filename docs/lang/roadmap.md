@@ -22,13 +22,6 @@ a directory, since shadowing is invisible at the call site.
 
 ## 2. Error model
 
-**Payload shape consistency** *(resolved — option (a); see design.md §2.9)*.
-Every error now carries one structured shape — `{"kind", "location",
-"operation", "input"[, "message"]}` — with `kind` drawn from a closed set. The
-old split (built-in bare strings vs. runtime `{"kind": ...}` objects) is gone,
-and all Ruby errors a program can trigger are caught and converted to this shape
-so nothing raw reaches stderr.
-
 **Better diagnostics.** `FUSION_DEBUG` exists for file/parse errors; extend
 principled diagnostics to runtime error origins (where did this error first
 arise?). One option: attaching a source position to the payload (an extra
