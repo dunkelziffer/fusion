@@ -31,11 +31,12 @@ module Fusion
       p.expect(:eof)
       expr
     rescue ParseError => err
-      Interpreter::ErrorVal.internal(kind: "syntax_error", location: location,
-                                     operation: "parsing", input: src, message: err.message)
+      Interpreter::ErrorVal.internal(kind: "syntax_error", location: location, operation: "parsing", input: src, message: err.message)
     end
 
-    def parse_expr = parse_pipe
+    def parse_expr
+      parse_pipe
+    end
 
     def parse_pipe
       left = parse_prefix
