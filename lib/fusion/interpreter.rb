@@ -36,6 +36,7 @@ module Fusion
     def initialize(env_vars: nil)
       @stdlib_dir = File.expand_path("../../stdlib", __dir__)
       raise Unreachable, "Couldn't find standard library" unless Dir.exist?(@stdlib_dir)
+
       @env_vars = env_vars || ENV.to_h
       @file_cache = {} # abspath -> FileThunk
       @ast_cache = {}  # abspath -> AST
@@ -49,8 +50,7 @@ module Fusion
       @file_cache[abspath] ||= FileThunk.new(self, abspath)
     end
 
-    # The `location` string for code at `abspath`: "stdlib X" for stdlib files,
-    # "code X" for everything else.
+    # The error field `location` for code at `abspath`.
     def file_location(abspath)
       if abspath.start_with?(@stdlib_dir + File::SEPARATOR)
         "stdlib #{File.basename(abspath)}"
@@ -59,11 +59,15 @@ module Fusion
       end
     end
 
-    # The `location` for code being evaluated under `env`. Inline (`-e`) programs
-    # have no file, so they report as "code <inline>".
+    # The error field `location` for code being evaluated under `env`.
     def code_location(env)
       f = env.lookup("__file__")
-      f == :__unbound__ ? "code <inline>" : file_location(f)
+      if f == :__unbound__
+        # Inline (`-e`) programs have no file, so they report as "code <inline>".
+        "code <inline>"
+      else
+        file_location(f)
+      end
     end
 
     def evaluate_file(abspath)
@@ -72,6 +76,7 @@ module Fusion
         src = File.read(abspath)
         Parser.parse_file(src, location: loc)
       end)
+
       if ast.is_a?(ErrorVal) # a parse error (already a payloaded value)
         ast
       else
@@ -128,13 +133,7 @@ module Fusion
         return load_file(stdlib_file).force
       end
 
-      ErrorVal.internal(
-        kind: "reference_error",
-        location: location,
-        operation: "resolving @#{name}",
-        input: name,
-        message: "unresolved reference"
-      )
+      ErrorVal.internal(kind: "reference_error", location: location, operation: "resolving @#{name}", input: name, message: "unresolved reference")
     end
 
     # Resolve a pure path "@dir/a" or "@../a": file only, never builtin/stdlib.
@@ -204,67 +203,120 @@ module Fusion
     # a value or an error in motion, never both.
     def eval_array(node, env)
       out = []
+
       node.elems.each do |kind, expr|
-        v = eval_expr(expr, env)
-        return v if v.is_a?(ErrorVal)
+        value = eval_expr(expr, env)
+
+        if value.is_a?(ErrorVal)
+          # Propagate errors
+          return value
+        end
+
         if kind == :spread
-          return ErrorVal.internal(kind: "type_error", location: code_location(env), operation: "[...] array spread", input: v, message: "expected an array") unless v.is_a?(Array)
-          out.concat(v)
+          if value.is_a?(Array)
+            out.concat(value)
+          else
+            return ErrorVal.internal(kind: "type_error", location: code_location(env), operation: "[...] array spread", input: value, message: "expected an array")
+          end
         else
-          out << v
+          out.append(value)
         end
       end
+
       out
     end
 
     def eval_object(node, env)
       out = {}
+
       node.members.each do |m|
         if m[0] == :spread
-          v = eval_expr(m[1], env)
-          return v if v.is_a?(ErrorVal)
-          return ErrorVal.internal(kind: "type_error", location: code_location(env), operation: "{...} object spread", input: v, message: "expected an object") unless v.is_a?(Hash)
-          out.merge!(v)
+          value = eval_expr(m[1], env)
+
+          if value.is_a?(ErrorVal)
+            # Propagate errors
+            return value
+          end
+
+          if value.is_a?(Hash)
+            out.merge!(value)
+          else
+            return ErrorVal.internal(kind: "type_error", location: code_location(env), operation: "{...} object spread", input: value, message: "expected an object")
+          end
         else
           _, key, expr = m
-          v = eval_expr(expr, env)
-          return v if v.is_a?(ErrorVal)
-          out[key] = v
+          value = eval_expr(expr, env)
+
+          if value.is_a?(ErrorVal)
+            # Propagate errors
+            return value
+          end
+
+          out[key] = value
         end
       end
+
       out
     end
 
     def eval_pipe(node, env)
-      v = eval_expr(node.left, env)
-      f = eval_expr(node.right, env)
-      apply(f, v, code_location(env))
+      value = eval_expr(node.left, env)
+      function = eval_expr(node.right, env)
+      apply(function, value, code_location(env))
     end
 
     def eval_member(node, env)
       obj = eval_expr(node.obj, env)
-      return obj if obj.is_a?(ErrorVal)
+
+      if obj.is_a?(ErrorVal)
+        # Propagate errors
+        return obj
+      end
+
       loc = code_location(env)
-      return ErrorVal.internal(kind: "type_error", location: loc, operation: ".#{node.key}", input: [obj, node.key], message: "expected an object") unless obj.is_a?(Hash)
-      return ErrorVal.internal(kind: "access_error", location: loc, operation: ".#{node.key}", input: [obj, node.key], message: "missing key") unless obj.key?(node.key)
+      unless obj.is_a?(Hash)
+        return ErrorVal.internal(kind: "type_error", location: loc, operation: ".#{node.key}", input: [obj, node.key], message: "expected an object")
+      end
+
+      unless obj.key?(node.key)
+        return ErrorVal.internal(kind: "access_error", location: loc, operation: ".#{node.key}", input: [obj, node.key], message: "missing key")
+      end
+
       obj[node.key]
     end
 
     def eval_index(node, env)
       obj = eval_expr(node.obj, env)
-      return obj if obj.is_a?(ErrorVal)
+
+      if obj.is_a?(ErrorVal)
+        # Propagate errors
+        return obj
+      end
+
       idx = eval_expr(node.idx, env)
-      return idx if idx.is_a?(ErrorVal)
+
+      if idx.is_a?(ErrorVal)
+        # Propagate errors
+        return idx
+      end
+
       loc = code_location(env)
       if obj.is_a?(Array) && idx.is_a?(Integer)
         i = idx >= 0 ? idx : obj.length + idx
-        return obj[i] if i >= 0 && i < obj.length
-        return ErrorVal.internal(kind: "access_error", location: loc, operation: "[#{idx}]", input: [obj, idx], message: "index out of range")
+        if i >= 0 && i < obj.length
+          obj[i]
+        else
+          ErrorVal.internal(kind: "access_error", location: loc, operation: "[#{idx}]", input: [obj, idx], message: "index out of range")
+        end
       elsif obj.is_a?(Hash) && idx.is_a?(String)
-        return obj[idx] if obj.key?(idx)
-        return ErrorVal.internal(kind: "access_error", location: loc, operation: "[#{idx.inspect}]", input: [obj, idx], message: "missing key")
+        if obj.key?(idx)
+          obj[idx]
+        else
+          ErrorVal.internal(kind: "access_error", location: loc, operation: "[#{idx.inspect}]", input: [obj, idx], message: "missing key")
+        end
+      else
+        ErrorVal.internal(kind: "type_error", location: loc, operation: "[index]", input: [obj, idx], message: "bad index type")
       end
-      ErrorVal.internal(kind: "type_error", location: loc, operation: "[index]", input: [obj, idx], message: "bad index type")
     end
 
     # ---- Application & matching ------------------------------------------
@@ -272,49 +324,57 @@ module Fusion
     # function. It defaults to "interpreter" for apply calls with no code context
     # (e.g. the CLI applying the whole program).
     def apply(f, v, location = "interpreter")
-      # An errored function value propagates as-is (more useful than a generic
-      # "applied a non-function" wrapper).
-      return f if f.is_a?(ErrorVal)
+      if f.is_a?(ErrorVal)
+        # Propagate errors
+        return f
+      end
+
       if f.is_a?(NativeFunc)
-        # Uniform propagation: built-ins never receive errors as inputs.
-        return v if v.is_a?(ErrorVal)
+        if v.is_a?(ErrorVal)
+          # Uniform propagation: built-ins never receive errors as inputs.
+          return v
+        end
+
         # Safety net: a builtin that raises a Ruby error (e.g. a domain error)
         # becomes a payloaded error rather than a raw backtrace on stderr.
         begin
-          return f.fn.call(v)
+          f.fn.call(v)
         rescue StandardError => err
           kind = (err.is_a?(FloatDomainError) || err.is_a?(ZeroDivisionError)) ? "math_error" : "type_error"
-          return ErrorVal.internal(kind: kind, location: "builtin #{f.name}", operation: f.name, input: v, message: err.message)
+          ErrorVal.internal(kind: kind, location: "builtin #{f.name}", operation: f.name, input: v, message: err.message)
         end
-      end
-      unless f.is_a?(Func)
-        return ErrorVal.internal(kind: "type_error", location: location, operation: "|", input: [v, f], message: "applied a non-function")
-      end
-      f.clauses.each do |pattern, body|
-        # Bindings are inserted directly into a fresh child env as the pattern
-        # matches; a duplicate binder (e.g. `[a, a]`) trips Env#bind, which we
-        # convert to a binding_error here. A failed/abandoned clause just drops
-        # its env, so partial bindings never leak.
-        clause_env = f.env.child
-        m =
-          begin
+      elsif f.is_a?(Func)
+        f.clauses.each do |pattern, body|
+          # Bindings are inserted directly into a fresh child env as the pattern
+          # matches; a duplicate binder (e.g. `[a, a]`) trips Env#bind, which we
+          # convert to a binding_error here. A failed/abandoned clause just drops
+          # its env, so partial bindings never leak.
+          clause_env = f.env.child
+          m = begin
             match(pattern, v, clause_env)
           rescue Env::DuplicateBinding => e
-            return ErrorVal.internal(kind: "binding_error", location: code_location(clause_env),
-                                     operation: "binding identifier #{e.name}", input: e.name,
-                                     message: "identifier already bound")
+            return ErrorVal.internal(kind: "binding_error", location: code_location(clause_env), operation: "binding identifier #{e.name}", input: e.name, message: "identifier already bound")
           end
-        # A `?` predicate raised an error during matching: bubble it up as the
-        # function's return value (no further clauses are tried).
-        return m if m.is_a?(ErrorVal)
-        if m
-          return eval_expr(body, clause_env)
+
+          if m.is_a?(ErrorVal)
+            # A `?` predicate raised an error during matching: bubble it up as the
+            # function's return value (no further clauses are tried).
+            return m
+          elsif m
+            # Successful match
+            return eval_expr(body, clause_env)
+          else
+            # Try next pattern
+            next
+          end
         end
+        # No clause matched. If the input was an error, it keeps propagating
+        # (an unmatched error must never be silently swallowed). Otherwise the
+        # lenient default is `null`.
+        v.is_a?(ErrorVal) ? v : NULL
+      else
+        ErrorVal.internal(kind: "type_error", location: location, operation: "|", input: [v, f], message: "applied a non-function")
       end
-      # No clause matched. If the input was an error, it keeps propagating
-      # (an unmatched error must never be silently swallowed). Otherwise the
-      # lenient default is `null`.
-      v.is_a?(ErrorVal) ? v : NULL
     end
 
     # Binds matched sub-values into `env` as it goes. Returns true (match),
@@ -325,40 +385,61 @@ module Fusion
       when Pattern::PLit
         deep_equal?(pattern.value, value)
       when Pattern::PErr
-        # If the value is an error, match the inner pattern against its
-        # payload. The inner is always a non-`!` pattern (the parser ensures
-        # that), so for a bare `!` we synthesized PWild as the inner.
-        return false unless value.is_a?(ErrorVal)
-        match(pattern.inner, value.payload, env)
+        if value.is_a?(ErrorVal)
+          # The pattern.inner is always a non-`!` pattern (ensured by the parser)
+          match(pattern.inner, value.payload, env)
+        else
+          false
+        end
       when Pattern::PWild
         # `_` matches anything EXCEPT an error value.
         !value.is_a?(ErrorVal)
       when Pattern::PBind
-        return false if value.is_a?(ErrorVal)    # binders never capture an error
-        env.bind(pattern.name, value)
-        true
+        if value.is_a?(ErrorVal)
+          # binders never capture an error
+          false
+        else
+          env.bind(pattern.name, value)
+          true
+        end
       when Pattern::PArr
         match_array(pattern, value, env)
       when Pattern::PObj
         match_object(pattern, value, env)
       when Pattern::PGuard
         inner_res = match(pattern.inner, value, env)
-        return inner_res if inner_res.is_a?(ErrorVal)
-        return false unless inner_res
-        # The predicate evaluates in the clause's lexical env — `env.parent`, not
-        # `env` — so it cannot see the pattern's own binders (including the one it
-        # refines). `env` is the clause env created in #apply, threaded through
-        # matching unchanged, so its parent is always that lexical env.
-        lexical_env = env.parent
-        pred = eval_expr(pattern.pred_expr, lexical_env)
-        return pred if pred.is_a?(ErrorVal)       # predicate expression itself errored
-        # The predicate sees whatever value reached this PGuard, which is
-        # already the right value because `!pat ? pred` parses as
-        # PErr(PGuard(pat, pred)) — by the time PGuard runs, the value is
-        # already the payload.
-        r = apply(pred, value, code_location(lexical_env))
-        return r if r.is_a?(ErrorVal)             # predicate raised during application
-        r == true
+        if !inner_res
+          # The inner pattern didn't match
+          false
+        elsif inner_res.is_a?(ErrorVal)
+          # The inner pattern produced an error
+          inner_res
+        else
+          # The predicate evaluates in the clause's lexical env — `env.parent`, not
+          # `env` — so it cannot see the pattern's own binders (including the one it
+          # refines). `env` is the clause env created in #apply, threaded through
+          # matching unchanged, so its parent is always that lexical env.
+          lexical_env = env.parent
+
+          pred = eval_expr(pattern.pred_expr, lexical_env)
+
+          if pred.is_a?(ErrorVal)
+            # The predicate expression itself errored, e.g. an unresolved @-reference.
+            return pred
+          end
+          # The predicate sees whatever value reached this PGuard, which is
+          # already the right value because `!pat ? pred` parses as
+          # PErr(PGuard(pat, pred)) — by the time PGuard runs, the value is
+          # already the payload.
+          predicate_result = apply(pred, value, code_location(lexical_env))
+          if predicate_result.is_a?(ErrorVal)
+            # Predicate raised during application, propagate error
+            return predicate_result
+          else
+            # Predicate clause matches, if predicate evaluates to "true"
+            predicate_result == true
+          end
+        end
       else
         raise Unreachable, "Unknown pattern #{pattern.class}"
       end
@@ -366,11 +447,13 @@ module Fusion
 
     def match_array(pattern, value, env)
       return false unless value.is_a?(Array)
+
       elems = pattern.elems
       rest_index = elems.index { |e| e[0] == :rest }
 
       if rest_index.nil?
         return false unless value.length == elems.length
+
         elems.each_with_index do |(_, p), i|
           r = match(p, value[i], env)
           return r if r.is_a?(ErrorVal)
@@ -403,6 +486,7 @@ module Fusion
 
     def match_object(pattern, value, env)
       return false unless value.is_a?(Hash)
+
       matched_keys = []
       rest_name = :__none__
       pattern.members.each do |m|
