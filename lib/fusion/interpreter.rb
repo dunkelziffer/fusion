@@ -33,8 +33,9 @@ module Fusion
 
     attr_reader :root_env
 
-    def initialize(stdlib_dir: nil, env_vars: nil)
-      @stdlib_dir = stdlib_dir
+    def initialize(env_vars: nil)
+      @stdlib_dir = File.expand_path("../../stdlib", __dir__)
+      raise Unreachable, "Couldn't find standard library" unless Dir.exist?(@stdlib_dir)
       @env_vars = env_vars || ENV.to_h
       @file_cache = {} # abspath -> FileThunk
       @ast_cache = {}  # abspath -> AST

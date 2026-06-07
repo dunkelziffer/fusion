@@ -20,7 +20,6 @@
 # Both input and output are (marker, payload) pairs mirroring the CLI (see
 # exe/fusion): "✅" for exit 0 (a value), "❌" for exit 1 (an error payload).
 module FusionHelpers
-  STDLIB   = File.expand_path("../../stdlib", __dir__)
   FIXTURES = File.expand_path("../fixtures", __dir__)
 
   OK = "✅"
@@ -74,9 +73,9 @@ module FusionHelpers
     # Evaluate the program against the input, mapping the result to
     # (marker, payload) exactly as exe/fusion does.
     def run
-      interp = Fusion::Interpreter.new(stdlib_dir: STDLIB, env_vars: @env_vars)
+      interp = Fusion::Interpreter.new(env_vars: @env_vars)
       value = interp.apply(program(interp), input_value)
-      status, json = Fusion::CLI.serialize(value)
+      status, json = Fusion::CLI.send(:serialize, value)
       [status.zero? ? OK : ERR, json]
     end
 
@@ -103,7 +102,7 @@ module FusionHelpers
     # An input may itself be an error ("❌"); all current specs use "✅".
     def input_value
       marker, payload = @input
-      parsed = Fusion::CLI.parse(payload)
+      parsed = Fusion::CLI.send(:parse, payload)
       marker == ERR ? Fusion::Interpreter::ErrorVal.new(parsed) : parsed
     end
   end

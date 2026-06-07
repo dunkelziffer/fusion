@@ -7,10 +7,11 @@ require_relative "cli/serializer"
 
 module Fusion
   module CLI
+    extend self
+
     # Load the program / code / function
-    def self.load(inline, program_path)
-      stdlib = File.expand_path("../../stdlib", __dir__)
-      interp = Fusion::Interpreter.new(stdlib_dir: (Dir.exist?(stdlib) ? stdlib : nil))
+    def load(inline, program_path)
+      interp = Fusion::Interpreter.new
 
       if inline
         ast = Fusion::Parser.parse_file(inline, location: "code <inline>")
@@ -28,36 +29,37 @@ module Fusion
 
     # Read input
     # Explicit arg wins, else stdin.
-    def self.read_input(explicit_input)
+    def read_input(explicit_input)
       input_text = explicit_input || ($stdin.tty? ? "" : $stdin.read)
       input_text = "null" if input_text.nil? || input_text.strip.empty?
 
       parse(input_text)
     end
 
-    # Parse the input
-    # Returns a runtime value
-    def self.parse(json)
-      Parser.parse(json)
+    # Returns output
+    def apply(input, function)
+      Fusion::Interpreter.new.apply(function, input)
     end
 
-    def self.apply(input, function)
-      stdlib = File.expand_path("../../stdlib", __dir__)
-      interp = Fusion::Interpreter.new(stdlib_dir: (Dir.exist?(stdlib) ? stdlib : nil))
-      interp.apply(function, input)
+    # Emit the output
+    def emit_output(runtime_value)
+      status, json = serialize(runtime_value)
+      (status.zero? ? $stdout : $stderr).puts json
+      exit status
+    end
+
+    private
+
+    # Parse the input
+    # Returns a runtime value
+    def parse(json)
+      Parser.parse(json)
     end
 
     # Serialize the output
     # Returns [exit_code, json]
-    def self.serialize(runtime_value)
+    def serialize(runtime_value)
       Serializer.to_json(runtime_value)
-    end
-
-    # Emit the output
-    def self.emit_output(runtime_value)
-      status, json = serialize(runtime_value)
-      (status.zero? ? $stdout : $stderr).puts json
-      exit status
     end
   end
 end
