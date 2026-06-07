@@ -39,7 +39,7 @@ RSpec.describe "@-resolution" do
       expect_pipe
         .in("✅", "null")
         .file_path("ref/readenv.fsn")
-        .out("❌", '{"kind":"missing_key","key":"CI"}')
+        .out("❌", '{"kind":"access_error","location":"code readenv.fsn","operation":".CI","input":[{},"CI"],"message":"missing key"}')
     end
 
     it "is shadowable by a sibling ENV.fsn" do
@@ -71,7 +71,7 @@ RSpec.describe "@-resolution" do
       expect_pipe
         .in("✅", '"nope.fsn"')
         .file_path("ref/loader.fsn")
-        .out("❌", a_string_including('"kind":"file_not_found"', "nope.fsn"))
+        .out("❌", a_string_including('"kind":"reference_error"', '"message":"file not found"', "nope.fsn"))
     end
 
     it "is shadowable by a sibling load.fsn" do
@@ -108,7 +108,7 @@ RSpec.describe "@-resolution" do
       expect_pipe
         .in("✅", "null")
         .file_path("ref/sub/usesDotDotBuiltin.fsn")
-        .out("❌", a_string_including('"kind":"file_not_found"', "subtract.fsn"))
+        .out("❌", a_string_including('"kind":"reference_error"', '"message":"file not found"', "subtract.fsn"))
     end
   end
 end

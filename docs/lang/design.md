@@ -292,7 +292,7 @@ Future work and open questions are tracked separately in our [Roadmap](./roadmap
 ### Cons
 
 - `_` does not mean "literally anything" (it excludes `!`), a subtle asymmetry.
-- 🩹 An uncaught error can travel far from its origin, which can make debugging harder (mitigated by `FUSION_DEBUG`, by the payload from 2.8, and by potential future diagnostics tracked in the roadmap).
+- 🩹 An uncaught error can travel far from its origin, which can make debugging harder. Partially mitigated by more detailed error payloads in 2.9. Could be improved further with stack traces, see roadmap.
 
 ---
 
@@ -352,13 +352,70 @@ Future work and open questions are tracked separately in our [Roadmap](./roadmap
 - The catch site can dispatch on the error kind (`(!{"kind":"missing_key"} => ..., !msg => !msg)`).
 - Construction and matching are syntactically symmetric (`!42` builds on the right of `=>`, matches on the left).
 - Propagation remains uniform, with no carve-outs to remember.
+- The previous error model with the single error value `!` can still be emulated:
+  - The expression `!` is equivalent to `!null`.
+  - The pattern `!` is equivalent to `!_`.
 
 ### Cons
 
-- The payload format is part of the language's surface — built-ins use string payloads (`"divide: division by zero"`) while runtime mechanics use structured object payloads (`{"kind": ...}`), an inconsistency tracked in the roadmap.
+- 🩹 The payload format is part of the language's surface. Builtins used string payloads (`"divide: division by zero"`) while the standard library used structured object payloads (`{"kind": ...}`). This inconsistency was resolved in 2.9.
 - A payload that itself contains sensitive data becomes part of the program's stderr stream.
 - The bare-`!`-means-`!null` rule preserves a simple expression form but means a careless `_ => !` clause gives a maximally unhelpful error.
 - Inspecting an error's payload requires a small catch-and-rebind (`(!a => a)`) rather than direct comparison.
+
+---
+
+## 2.9 Standardized error payloads
+
+### Decisions
+
+- 🧑 ✅ Every error payload produced by "the runtime" (the interpreter or a built-in function) has the **same shape**. This shape is enforced by constructing "internal errors" via `ErrorVal.internal`. The full schema is documented in [reference §6.5](../user/reference.md#65-the-standardized-error-payload).
+- 🤖 ✅ The stdlib is "ordinary unpriviledged Fusion code" and doesn't produce internal errors.
+- 🧑 ✅ However, all stdlib functions mirror the built-in error shape.
+- 🔢 ✅ During function application we differentiate between:
+  - `argument_error`: bad *input shape* (e.g. the wrong number of inputs). Constraints that could be expressed as a pattern without `?`.
+  - `type_error`: unsupported *input type* (e.g. string instead of number) or constraints between multiple inputs. Usually would require a `?` to express as a pattern.
+- 🧑 ✅ Member/index access reserves `access_error` for exactly `missing key` and `index out of range`:
+  - Accessing a member of a non-object or indexing with a wrong-typed key is a `type_error` instead.
+  - File-system access failures ("missing file", "directory instead of file", "permission denied") are a `reference_error` instead.
+
+### Alternatives
+
+- 🔢 ⏪ Keep the previous split between builtin errors (string payload) and stdlib errors (object payloads). Only document the rule.
+- 🧑 💭 Don't standardize the error payloads at all.
+
+### Pros
+
+- Every catch site (`!` pattern) can rely on this default shape.
+- The structured fields make errors self-describing (what failed, where, on what input).
+
+### Cons
+
+- The new structured payloads are more verbose than the old bare strings.
+- Some converted Ruby messages still leak host detail (e.g. an `Errno` message). Pending per-case cleanup.
+
+---
+
+## 2.10 Disallow duplicate binders
+
+### Decisions
+
+- 🧑 ✅ Binding the same identifier twice in one clause is a `binding_error`.
+- 🤖 ✅ It is detected in `match` as the binding is produced, so it surfaces only when the clause's shape otherwise matches. A non-matching shape just means the clause does not apply.
+
+### Alternatives
+
+- 🧑 ❌ Binding the same identifier twice is a non-linear "must be equal". The pattern only matches, if all parts with the same identifier have the same value.
+
+### Pros
+
+- Less implementation effort than "equal identifiers mean equal value". Already solved by fully generic `?` predicates.
+- Runtime detection fits to this language's dynamic nature.
+
+### Cons
+
+- Slightly less expressive pattern language.
+- Invalid patterns will only raise an error as soon as a value actually matches. No static guarantees.
 
 ---
 
@@ -560,7 +617,52 @@ All access goes through `@`:
 ### Cons
 
 - No streaming; whole input must be buffered and parsed.
-- 🩹 A bare `!` with nonzero exit gives little diagnostic detail (mitigated by `FUSION_DEBUG`).
+- 🩹 A bare `!` with nonzero exit gives little diagnostic detail. Mitigated for internal errors by more detailed error payloads in 2.9.
+
+---
+
+## 4.2 No raw Ruby errors reach the user
+
+### Decisions
+
+- 🧑 ✅ The CLI contract already spends stdout (the result) and stderr (the error payload). There is **no third channel**, so a raw Ruby backtrace on stderr would corrupt the contract. Fusion therefore **catches every Ruby error a program can trigger and converts it to a standardized payload**.
+- 🔢 ✅ Conversion happens *both* **deep** (so an error becomes catchable by other code as soon as possible) *and* at a **top-level net** (so nothing escapes). Notably `SystemStackError` becomes a regular error value `stack_error` on stderr.
+- 🧑 ✅ The internal "assertions" (`raise Unreachable`) are a deliberate exception. Reaching them is an interpreter bug. Interpreter bugs should surface and are allowed to violate our CLI contract.
+- 🧑 ✅ The old `FUSION_DEBUG` env var (which wrote to stderr via `warn`) is removed entirely.
+
+### Alternatives
+
+- 🤖 ❌ A top-level net only — rejected because a mid-program Ruby error would then become a final result rather than a catchable `!`.
+- 🤖 💭 An `internal_error` kind for the invariant asserts. Rejected, because interpreter bugs shouldn't be catchable and shouldn't be a seemingly regular final result.
+
+### Pros
+
+- The CLI contract holds unconditionally. A program can even crash the interpreter's host language via infinite recursion and the user still gets a clean JSON payload and exit `1`.
+
+### Cons
+
+- Implementation effort.
+- Might hide valuable debugging information. However, the "top-level net" could be made opt-out.
+- The `location` for a stack overflow is only `"interpreter"`. No single owning file is knowable at that point.
+
+---
+
+## 4.3 Internal errors and lenient JSON serialization
+
+### Decisions
+
+- 🔢 ✅ To serialize values without a valid JSON representation, we introduce "lenient serialization". Values without JSON representation get turned into string representations (`"<function>"` and `"<Infinity>"`/`"<-Infinity>"`/`"<NaN>"`).
+- 🧑 ✅ The remaining data structure gets preserved.
+- 🔢 ✅ Internal errors (`ErrorVal.internal_error?`) get serialized leniently by default, so their info isn't obscured by a `serialization_error`.
+- 🤖 ✅ The stdlib doesn't produce internal errors.
+- 🧑 ✅ However, all stdlib functions use `@sanitize` to mimick the lenient JSON serialization and preserve as much info as possible.
+- 🧑 ✅ Ordinary values and user errors are serialized strictly to avoid surprising type conversions. If they fail to serialize, they get turned into an internal `serialization_error` and will subsequently get serialized leniently.
+
+### Alternatives
+
+- 🤖 ❌ The standard library could create real "internal errors" via a dedicated `@raise` primitive. Declined, because it offers little over the `!` prefix and would let any code (not just the stdlib) create internal errors. The main reason for internal errors (apart from enforcing a consistent shape) is lenient serialization.
+- 🧑 ❌ Internal errors also serialize strictly by default. Rejected, because this would turn too many errors into a `serialization_error` and would lose too much information.
+- 🧑 💭 All errors serialize leniently by default. Rejected, because this hides real errors (e.g. `NaN` or a function as a result) behind an automatic type conversion.
 
 ---
 

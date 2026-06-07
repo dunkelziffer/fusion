@@ -3,9 +3,6 @@
 
 # Fusion CLI entrypoint.
 #
-# A file contains exactly one value. A file is "executable" if that value is a
-# function; the runtime computes  STDIN | thatFunction  and prints the result.
-#
 # Usage:
 #   echo '[1,2,3]' | fusion path/to/main.fsn
 #   fusion path/to/main.fsn '<json-input>'        # input as an argument
@@ -24,34 +21,30 @@ else
   explicit_input = args[1]
 end
 
-stdlib = File.expand_path("../stdlib", __dir__)
-interp = Fusion::Interpreter.new(stdlib_dir: (Dir.exist?(stdlib) ? stdlib : nil))
+abort("usage: fusion <file.fsn> [json-input]   or   fusion -e '<src>' [json-input]") unless inline || program_path
 
-# Determine the program function value.
-program_value =
-  if inline
-    ast = Fusion::Parser.parse_file(inline)
-    env = interp.root_env.child
-    env.define("__dir__", Dir.pwd)
-    interp.eval_expr(ast, env)
-  else
-    abort("usage: fusion <file.fsn> [json-input]   or   fusion -e '<src>' [json-input]") unless program_path
-    interp.load_file(File.expand_path(program_path)).force
-  end
-
-# Read input: explicit arg wins, else stdin.
-input_text = explicit_input || ($stdin.tty? ? "" : $stdin.read)
-input_text = "null" if input_text.nil? || input_text.strip.empty?
-input_value = Fusion::CLI.parse(input_text)
-
-result = interp.apply(program_value, input_value)
-
-if result.is_a?(Fusion::Interpreter::ErrorVal)
-  # Print only the payload (as JSON) to stderr; stdout stays empty so that
-  # shell pipelines can rely on "stdout has the result, or there isn't one".
-  $stderr.puts Fusion::CLI.serialize(result.payload)
-  exit 1
-else
-  puts Fusion::CLI.serialize(result)
-  exit 0
+begin
+  function = Fusion::CLI.load(inline, program_path)
+  input = Fusion::CLI.read_input(explicit_input)
+  output = Fusion::CLI.apply(input, function)
+  Fusion::CLI.emit_output(output)
+rescue SystemExit
+  # Let exit/abort through untouched.
+  raise
+rescue Fusion::Unreachable
+  # If this internal safeguard was reached, it's a bug. Allowed to surface as a Ruby error.
+  raise
+rescue Exception => err # rubocop:disable Lint/RescueException
+  # Final safety net: SystemStackError and any other escaped Ruby error become a
+  # payloaded error rather than a raw backtrace on stderr.
+  kind, message = err.is_a?(SystemStackError) ? ["stack_error", "recursion too deep"] : ["type_error", err.message]
+  Fusion::CLI.emit_output(
+    Fusion::Interpreter::ErrorVal.internal(
+      kind: kind,
+      location: "interpreter",
+      operation: "running the program",
+      input: Fusion::Interpreter::NULL,
+      message: message
+    )
+  )
 end

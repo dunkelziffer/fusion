@@ -22,26 +22,6 @@ a directory, since shadowing is invisible at the call site.
 
 ## 2. Error model
 
-**Payload shape consistency** *(open)*. The payload *shape* is inconsistent:
-built-ins use bare strings (`"divide: division by zero"`) while runtime
-mechanics use structured objects (`{"kind":"missing_key","key":"foo"}`). The
-string form is human-friendlier; the structured form is machine-friendlier
-(catchable via `!{"kind": k}`). Three plausible resolutions:
-
-- (a) all errors get structured payloads with a `kind` and an optional `message`;
-- (b) all errors get human strings, and structured matching is left to user code;
-- (c) keep both, document the rule that built-in operations use strings and
-  runtime mechanics use objects.
-
-This is a small but irreversible decision (it shapes how catch clauses are
-written) and should be decided before any external code grows that depends on
-the current shapes.
-
-**Better diagnostics.** `FUSION_DEBUG` exists for file/parse errors; extend
-principled diagnostics to runtime error origins (where did this error first
-arise?). One option: attaching a source position to the payload (an extra
-`"at": "file.fsn:L:C"` field) when `FUSION_DEBUG` is set.
-
 **Stack traces** *(deferred)*. A propagated error tells you what happened, but
 not the chain of function applications it passed through. A capped trace
 (last N frames, accessible as an extra payload field, opt-in via env) would
@@ -54,7 +34,7 @@ help in deep pipelines.
 Populate Tier 1 (written in Fusion): `filter`, `reduce`/`fold`, `reverse`,
 `head`, `tail`, `last`, `init`, `take`, `drop`, `zip`, `flatten`, `member`,
 `find`, `all`, `any`, `count`; comparison derivatives `lessEq`, `greaterThan`,
-`greaterEq`, `notEquals`; object helpers `entries`, `get`, `set`, `merge`; an
+`greaterEq`, `notEquals`; object helpers `entries`, `merge`; an
 `if` helper. This is also the best stress test of whether the language is
 pleasant to *write* in, not just to implement.
 

@@ -5,8 +5,8 @@ every example. By the end you will have written a recursive program and understo
 Fusion's pieces fit together.*
 
 > **What you need:** Ruby installed and the `fusion` interpreter available on your
-> `PATH` (along with its bundled `stdlib/` folder). All commands below can be run
-> from any directory containing your `.fsn` files.
+> `PATH`. All commands below can be run from any directory containing your `.fsn`
+> files.
 
 ---
 
@@ -271,15 +271,16 @@ wrong? Try dividing by zero. Save as `boom.fsn`:
 echo '5' | fusion boom.fsn
 ```
 
-You will see no output on stdout, a message like `"divide: division by zero"` on
-stderr, and the process will exit with status `1`. The result *was* an error, and
-the interpreter knows the difference: it routes the error's **payload** to
-stderr, leaves stdout empty, and signals failure. That makes Fusion programs
-well-behaved Unix filters.
+You will see no output on stdout, an error payload like
+`{"kind":"math_error",…,"message":"division by zero"}` on stderr, and the process
+will exit with status `1`. The result *was* an error, and the interpreter knows
+the difference: it routes the error's **payload** to stderr, leaves stdout empty,
+and signals failure. That makes Fusion programs well-behaved Unix filters.
 
-An error is always written as `!` followed by a **payload** — any regular JSON value.
-The built-ins above produced `!"divide: division by zero"` (an error whose payload
-is a string). You can construct your own:
+An error is always written as `!` followed by a **payload**. Errors the
+interpreter produces (like the one above) use a standardized payload shape —
+see [reference §6.5](./reference.md#65-the-standardized-error-payload). You can
+also construct your own, with any payload you like:
 
 | Example                             | Meaning                  |
 | ----------------------------------- | ------------------------ |

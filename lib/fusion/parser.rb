@@ -9,6 +9,7 @@
 
 require_relative "token"
 require_relative "ast"
+require_relative "interpreter/error_val"
 
 module Fusion
   class Parser
@@ -19,15 +20,23 @@ module Fusion
       @i = 0
     end
 
-    def self.parse_file(src)
+    # Parse a complete program. The lexer and parser report failures by raising
+    # ParseError; this single entry point rescues them and returns a standardized
+    # syntax_error value, so no caller ever sees a raw Ruby error. `location` is the
+    # syntax_error's "code X" / "code <inline>" context.
+    def self.parse_file(src, location:)
       toks = Lexer.new(src).tokens
       p = new(toks)
       expr = p.parse_expr
       p.expect(:eof)
       expr
+    rescue ParseError => err
+      Interpreter::ErrorVal.internal(kind: "syntax_error", location: location, operation: "parsing", input: src, message: err.message)
     end
 
-    def parse_expr = parse_pipe
+    def parse_expr
+      parse_pipe
+    end
 
     def parse_pipe
       left = parse_prefix

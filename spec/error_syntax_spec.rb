@@ -16,7 +16,7 @@ RSpec.describe "error pattern syntax" do
       it "rejects #{why}" do
         expect_pipe
           .code(src)
-          .raises(Fusion::ParseError)
+          .out("❌", a_string_including('"kind":"syntax_error"', '"location":"code <inline>"'))
       end
     end
   end

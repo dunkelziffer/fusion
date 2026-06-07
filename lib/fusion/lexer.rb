@@ -118,7 +118,14 @@ module Fusion
                  when "u"
                    hex = @src[@i + 1, 4]
                    @i += 4
-                   [hex.to_i(16)].pack("U")
+                   code_point = hex.to_i(16)
+                   # Reject surrogates and out-of-range code points up front:
+                   # pack("U") would otherwise build an invalid-encoding string
+                   # whose malformed-UTF-8 error surfaces far downstream.
+                   if code_point.between?(0xD800, 0xDFFF) || code_point > 0x10FFFF
+                     raise ParseError, "Invalid unicode escape \\u#{hex}"
+                   end
+                   [code_point].pack("U")
                  else
                    raise ParseError, "Bad escape \\#{e}"
                  end

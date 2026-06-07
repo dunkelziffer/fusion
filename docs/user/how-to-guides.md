@@ -8,18 +8,12 @@ basics. Scan for the problem you have and copy the solution.*
 ## Diagnose a program that returns an error unexpectedly
 
 When you run a program and see an error payload on stderr, the payload itself
-usually tells you what went wrong (e.g. `"divide: division by zero"` or
-`{"kind":"missing_key","key":"email"}`). For errors arising *during reference
-resolution* — typically a missing file or a parse error in an `@`-referenced file —
-enable extra diagnostics:
+tells you what went wrong. Interpreter errors carry a standardized object whose
+fields (`kind`, `location`, `operation`, `input`, `message`) are documented in
+[reference §6.5](./reference.md#65-the-standardized-error-payload).
 
-```sh
-FUSION_DEBUG=1 fusion program.fsn '...'
-```
-
-With `FUSION_DEBUG` set, the interpreter prints to stderr the exact path it failed
-to find or the parse error it hit. The most common cause is that the `stdlib/`
-folder is not where the interpreter expects it, so `@`-references can't be resolved.
+For a missing file or a parse error in an `@`-referenced file, the `location` and
+`input` fields name the exact path that failed.
 
 ---
 

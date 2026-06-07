@@ -12,14 +12,14 @@
 #     .out("❌", "42")           # … or .code("(x => …)") for inline source
 #
 # `.out(marker, payload)` runs the pipe and asserts the result; a matcher object
-# (e.g. a_string_including(...)) is allowed in the payload slot. `.raises(Err)`
-# instead asserts the program fails to parse/evaluate. `.env(CI: "1")` supplies
+# (e.g. a_string_including(...)) is allowed in the payload slot. A program that
+# fails to parse is not an exception — it is a payloaded syntax_error, asserted
+# with `.out("❌", ...)` like any other failure. `.env(CI: "1")` supplies
 # variables visible to @ENV.
 #
 # Both input and output are (marker, payload) pairs mirroring the CLI (see
 # exe/fusion): "✅" for exit 0 (a value), "❌" for exit 1 (an error payload).
 module FusionHelpers
-  STDLIB   = File.expand_path("../../stdlib", __dir__)
   FIXTURES = File.expand_path("../fixtures", __dir__)
 
   OK = "✅"
@@ -29,9 +29,7 @@ module FusionHelpers
     PipeExpectation.new(self)
   end
 
-  # Chainable builder; see the module comment for usage. Each builder step may be
-  # used at most once, and the code/file_path and out/raises pairs are mutually
-  # exclusive — misuse raises immediately rather than silently last-wins.
+  # Chainable builder
   class PipeExpectation
     def initialize(example)
       @example  = example
@@ -66,30 +64,19 @@ module FusionHelpers
 
     # Run the pipe and assert the (marker, payload) result.
     def out(status, json)
-      claim!(:assertion, "out/raises")
+      claim!(:assertion, "out")
       actual = run
       expected = [status, json]
       @example.instance_exec { expect(actual).to match(expected) }
     end
 
-    # Assert the program fails to parse/evaluate instead of producing a result.
-    def raises(error_class)
-      claim!(:assertion, "out/raises")
-      pipe = self
-      @example.instance_exec { expect { pipe.run }.to raise_error(error_class) }
-    end
-
     # Evaluate the program against the input, mapping the result to
-    # (marker, payload) exactly as exe/fusion does. Public so .raises can defer
-    # it inside an `expect { }` block.
+    # (marker, payload) exactly as exe/fusion does.
     def run
-      interp = Fusion::Interpreter.new(stdlib_dir: STDLIB, env_vars: @env_vars)
+      interp = Fusion::Interpreter.new(env_vars: @env_vars)
       value = interp.apply(program(interp), input_value)
-      if value.is_a?(Fusion::Interpreter::ErrorVal)
-        [ERR, Fusion::CLI.serialize(value.payload)]
-      else
-        [OK, Fusion::CLI.serialize(value)]
-      end
+      status, json = Fusion::CLI.send(:serialize, value)
+      [status.zero? ? OK : ERR, json]
     end
 
     private
@@ -104,7 +91,8 @@ module FusionHelpers
       if @file_path
         interp.load_file(File.join(FIXTURES, @file_path)).force
       else
-        ast = Fusion::Parser.parse_file(@code)
+        ast = Fusion::Parser.parse_file(@code, location: "code <inline>")
+        return ast if ast.is_a?(Fusion::Interpreter::ErrorVal) # a parse error
         env = interp.root_env.child
         env.define("__dir__", FIXTURES)
         interp.eval_expr(ast, env)
@@ -114,7 +102,7 @@ module FusionHelpers
     # An input may itself be an error ("❌"); all current specs use "✅".
     def input_value
       marker, payload = @input
-      parsed = Fusion::CLI.parse(payload)
+      parsed = Fusion::CLI.send(:parse, payload)
       marker == ERR ? Fusion::Interpreter::ErrorVal.new(parsed) : parsed
     end
   end

@@ -230,13 +230,21 @@ etc. are ordinary functions returning booleans, reached with `@` and used with `
 
 ## 6. Errors
 
-An **error value** is `!` followed by a payload: `!42`, `!"divide by zero"`,
-`!{"kind":"missing_key","key":"id"}`, `!null`. The payload may be any regular Fusion
-value (including `null`). Not allowed are functions and nested errors.
+An **error value** is `!` followed by a payload:
+- `!null`
+- `!42`
+- `!"oops"`
+- `!{"kind":"missing_key","key":"id"}`
+
+The payload may be any regular Fusion value. Errors can't nest (§6.3). Instead the inner
+error will propagate.
 
 Error values are distinct from ordinary data:
 - `null` means legitimate absence.
 - An error means something went wrong.
+
+Errors produced by the interpreter itself all share one standardized payload shape,
+documented in §6.5.
 
 ### 6.1 Constructing errors
 
@@ -244,7 +252,7 @@ In expression position, `!` is a prefix operator that constructs an error from i
 operand:
 
 - `!42` is an error with payload `42`.
-- `!"oops"` is an error with payload the string `"oops"`.
+- `!"oops"` is an error with the string `"oops"` as payload.
 - `!` alone (with nothing following it) is shorthand for `!null`.
 - `!expr` where `expr` itself evaluates to an error **propagates** that inner error
   rather than wrapping it (so you cannot accidentally bury an error inside another
@@ -297,8 +305,8 @@ particular built-ins:
   evaluating an element/member. `[1, !"bad", 2]` evaluates to `!"bad"`, not to
   an array of three things.
 - **Constructing an error from an erroring expression** propagates the inner
-  error rather than wrapping it. `!([5,0] | @divide)` evaluates to
-  `!"divide: division by zero"`, never to an error wrapping an error. (This
+  error rather than wrapping it. `!([5,0] | @divide)` evaluates to the division
+  error itself (a `math_error`, §6.5), never to an error wrapping an error. (This
   preserves the rule that there is never more than one error simultaneously.)
 - **When the function value itself is an error** (e.g. `value | @undefined_name`
   where `@undefined_name` resolves to an error), that error is the result.
@@ -312,22 +320,64 @@ treated as program failures, not as "no match." This is the key reason to make
 your predicates *total* (end with `_ => false`): a predicate that can crash will
 short-circuit your whole function.
 
-### 6.5 Sources of errors
+### 6.5 The standardized error payload
 
-Built-in errors are produced by:
+There are two origins of error values, and they differ in payload:
 
-- A strict function (`_ => !`) on no match — payload `null`.
-- Built-in operations on bad input — payload is a descriptive string,
-  e.g. `"divide: division by zero"`, `"add: expected a pair of numbers"`.
-- Member access on a missing key or non-object, index out of range, or bad index
-  type — payload is a structured object like
-  `{"kind":"missing_key","key":"foo"}` or `{"kind":"index_out_of_range",...}`.
-- Spread of a non-array or non-object — `{"kind":"spread_non_array",...}`.
-- Unresolved `@`-reference — `{"kind":"unresolved_ref","name":"..."}`.
-- Non-productive data cycle — `{"kind":"data_cycle","path":"..."}`.
-- Applying a non-function — `{"kind":"apply_non_function","got":"..."}`.
+- **Interpreter errors** — produced by the language itself (a bad built-in call,
+  an unresolved `@`-reference, a parse failure, …). Every interpreter error
+  carries one **standardized payload**: a JSON object with a fixed set of fields,
+  documented here. The uniform shape lets one catch clause dispatch on a single
+  field, e.g. `(!{"kind": "math_error"} => …)`. Standard library functions
+  adhere to this same structure.
+- **User errors** — built with `!payload` (§6.1). The payload is whatever you
+  give it: any Fusion value, with no required shape.
 
-User code constructs errors with `!payload` as described above.
+#### Payload shape
+
+```json
+{"kind": "type_error", "location": "builtin add", "operation": "add", "input": [1, "x"], "message": "expected numbers"}
+```
+
+| Field       | Required | Meaning                                                                                                                    |
+| ----------- | -------- | -------------------------------------------------------------------------------------------------------------------------- |
+| `kind`      | yes      | The error category, from the closed set below.                                                                             |
+| `location`  | yes      | Where the failing operation lives, from the closed set below.                                                              |
+| `operation` | yes      | A short description of the operation that failed, e.g. `"\|"`, `".name"`, `"[2]"`, `"add"`, `"reading file"`, `"parsing"`. |
+| `input`     | yes      | The operand(s) the operation received — often the offending value; for member/index access it is `[object, key]`.          |
+| `message`   | no       | Extra human-readable detail, e.g. `"expected an object"`.                                                                  |
+
+#### `kind` — the closed set
+
+| `kind`                | Raised when                                                                                                    |
+| --------------------- | -------------------------------------------------------------------------------------------------------------- |
+| `syntax_error`        | source code, or the JSON input, fails to parse.                                                                |
+| `reference_error`     | an `@`-reference cannot be resolved: unknown name, file not found, a file-system failure, a non-productive data cycle, or a `@`-self-reference with no current file. |
+| `type_error`          | a value has the wrong type for an operation (expected X / a type mismatch); also applying a non-function, spreading a non-array/object, member access on a non-object, or a wrong-typed index. |
+| `argument_error`      | a built-in receives the wrong number/shape of arguments (e.g. not a pair). Its `message` states the expected shape as a Fusion pattern where possible (the pair-built-ins report `expected [_, _]`). |
+| `binding_error`       | reading an unbound identifier, or binding the same name twice in one clause.                                   |
+| `access_error`        | a missing object key or an out-of-range array index — and nothing else (a non-object member access or a wrong-typed index is a `type_error`). |
+| `math_error`          | division or modulo by zero, or a non-finite number.                                                            |
+| `conversion_error`    | a value cannot be converted (`@toString` of an unconvertible type, `@parseNumber` of a non-numeric string).    |
+| `stack_error`         | recursion too deep (a stack overflow).                                                                         |
+| `serialization_error` | a result, or a user error's payload, has no JSON form — see §9.3.                                              |
+
+#### `location` — the closed set
+
+| `location`      | Meaning                                                           |
+| --------------- | ----------------------------------------------------------------- |
+| `builtin X`     | the built-in named X, e.g. `builtin divide`.                      |
+| `stdlib X`      | the standard-library file X.                                      |
+| `code X`        | the user source file X (basename).                                |
+| `code <inline>` | an inline `-e` program.                                           |
+| `input`         | the input channel (stdin or the CLI-argument).                    |
+| `output`        | the output channel (the serialized result).                       |
+| `interpreter`   | the interpreter itself, e.g. a stack overflow.                    |
+
+`input` and `output` name the data channels; they **never** refer to the program
+source, which always reports as `code X`.
+
+User errors don't have to adhere to this standard.
 
 ---
 
@@ -341,21 +391,21 @@ input that is not of the queried type (they never return `!`).
 
 ### 7.1 Arithmetic (operations)
 
-| Name       | Input             | Result                                             |
-| ---------- | ----------------- | -------------------------------------------------- |
-| `add`      | `[number, number]`| sum                                                |
-| `subtract` | `[number, number]`| difference                                         |
-| `multiply` | `[number, number]`| product                                            |
+| Name       | Input             | Result                                                                 |
+| ---------- | ----------------- | ---------------------------------------------------------------------- |
+| `add`      | `[number, number]`| sum                                                                    |
+| `subtract` | `[number, number]`| difference                                                             |
+| `multiply` | `[number, number]`| product                                                                |
 | `divide`   | `[number, number]`| quotient; integer if evenly divisible, else float; `!` if divisor is 0 |
-| `mod`      | `[number, number]`| remainder; `!` if divisor is 0                     |
-| `negate`   | `number`          | negation                                           |
-| `floor`    | `number`          | floor (integer)                                    |
+| `mod`      | `[number, number]`| remainder; `!` if divisor is 0                                         |
+| `negate`   | `number`          | negation                                                               |
+| `floor`    | `number`          | floor (integer)                                                        |
 
 ### 7.2 Comparison (operations)
 
-| Name        | Input                                   | Result          |
-| ----------- | --------------------------------------- | --------------- |
-| `equals`    | `[any, any]`                            | deep structural equality (boolean) |
+| Name        | Input                                   | Result                                   |
+| ----------- | --------------------------------------- | ---------------------------------------- |
+| `equals`    | `[any, any]`                            | deep structural equality (boolean)       |
 | `lessThan`  | `[number, number]` or `[string, string]`| boolean; `!` on mismatched/invalid types |
 
 Other comparisons (`lessEq`, `greaterThan`, `greaterEq`, `notEquals`) are specified
@@ -381,11 +431,31 @@ for the standard library, derivable from `equals` and `lessThan`.
 | `parseNumber` | string                      | integer or float; `!` if not numeric    |
 | `keys`        | object                      | array of key strings                    |
 | `values`      | object                      | array of values                         |
+| `get`         | `[array, int]` or `[object, string-key]` | element at that index/key (like `[]`, §8); `!` if out of range / missing |
+| `set`         | `[array, int, value]` or `[object, string-key, value]` | a **new** array/object with that entry set; an array index must already exist, an object key may be new |
+| `toObject`    | `[[string-key, value], …]`  | object built from entries; later duplicate keys win |
 
 ### 7.5 Type predicates (predicates)
 
-`Integer`, `Float`, `Number`, `String`, `Boolean`, `Array`, `Object`, `Null`. Each
-takes any value and returns a boolean. `Number` is true for integers and floats.
+Each of these functions takes any input value and returns a boolean. This set of
+functions provides a runtime type system.
+
+| Name        | `true` for                           | Equivalent pattern |
+| ----------- | ------------------------------------ | ------------------ |
+| `Null`      | `null`                               | `null`             |
+| `Boolean`   | `true`, `false`                      |                    |
+| `Integer`   | integers                             |                    |
+| `Float`     | floats                               |                    |
+| `Number`    | integers and floats                  |                    |
+| `String`    | strings                              |                    |
+| `Array`     | arrays                               | `[_]`              |
+| `Object`    | objects                              | `{_}`              |
+| `Function`  | any function (builtin, stdlib, user) |                    |
+| `NonFinite` | "Infinity", "-Infinity", "NaN"       |                    |
+
+Notes:
+- Booleans are separate from numbers. There's no automatic type conversion (`false` <-> `0`, `true` <-> `1`).
+- The set of values without JSON representation (§9.3) is exactly `Function` + `NonFinite`
 
 ### 7.6 Special built-ins: `ENV` and `load`
 
@@ -485,13 +555,29 @@ The interpreter reads standard input as JSON, converts it to a Fusion value `v`,
 computes `v | programFunction`, and prints the result on standard output as JSON.
 
 - Empty input is treated as `null`.
-- Non-JSON input yields an error (payload `{"kind":"stdin_not_json"}`).
+- Non-JSON input yields a `syntax_error` at `location: "input"` (§6.5).
 - **If the final result is an error**, the interpreter prints **nothing** to
   standard output, prints the error's **payload** (as JSON) to standard error, and
   exits with status `1`. Otherwise the result is printed to standard output and the
   interpreter exits `0`. This makes Fusion programs first-class Unix filters: the
   stdout stream carries the value-or-nothing, the stderr stream carries the failure
   detail, and the exit code is `0`/`1` accordingly.
+
+**Serialization.** A function and a non-finite float number have no JSON form.
+How one is rendered depends on where it sits:
+
+- In a **result** or inside a **user error's** payload, they can't be serialized.
+  The whole output becomes a `serialization_error`.
+- Inside an **interpreter error's** payload, it is serialized leniently as a
+  string:
+  - a function renders as `"<function>"`
+  - a non-finite number as `"<Infinity>"` / `"<-Infinity>"` / `"<NaN>"`
+
+Note:
+- If a regular value or user error fails to serialize strictly, the resulting
+  `serializaton_error` will be an interpreter error and will subsequently
+  serialize leniently to preserve as much information about the root error as
+  possible.
 
 ### 9.4 Command-line interface
 
@@ -501,5 +587,4 @@ fusion -e '<source>' [json-input]
 ```
 
 Input comes from the `[json-input]` argument if present, otherwise from standard
-input. Setting the environment variable `FUSION_DEBUG` causes file-not-found and
-parse errors during reference resolution to be reported on standard error.
+input.
