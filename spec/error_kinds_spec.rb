@@ -264,7 +264,7 @@ RSpec.describe "error kinds" do
 
     it "eval_expr raises on an unknown expression node" do
       expect { interp.eval_expr(Object.new, interp.root_env) }
-        .to raise_error(Fusion::Unreachable, /Cannot evaluate node/)
+        .to raise_error(Fusion::Unreachable, /Unknown AST node/)
     end
 
     it "match raises on an unknown pattern node" do

@@ -52,7 +52,7 @@ module Fusion
     # The `location` string for code at `abspath`: "stdlib X" for stdlib files,
     # "code X" for everything else.
     def file_location(abspath)
-      if @stdlib_dir && abspath.start_with?(@stdlib_dir + File::SEPARATOR)
+      if abspath.start_with?(@stdlib_dir + File::SEPARATOR)
         "stdlib #{File.basename(abspath)}"
       else
         "code #{File.basename(abspath)}"
@@ -72,13 +72,16 @@ module Fusion
         src = File.read(abspath)
         Parser.parse_file(src, location: loc)
       end)
-      return ast if ast.is_a?(ErrorVal) # a parse error (already a payloaded value)
-      # A file's value is evaluated in a fresh env whose parent is root (builtins),
-      # plus knowledge of its own directory for resolving @refs.
-      env = @root_env.child
-      env.define("__dir__", File.dirname(abspath))
-      env.define("__file__", abspath)
-      eval_expr(ast, env)
+      if ast.is_a?(ErrorVal) # a parse error (already a payloaded value)
+        ast
+      else
+        # A file's value is evaluated in a fresh env whose parent is root (builtins),
+        # plus knowledge of its own directory for resolving @refs.
+        env = @root_env.child
+        env.define("__dir__", File.dirname(abspath))
+        env.define("__file__", abspath)
+        eval_expr(ast, env)
+      end
     rescue Errno::ENOENT
       ErrorVal.internal(kind: "reference_error", location: loc, operation: "reading file", input: abspath, message: "file not found")
     rescue SystemCallError => err # EISDIR, EACCES, ... — file-system access failures
@@ -88,28 +91,50 @@ module Fusion
     # Resolve a bare "@name": sibling file > builtin (incl. load, ENV) > stdlib > !.
     # `location` is the "code X" of the referencing file (for the unresolved case).
     def resolve_name(name, dir, location)
-      sib = File.expand_path(name + ".fsn", dir)
-      return load_file(sib).force if File.exist?(sib)
+      sibling_file = File.expand_path(name + ".fsn", dir)
+      if File.exist?(sibling_file)
+        return load_file(sibling_file).force
+      end
+
       if name == "ENV"
         return @env_vars.dup
       end
+
       if name == "load"
         # @load is a builtin closure capturing the calling file's directory. It
         # loads a VERBATIM filename (no ".fsn" appended) so arbitrary names work.
         d = dir
         return NativeFunc.new("load", lambda do |v|
-          next ErrorVal.internal(kind: "type_error", location: "builtin load", operation: "@load", input: v, message: "expected a string") unless v.is_a?(String)
+          unless v.is_a?(String)
+            next ErrorVal.internal(kind: "type_error", location: "builtin load", operation: "@load", input: v, message: "expected a string")
+          end
+
           target = File.expand_path(v, d)
-          next ErrorVal.internal(kind: "reference_error", location: "builtin load", operation: "@load", input: v, message: "file not found") unless File.exist?(target)
+
+          unless File.exist?(target)
+            next ErrorVal.internal(kind: "reference_error", location: "builtin load", operation: "@load", input: v, message: "file not found")
+          end
+
           load_file(target).force
         end)
       end
-      return @builtins[name] if @builtins.key?(name)
-      if @stdlib_dir
-        std = File.join(@stdlib_dir, name + ".fsn")
-        return load_file(std).force if File.exist?(std)
+
+      if @builtins.key?(name)
+        return @builtins[name]
       end
-      ErrorVal.internal(kind: "reference_error", location: location, operation: "resolving @#{name}", input: name, message: "unresolved reference")
+
+      stdlib_file = File.join(@stdlib_dir, name + ".fsn")
+      if File.exist?(stdlib_file)
+        return load_file(stdlib_file).force
+      end
+
+      ErrorVal.internal(
+        kind: "reference_error",
+        location: location,
+        operation: "resolving @#{name}",
+        input: name,
+        message: "unresolved reference"
+      )
     end
 
     # Resolve a pure path "@dir/a" or "@../a": file only, never builtin/stdlib.
@@ -122,18 +147,27 @@ module Fusion
       case node
       when Expression::Lit then node.value
       when Expression::ErrLit
-        # Bare `!` means `!null`; `!expr` wraps expr's value as an error.
-        # If the payload expression itself errors, propagate THAT error rather
-        # than wrapping it -- prevents accidental error-burying.
         if node.payload.nil?
+          # Bare `!` means `!null`
           ErrorVal.new(NULL)
         else
-          p = eval_expr(node.payload, env)
-          p.is_a?(ErrorVal) ? p : ErrorVal.new(p)
+          payload = eval_expr(node.payload, env)
+
+          if payload.is_a?(ErrorVal)
+            # No nested errors. Propagate inner error.
+            payload
+          else
+            ErrorVal.new(payload)
+          end
         end
       when Expression::Ident
-        v = env.lookup(node.name)
-        v == :__unbound__ ? ErrorVal.internal(kind: "binding_error", location: code_location(env), operation: "reading identifier #{node.name}", input: node.name, message: "unbound identifier") : v
+        value = env.lookup(node.name)
+
+        if value == :__unbound__
+          ErrorVal.internal(kind: "binding_error", location: code_location(env), operation: "reading identifier #{node.name}", input: node.name, message: "unbound identifier")
+        else
+          value
+        end
       when Expression::FileRef
         dir = env.lookup("__dir__")
         dir = Dir.pwd if dir == :__unbound__
@@ -142,8 +176,13 @@ module Fusion
           # Bare `@` is the current file. NOTE: inline (`-e`) programs have no
           # current file, so `@` is unresolvable there today — but it *should*
           # refer to the whole inline program (tracked as a gap).
-          f = env.lookup("__file__")
-          f == :__unbound__ ? ErrorVal.internal(kind: "reference_error", location: code_location(env), operation: "resolving @", input: NULL, message: "no current file for self-reference") : load_file(f).force
+          file = env.lookup("__file__")
+
+          if file == :__unbound__
+            ErrorVal.internal(kind: "reference_error", location: code_location(env), operation: "resolving @", input: NULL, message: "no current file for self-reference")
+          else
+            load_file(file).force
+          end
         when :name
           resolve_name(node.path, dir, code_location(env))
         else # :path
@@ -155,7 +194,8 @@ module Fusion
       when Expression::Pipe then eval_pipe(node, env)
       when Expression::Member then eval_member(node, env)
       when Expression::Index then eval_index(node, env)
-      else raise Unreachable, "Cannot evaluate node #{node.class}"
+      else
+        raise Unreachable, "Unknown AST node #{node.class}"
       end
     end
 
