@@ -13,9 +13,7 @@ fields (`kind`, `location`, `operation`, `input`, `message`) are documented in
 [reference §6.5](./reference.md#65-the-standardized-error-payload).
 
 For a missing file or a parse error in an `@`-referenced file, the `location` and
-`input` fields name the exact path that failed. A common cause is that the
-`stdlib/` folder is not where the interpreter expects it, so `@`-references can't
-be resolved.
+`input` fields name the exact path that failed.
 
 ---
 

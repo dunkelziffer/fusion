@@ -5,8 +5,8 @@ every example. By the end you will have written a recursive program and understo
 Fusion's pieces fit together.*
 
 > **What you need:** Ruby installed and the `fusion` interpreter available on your
-> `PATH` (along with its bundled `stdlib/` folder). All commands below can be run
-> from any directory containing your `.fsn` files.
+> `PATH`. All commands below can be run from any directory containing your `.fsn`
+> files.
 
 ---
 
