@@ -352,10 +352,13 @@ Future work and open questions are tracked separately in our [Roadmap](./roadmap
 - The catch site can dispatch on the error kind (`(!{"kind":"missing_key"} => ..., !msg => !msg)`).
 - Construction and matching are syntactically symmetric (`!42` builds on the right of `=>`, matches on the left).
 - Propagation remains uniform, with no carve-outs to remember.
+- The previous error model with the single error value `!` can still be emulated:
+  - The expression `!` is equivalent to `!null`.
+  - The pattern `!` is equivalent to `!_`.
 
 ### Cons
 
-- 🩹 The payload format is part of the language's surface — built-ins originally used string payloads (`"divide: division by zero"`) while runtime mechanics used structured object payloads (`{"kind": ...}`). This inconsistency is resolved in 2.9: every error now carries the same structured payload.
+- 🩹 The payload format is part of the language's surface. Builtins used string payloads (`"divide: division by zero"`) while the standard library used structured object payloads (`{"kind": ...}`). This inconsistency was resolved in 2.9.
 - A payload that itself contains sensitive data becomes part of the program's stderr stream.
 - The bare-`!`-means-`!null` rule preserves a simple expression form but means a careless `_ => !` clause gives a maximally unhelpful error.
 - Inspecting an error's payload requires a small catch-and-rebind (`(!a => a)`) rather than direct comparison.
