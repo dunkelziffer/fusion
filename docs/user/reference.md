@@ -563,14 +563,15 @@ computes `v | programFunction`, and prints the result on standard output as JSON
   stdout stream carries the value-or-nothing, the stderr stream carries the failure
   detail, and the exit code is `0`/`1` accordingly.
 
-**Serialization.** A function and a non-finite number (`Infinity`/`NaN`) have no
-JSON form. How one is rendered depends on where it sits:
+**Serialization.** A function and a non-finite float number have no JSON form.
+How one is rendered depends on where it sits:
 
 - In a **result** or inside a **user error's** payload, they can't be serialized.
-  The whole output becomes a `serialization_error` (`location: "output"`).
-- Inside an **interpreter error's** payload, it is serialized leniently — a
-  function renders as `"<function>"`, a non-finite number as `"Infinity"` /
-  `"-Infinity"` / `"NaN"`.
+  The whole output becomes a `serialization_error`.
+- Inside an **interpreter error's** payload, it is serialized leniently as a
+  string:
+  - a function renders as `"<function>"`
+  - a non-finite number as `"<Infinity>"` / `"<-Infinity>"` / `"<NaN>"`
 
 Note:
 - If a regular value or user error fails to serialize strictly, the resulting
