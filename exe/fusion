@@ -3,20 +3,10 @@
 
 # Fusion CLI entrypoint.
 #
-# A file contains exactly one value. A file is "executable" if that value is a
-# function; the runtime computes  STDIN | thatFunction  and prints the result.
-#
 # Usage:
 #   echo '[1,2,3]' | fusion path/to/main.fsn
 #   fusion path/to/main.fsn '<json-input>'        # input as an argument
 #   fusion -e '(n => [n,2] | @multiply)' '21'     # inline program
-#
-# The CLI contract uses stdout for the result and stderr for the error payload
-# only. There is no channel for raw Ruby errors, so every failure is converted to
-# a standardized payloaded error (see docs/lang/design.md §2.9) and printed as
-# JSON to stderr with exit 1. The lone exception is an internal-invariant assert
-# (an "Unreachable" that is not a parse error) — reaching it is an interpreter bug,
-# so it is allowed to surface as a Ruby error.
 
 require_relative "../lib/fusion"
 
