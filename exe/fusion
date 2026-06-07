@@ -20,58 +20,35 @@
 
 require_relative "../lib/fusion"
 
-def emit(runtime_value)
-  status, json = Fusion::CLI.serialize(runtime_value)
-  (status.zero? ? $stdout : $stderr).puts json
-  exit status
+args = ARGV.dup
+inline = nil
+if args[0] == "-e"
+  inline = args[1]
+  program_path = nil
+  explicit_input = args[2]
+else
+  program_path = args[0]
+  explicit_input = args[1]
 end
 
+abort("usage: fusion <file.fsn> [json-input]   or   fusion -e '<src>' [json-input]") unless inline || program_path
+
 begin
-  args = ARGV.dup
-  inline = nil
-  if args[0] == "-e"
-    inline = args[1]
-    program_path = nil
-    explicit_input = args[2]
-  else
-    program_path = args[0]
-    explicit_input = args[1]
-  end
-
-  stdlib = File.expand_path("../stdlib", __dir__)
-  interp = Fusion::Interpreter.new(stdlib_dir: (Dir.exist?(stdlib) ? stdlib : nil))
-
-  # Determine the program function value.
-  program_value =
-    if inline
-      ast = Fusion::Parser.parse_file(inline, location: "code <inline>")
-      if ast.is_a?(Fusion::Interpreter::ErrorVal)
-        ast # a parse error becomes the program value and propagates below
-      else
-        env = interp.root_env.child
-        env.define("__dir__", Dir.pwd)
-        interp.eval_expr(ast, env)
-      end
-    else
-      abort("usage: fusion <file.fsn> [json-input]   or   fusion -e '<src>' [json-input]") unless program_path
-      interp.load_file(File.expand_path(program_path)).force
-    end
-
-  # Read input: explicit arg wins, else stdin.
-  input_text = explicit_input || ($stdin.tty? ? "" : $stdin.read)
-  input_text = "null" if input_text.nil? || input_text.strip.empty?
-  input_value = Fusion::CLI.parse(input_text)
-
-  emit(interp.apply(program_value, input_value))
+  function = Fusion::CLI.load(inline, program_path)
+  input = Fusion::CLI.read_input(explicit_input)
+  output = Fusion::CLI.apply(input, function)
+  Fusion::CLI.emit_output(output)
 rescue SystemExit
-  raise # let exit()/abort() through untouched
+  # Let exit/abort through untouched.
+  raise
 rescue Fusion::Unreachable
-  raise # internal-invariant assert — a bug; allowed to surface as a Ruby error
+  # If this internal safeguard was reached, it's a bug. Allowed to surface as a Ruby error.
+  raise
 rescue Exception => err # rubocop:disable Lint/RescueException
   # Final safety net: SystemStackError and any other escaped Ruby error become a
   # payloaded error rather than a raw backtrace on stderr.
   kind, message = err.is_a?(SystemStackError) ? ["stack_error", "recursion too deep"] : ["type_error", err.message]
-  emit(
+  Fusion::CLI.emit_output(
     Fusion::Interpreter::ErrorVal.internal(
       kind: kind,
       location: "interpreter",
