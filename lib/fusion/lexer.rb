@@ -118,14 +118,14 @@ module Fusion
                  when "u"
                    hex = @src[@i + 1, 4]
                    @i += 4
-                   cp = hex.to_i(16)
+                   code_point = hex.to_i(16)
                    # Reject surrogates and out-of-range code points up front:
                    # pack("U") would otherwise build an invalid-encoding string
                    # whose malformed-UTF-8 error surfaces far downstream.
-                   if cp.between?(0xD800, 0xDFFF) || cp > 0x10FFFF
+                   if code_point.between?(0xD800, 0xDFFF) || code_point > 0x10FFFF
                      raise ParseError, "Invalid unicode escape \\u#{hex}"
                    end
-                   [cp].pack("U")
+                   [code_point].pack("U")
                  else
                    raise ParseError, "Bad escape \\#{e}"
                  end
