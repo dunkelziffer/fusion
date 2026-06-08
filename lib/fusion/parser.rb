@@ -43,7 +43,7 @@ module Fusion
       while at?(:pipe)
         advance
         right = parse_prefix
-        left = Expression::Pipe.new(left, right)
+        left = Expression::Pipe.new(left: left, right: right)
       end
       left
     end
@@ -60,9 +60,9 @@ module Fusion
       if at?(:bang)
         advance
         if PRIMARY_STARTERS.include?(peek.type)
-          Expression::ErrLit.new(parse_prefix)            # allow !!x to nest
+          Expression::ErrLit.new(payload: parse_prefix)   # allow !!x to nest
         else
-          Expression::ErrLit.new(nil)                     # bare ! -> !null
+          Expression::ErrLit.new(payload: nil)            # bare ! -> !null
         end
       else
         parse_postfix
@@ -75,12 +75,12 @@ module Fusion
         if at?(:dot)
           advance
           key = expect(:ident).value
-          node = Expression::Member.new(node, key)
+          node = Expression::Member.new(obj: node, key: key)
         elsif at?(:lbracket)
           advance
           idx = parse_expr
           expect(:rbracket)
-          node = Expression::Index.new(node, idx)
+          node = Expression::Index.new(obj: node, idx: idx)
         else
           break
         end
@@ -91,12 +91,12 @@ module Fusion
     def parse_primary
       t = peek
       case t.type
-      when :number, :string then advance; Expression::Lit.new(t.value)
-      when :true_kw, :false_kw, :null_kw then advance; Expression::Lit.new(t.value)
+      when :number, :string then advance; Expression::Lit.new(value: t.value)
+      when :true_kw, :false_kw, :null_kw then advance; Expression::Lit.new(value: t.value)
       when :lbracket then parse_array
       when :lbrace then parse_object
       when :lparen then parse_function_or_group
-      when :ident then advance; Expression::Ident.new(t.value)
+      when :ident then advance; Expression::Ident.new(name: t.value)
       when :at then parse_fileref
       else raise ParseError, "Unexpected token #{t.type} (#{t.value.inspect}) at #{t.pos}"
       end
@@ -107,7 +107,7 @@ module Fusion
       # Bare "@" = current file: not followed by something that can begin a path.
       nxt = peek
       starts_path = (nxt.type == :ident) || (nxt.type == :dot && peek(1)&.type == :dot)
-      return Expression::FileRef.new(:self, nil) unless starts_path
+      return Expression::FileRef.new(variety: :self, path: nil) unless starts_path
       # refpath: { "../" } segment { "/" segment }
       parts = []
       has_dotdot = false
@@ -126,7 +126,7 @@ module Fusion
       # contain "../". Downward paths like "dir/a" are still eligible; only "../"
       # (escaping upward) forces pure file-path (:path) resolution.
       bare = !has_dotdot
-      Expression::FileRef.new(bare ? :name : :path, parts.join("/"))
+      Expression::FileRef.new(variety: bare ? :name : :path, path: parts.join("/"))
     end
 
     def parse_array
@@ -143,7 +143,7 @@ module Fusion
         advance
       end
       expect(:rbracket)
-      Expression::ArrLit.new(elems)
+      Expression::ArrLit.new(elems: elems)
     end
 
     def parse_object
@@ -162,7 +162,7 @@ module Fusion
         advance
       end
       expect(:rbrace)
-      Expression::ObjLit.new(members)
+      Expression::ObjLit.new(members: members)
     end
 
     # A "(" can begin either a grouped expression or a function literal.
@@ -186,7 +186,7 @@ module Fusion
           end
         end
         expect(:rparen)
-        Expression::FuncLit.new(clauses)
+        Expression::FuncLit.new(clauses: clauses)
       else
         e = parse_expr
         expect(:rparen)
@@ -238,9 +238,9 @@ module Fusion
     def parse_errpat
       expect(:bang)
       if GUARDEDPAT_STARTERS.include?(peek.type)
-        Pattern::PErr.new(parse_guardedpat)            # "!" guardedpat
+        Pattern::PErr.new(inner: parse_guardedpat)               # "!" guardedpat
       else
-        Pattern::PErr.new(Pattern::PWild.new(nil))               # bare "!" — matches any error, binds nothing
+        Pattern::PErr.new(inner: Pattern::PWild.new(dummy: nil)) # bare "!" — matches any error, binds nothing
       end
     end
 
@@ -249,7 +249,7 @@ module Fusion
       if at?(:question)
         advance
         pred = parse_prefix
-        Pattern::PGuard.new(inner, pred)
+        Pattern::PGuard.new(inner: inner, pred_expr: pred)
       else
         inner
       end
@@ -258,13 +258,13 @@ module Fusion
     def parse_corepat
       t = peek
       case t.type
-      when :number, :string then advance; Pattern::PLit.new(t.value)
-      when :true_kw, :false_kw, :null_kw then advance; Pattern::PLit.new(t.value)
+      when :number, :string then advance; Pattern::PLit.new(value: t.value)
+      when :true_kw, :false_kw, :null_kw then advance; Pattern::PLit.new(value: t.value)
       when :lbracket then parse_arraypat
       when :lbrace then parse_objectpat
       when :ident
         advance
-        t.value == "_" ? Pattern::PWild.new(nil) : Pattern::PBind.new(t.value)
+        t.value == "_" ? Pattern::PWild.new(dummy: nil) : Pattern::PBind.new(name: t.value)
       when :bang
         # `!pat` is only valid as a clause's top-level pattern, never inside an
         # array element, object member, or error payload.
@@ -290,7 +290,7 @@ module Fusion
         advance
       end
       expect(:rbracket)
-      Pattern::PArr.new(elems)
+      Pattern::PArr.new(elems: elems)
     end
 
     def parse_objectpat
@@ -311,7 +311,7 @@ module Fusion
         advance
       end
       expect(:rbrace)
-      Pattern::PObj.new(members)
+      Pattern::PObj.new(members: members)
     end
 
     # ---- token helpers ----
