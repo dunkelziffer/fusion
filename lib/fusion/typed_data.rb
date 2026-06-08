@@ -19,9 +19,19 @@ module TypedData
     end
   end
 
-  # A field that matches any one of several alternatives. An alternative is
-  # anything that responds to `===`: a class (`Integer`), a literal value
-  # (`true`, `:null`, `nil`), a marker module, or a nested matcher.
+  # `TypedData::Union(a, b, ...)` — a field matching any one of the alternatives.
+  def self.Union(*alternatives)
+    Union.new(*alternatives)
+  end
+
+  # `TypedData::ArrayOf(item)` — a field holding an array of `item`s.
+  def self.ArrayOf(item)
+    ArrayOf.new(item)
+  end
+
+  # Matches any one of several alternatives. An alternative is anything that
+  # responds to `===`: a class (`Integer`), a literal value (`true`, `:null`,
+  # `nil`), a marker module, or a nested matcher.
   class Union
     def initialize(*alternatives)
       @alternatives = alternatives
@@ -37,8 +47,7 @@ module TypedData
     alias_method :to_s, :inspect
   end
 
-  # A field holding an array whose every element matches `item` (anything that
-  # responds to `===`). Use the `_Array(item)` shorthand to build one.
+  # Matches an array whose every element matches `item` (anything `===`-able).
   class ArrayOf
     def initialize(item)
       @item = item
@@ -52,9 +61,5 @@ module TypedData
       "Array(#{@item.inspect})"
     end
     alias_method :to_s, :inspect
-  end
-
-  def self._Array(item)
-    ArrayOf.new(item)
   end
 end

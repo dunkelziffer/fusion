@@ -135,9 +135,9 @@ module Fusion
       until at?(:rbracket)
         if at?(:spread)
           advance
-          elems << [:spread, parse_expr]
+          elems << ArraySpread.new(value: parse_expr)
         else
-          elems << [:item, parse_expr]
+          elems << ArrayItem.new(value: parse_expr)
         end
         break unless at?(:comma)
         advance
@@ -152,11 +152,11 @@ module Fusion
       until at?(:rbrace)
         if at?(:spread)
           advance
-          members << [:spread, parse_expr]
+          members << ObjectSpread.new(value: parse_expr)
         else
           key = expect(:string).value
           expect(:colon)
-          members << [:kv, key, parse_expr]
+          members << KeyValuePair.new(key: key, value: parse_expr)
         end
         break unless at?(:comma)
         advance
@@ -177,7 +177,7 @@ module Fusion
           pat = parse_pattern
           expect(:arrow)
           body = parse_expr
-          clauses << [pat, body]
+          clauses << Clause.new(pattern: pat, body: body)
           if at?(:comma)
             advance
             break if at?(:rparen) # trailing comma
@@ -282,9 +282,9 @@ module Fusion
         if at?(:spread)
           advance
           name = at?(:ident) ? advance.value : nil
-          elems << [:rest, name]
+          elems << PatternRest.new(name: name)
         else
-          elems << [:pat, parse_guardedpat]
+          elems << PatternItem.new(pattern: parse_guardedpat)
         end
         break unless at?(:comma)
         advance
@@ -301,11 +301,11 @@ module Fusion
         if at?(:spread)
           advance
           name = at?(:ident) ? advance.value : nil
-          members << [:rest, name]
+          members << PatternRest.new(name: name)
         else
           key = expect(:string).value
           expect(:colon)
-          members << [:kv, key, parse_guardedpat]
+          members << PatternPair.new(key: key, pattern: parse_guardedpat)
         end
         break unless at?(:comma)
         advance

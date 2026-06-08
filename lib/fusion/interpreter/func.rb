@@ -10,7 +10,7 @@ module Fusion
       attr_reader :clauses, :env
 
       def initialize(clauses, env)
-        @clauses = clauses # [[pattern, expr_ast], ...]
+        @clauses = clauses # [AST::Clause, ...]
         @env = env
       end
 

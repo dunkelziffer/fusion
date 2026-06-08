@@ -204,15 +204,15 @@ module Fusion
     def eval_array(node, env)
       out = []
 
-      node.elems.each do |kind, expr|
-        value = eval_expr(expr, env)
+      node.elems.each do |elem|
+        value = eval_expr(elem.value, env)
 
         if value.is_a?(ErrorVal)
           # Propagate errors
           return value
         end
 
-        if kind == :spread
+        if elem.is_a?(ArraySpread)
           if value.is_a?(Array)
             out.concat(value)
           else
@@ -229,9 +229,9 @@ module Fusion
     def eval_object(node, env)
       out = {}
 
-      node.members.each do |m|
-        if m[0] == :spread
-          value = eval_expr(m[1], env)
+      node.members.each do |member|
+        if member.is_a?(ObjectSpread)
+          value = eval_expr(member.value, env)
 
           if value.is_a?(ErrorVal)
             # Propagate errors
@@ -244,15 +244,14 @@ module Fusion
             return ErrorVal.internal(kind: "type_error", location: code_location(env), operation: "{...} object spread", input: value, message: "expected an object")
           end
         else
-          _, key, expr = m
-          value = eval_expr(expr, env)
+          value = eval_expr(member.value, env)
 
           if value.is_a?(ErrorVal)
             # Propagate errors
             return value
           end
 
-          out[key] = value
+          out[member.key] = value
         end
       end
 
@@ -344,14 +343,14 @@ module Fusion
           ErrorVal.internal(kind: kind, location: "builtin #{f.name}", operation: f.name, input: v, message: err.message)
         end
       elsif f.is_a?(Func)
-        f.clauses.each do |pattern, body|
+        f.clauses.each do |clause|
           # Bindings are inserted directly into a fresh child env as the pattern
           # matches; a duplicate binder (e.g. `[a, a]`) trips Env#bind, which we
           # convert to a binding_error here. A failed/abandoned clause just drops
           # its env, so partial bindings never leak.
           clause_env = f.env.child
           m = begin
-            match(pattern, v, clause_env)
+            match(clause.pattern, v, clause_env)
           rescue Env::DuplicateBinding => e
             return ErrorVal.internal(kind: "binding_error", location: code_location(clause_env), operation: "binding identifier #{e.name}", input: e.name, message: "identifier already bound")
           end
@@ -362,7 +361,7 @@ module Fusion
             return m
           elsif m
             # Successful match
-            return eval_expr(body, clause_env)
+            return eval_expr(clause.body, clause_env)
           else
             # Try next pattern
             next
@@ -449,13 +448,13 @@ module Fusion
       return false unless value.is_a?(Array)
 
       elems = pattern.elems
-      rest_index = elems.index { |e| e[0] == :rest }
+      rest_index = elems.index { |e| e.is_a?(PatternRest) }
 
       if rest_index.nil?
         return false unless value.length == elems.length
 
-        elems.each_with_index do |(_, p), i|
-          r = match(p, value[i], env)
+        elems.each_with_index do |elem, i|
+          r = match(elem.pattern, value[i], env)
           return r if r.is_a?(ErrorVal)
           return false unless r
         end
@@ -464,18 +463,18 @@ module Fusion
         before = elems[0...rest_index]
         after  = elems[(rest_index + 1)..]
         return false if value.length < before.length + after.length
-        before.each_with_index do |(_, p), i|
-          r = match(p, value[i], env)
+        before.each_with_index do |elem, i|
+          r = match(elem.pattern, value[i], env)
           return r if r.is_a?(ErrorVal)
           return false unless r
         end
-        after.each_with_index do |(_, p), k|
+        after.each_with_index do |elem, k|
           vi = value.length - after.length + k
-          r = match(p, value[vi], env)
+          r = match(elem.pattern, value[vi], env)
           return r if r.is_a?(ErrorVal)
           return false unless r
         end
-        rest_name = elems[rest_index][1]
+        rest_name = elems[rest_index].name
         if rest_name
           mid = value[before.length...(value.length - after.length)]
           env.bind(rest_name, mid)
@@ -489,16 +488,15 @@ module Fusion
 
       matched_keys = []
       rest_name = :__none__
-      pattern.members.each do |m|
-        if m[0] == :rest
-          rest_name = m[1] # may be nil (ignore) or a string
+      pattern.members.each do |member|
+        if member.is_a?(PatternRest)
+          rest_name = member.name # may be nil (ignore) or a string
         else
-          _, key, p = m
-          return false unless value.key?(key)
-          r = match(p, value[key], env)
+          return false unless value.key?(member.key)
+          r = match(member.pattern, value[member.key], env)
           return r if r.is_a?(ErrorVal)
           return false unless r
-          matched_keys << key
+          matched_keys << member.key
         end
       end
       if rest_name != :__none__ && rest_name
