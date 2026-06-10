@@ -444,6 +444,27 @@ Future work and open questions are tracked separately in our [Roadmap](./roadmap
 
 ---
 
+## 2.12 Object patterns are closed unless they carry a `...rest`
+
+### Decisions
+
+- 🧑 ✅ An object pattern without a `...rest` matches only an object whose keys are *exactly* the pattern's keys — a superfluous key makes the match fail. A `...rest` (named, or bare `...`) reopens it: extra keys are then allowed, and a named rest captures them.
+
+### Alternatives
+
+- 🧑 ⏪ Object patterns are always open — extra keys are ignored whether or not a rest is present. The original behavior; superseded because it costs expressive power: there was no way to assert "an object with *exactly* these keys".
+
+### Pros
+
+- Regains the ability to match an object's full shape, not just a lower bound on its keys.
+- `...rest` becomes the explicit opt-in to extra keys, symmetric with how it works in arrays.
+
+### Cons
+
+- More verbose in the common case: ignoring extra keys now needs an explicit trailing `...`.
+
+---
+
 # 3. @ references
 
 ## 3.1 A file contains exactly one value

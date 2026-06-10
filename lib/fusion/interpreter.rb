@@ -501,9 +501,14 @@ module Fusion
           raise Unreachable, "Unknown object pattern member #{member.class}"
         end
       end
-      if rest_name != :__none__ && rest_name
-        remaining = value.reject { |k, _| matched_keys.include?(k) }
-        env.bind(rest_name, remaining)
+      case rest_name
+      when :__none__
+        # No `...rest`: the pattern is closed — a superfluous key means no match.
+        return false unless value.size == matched_keys.size
+      when nil
+        # Bare `...`: extra keys are allowed but bound to nothing.
+      else
+        env.bind(rest_name, value.reject { |k, _| matched_keys.include?(k) })
       end
       true
     end

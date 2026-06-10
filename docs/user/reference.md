@@ -196,8 +196,8 @@ A pattern both tests structure and extracts parts. Pattern forms:
 | identifier (`a`)                           | anything **except** an error              | the value, under that name         |
 | Fixed size arrays, e.g. `[x_1, x_2]`       | array of matching length, elementwise     | each `x_i` binds                   |
 | Variably arrays, e.g. `[p, ...rest]`       | array with ≥ fixed elements               | `rest` = remaining elements        |
-| Fixed member objects, e.g. `{"a": p}`      | object having key `a` (and others)        | as `p` binds                       |
-| Variable objects, e.g. `{"a": p, ...rest}` | object                                    | `rest` = unmatched key/value pairs |
+| Fixed member objects, e.g. `{"a": p}`      | object whose keys are **exactly** `a`     | as `p` binds                       |
+| Variable objects, e.g. `{"a": p, ...rest}` | object having key `a` (extra keys allowed) | `rest` = unmatched key/value pairs |
 | `p_core ? pred`                            | `p_core` matches **and** pred is `true`   | as `p_core` binds                  |
 | `!`, `!_`, `!pat`                          | an error; `!pat` destructures the payload | as `pat` binds                     |
 
@@ -226,8 +226,9 @@ Rules:
   of the array.
 - In an object pattern it must be the last member and captures all keys not explicitly matched.
 - A bare `...` with no name matches without binding.
-- An object pattern matches if all its named keys are present; extra keys are allowed
-  (and captured by `...rest` if present).
+- An object pattern is **closed** unless it carries a `...rest`: without one it matches only
+  an object whose keys are *exactly* the named keys. A `...rest` (named or bare `...`) opens
+  it — extra keys are then allowed, and a named rest captures them.
 
 ---
 

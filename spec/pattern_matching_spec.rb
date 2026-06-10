@@ -41,6 +41,29 @@ RSpec.describe "pattern matching" do
     end
   end
 
+  describe "object patterns are closed without a rest" do
+    it "matches when the keys are exactly the named ones" do
+      expect_pipe
+        .in("✅", '{"a":1}')
+        .code('({"a": x} => x)')
+        .out("✅", "1")
+    end
+
+    it "does not match when a superfluous key is present" do
+      expect_pipe
+        .in("✅", '{"a":1,"b":2}')
+        .code('({"a": x} => x)')
+        .out("✅", "null")
+    end
+
+    it "a bare ... reopens it to ignore extra keys" do
+      expect_pipe
+        .in("✅", '{"a":1,"b":2}')
+        .code('({"a": x, ...} => x)')
+        .out("✅", "1")
+    end
+  end
+
   describe "duplicate binders" do
     it "rejects a repeated binder in an array pattern" do
       expect_pipe

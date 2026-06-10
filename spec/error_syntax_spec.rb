@@ -53,7 +53,7 @@ RSpec.describe "error pattern syntax" do
     it "destructures an object payload" do
       expect_pipe
         .in("✅", "null")
-        .code('(_ => !{"kind": "x", "msg": "hi"} | (!{"kind": k} => k))')
+        .code('(_ => !{"kind": "x", "msg": "hi"} | (!{"kind": k, ...} => k))')
         .out("✅", '"x"')
     end
 
