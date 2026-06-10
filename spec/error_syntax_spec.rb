@@ -21,6 +21,27 @@ RSpec.describe "error pattern syntax" do
     end
   end
 
+  describe "a pattern may contain at most one ...rest" do
+    [
+      ["([...a, ...b] => a)",            "two rests in an array pattern"],
+      ["([x, ...a, y, ...b] => a)",      "two rests around fixed elements"],
+      ['({"a": x, ...r, ...s} => r)',    "two rests in an object pattern"],
+    ].each do |src, why|
+      it "rejects #{why}" do
+        expect_pipe
+          .code(src)
+          .out("❌", a_string_including('"kind":"syntax_error"', '"location":"code <inline>"'))
+      end
+    end
+
+    it "accepts a single rest" do
+      expect_pipe
+        .in("✅", "[1, 2, 3]")
+        .code("([first, ...rest] => rest)")
+        .out("✅", "[2,3]")
+    end
+  end
+
   describe "legitimate error patterns still work" do
     it "parses and runs a top-level !pat (no match on non-error input)" do
       expect_pipe

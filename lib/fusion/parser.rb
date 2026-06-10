@@ -278,9 +278,12 @@ module Fusion
       # Array elements are `guardedpat`s — they cannot be error patterns.
       expect(:lbracket)
       elems = []
+      seen_rest = false
       until at?(:rbracket)
         if at?(:spread)
-          advance
+          rest = advance
+          raise ParseError, "a pattern may contain at most one `...rest` (at #{rest.pos})" if seen_rest
+          seen_rest = true
           name = at?(:ident) ? advance.value : nil
           elems << PatternRest.new(name: name)
         else
@@ -297,9 +300,12 @@ module Fusion
       # Object members are `guardedpat`s — they cannot be error patterns.
       expect(:lbrace)
       members = []
+      seen_rest = false
       until at?(:rbrace)
         if at?(:spread)
-          advance
+          rest = advance
+          raise ParseError, "a pattern may contain at most one `...rest` (at #{rest.pos})" if seen_rest
+          seen_rest = true
           name = at?(:ident) ? advance.value : nil
           members << PatternRest.new(name: name)
         else

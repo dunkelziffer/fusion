@@ -212,14 +212,17 @@ module Fusion
           return value
         end
 
-        if elem.is_a?(ArraySpread)
+        case elem
+        when ArrayItem
+          out.append(value)
+        when ArraySpread
           if value.is_a?(Array)
             out.concat(value)
           else
             return ErrorVal.internal(kind: "type_error", location: code_location(env), operation: "[...] array spread", input: value, message: "expected an array")
           end
         else
-          out.append(value)
+          raise Unreachable, "Unknown array element #{elem.class}"
         end
       end
 
@@ -230,28 +233,24 @@ module Fusion
       out = {}
 
       node.members.each do |member|
-        if member.is_a?(ObjectSpread)
-          value = eval_expr(member.value, env)
+        value = eval_expr(member.value, env)
 
-          if value.is_a?(ErrorVal)
-            # Propagate errors
-            return value
-          end
+        if value.is_a?(ErrorVal)
+          # Propagate errors
+          return value
+        end
 
+        case member
+        when KeyValuePair
+          out[member.key] = value
+        when ObjectSpread
           if value.is_a?(Hash)
             out.merge!(value)
           else
             return ErrorVal.internal(kind: "type_error", location: code_location(env), operation: "{...} object spread", input: value, message: "expected an object")
           end
         else
-          value = eval_expr(member.value, env)
-
-          if value.is_a?(ErrorVal)
-            # Propagate errors
-            return value
-          end
-
-          out[member.key] = value
+          raise Unreachable, "Unknown object member #{member.class}"
         end
       end
 
@@ -489,14 +488,17 @@ module Fusion
       matched_keys = []
       rest_name = :__none__
       pattern.members.each do |member|
-        if member.is_a?(PatternRest)
+        case member
+        when PatternRest
           rest_name = member.name # may be nil (ignore) or a string
-        else
+        when PatternPair
           return false unless value.key?(member.key)
           r = match(member.pattern, value[member.key], env)
           return r if r.is_a?(ErrorVal)
           return false unless r
           matched_keys << member.key
+        else
+          raise Unreachable, "Unknown object pattern member #{member.class}"
         end
       end
       if rest_name != :__none__ && rest_name

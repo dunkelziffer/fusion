@@ -16,7 +16,7 @@ module Fusion
   # pos:   the token's source offset.
   Token = TypedData.define(
     type: Symbol,
-    value: TypedData::Union(AST::Value, nil),
+    value: ->(v) { AST::Value === v || v.nil? },
     pos: Integer,
   )
 end
