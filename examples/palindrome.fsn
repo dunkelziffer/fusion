@@ -1,8 +1,9 @@
 # Check, whether input string or array is a palindrome
 (
+  n ? @Number => n | @toString | @,
   s ? @String => s | @chars | @,
   []  => "palindrome",
   [_] => "palindrome",
-  [_, ...rest, _] ? ([first, ..., last] => [first, last] | @equals) => rest | @,
+  [_, ...rest, _] ? @ends | @equals => rest | @,
   _   => "not a palindrome"
 )
