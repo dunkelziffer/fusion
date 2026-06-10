@@ -116,18 +116,30 @@ member      = string ":" expr | spread ;
 function    = "(" clause { "," clause } [ "," ] ")" ;
 clause      = pattern "=>" expr ;
 
-pattern     = errpat | guardedpat ;
-errpat      = "!" | "!" guardedpat ;                (* bare "!" matches any error, binds nothing *)
-guardedpat  = corepat [ "?" predicate ] ;
-predicate   = prefix ;                              (* any expression yielding a function *)
-corepat     = literalpat | bindpat | wildcard | arraypat | objectpat ;
-literalpat  = atom ;
-wildcard    = "_" ;
-bindpat     = identifier ;
-arraypat    = "[" [ pelem { "," pelem } [ "," ] ] "]" ;
-pelem       = guardedpat | "..." [ identifier ] ;
-objectpat   = "{" [ pmember { "," pmember } [ "," ] ] "}" ;
-pmember     = string ":" guardedpat | "..." [ identifier ] ;
+pattern        = p_error | p_guarded ;
+p_error        = "!" | "!" p_guarded ;              (* bare "!" matches any error, binds nothing *)
+p_guarded      = p_core [ "?" predicate ] ;
+predicate      = prefix ;                           (* any expression yielding a function *)
+p_core         = p_literal | p_bind | p_wildcard | p_array | p_object ;
+p_literal      = atom ;
+p_wildcard     = "_" ;
+p_bind         = identifier ;
+
+(* A pattern's array/object splits into two arms — one with a "..." rest, one    *)
+(* without — so "at most one rest" is structural, not a side-condition.          *)
+p_array        = "[" p_fixed_items | p_rest_items "]" ;
+p_fixed_items  = [ p_items [ "," ] ] ;
+p_rest_items   = [ p_items "," ] p_rest [ "," p_items ] [ "," ] ;
+p_items        = p_item { "," p_item } ;
+p_item         = p_guarded ;
+
+p_object       = "{" p_fixed_pairs | p_rest_pairs "}" ;
+p_fixed_pairs  = [ p_pairs [ "," ] ] ;
+p_rest_pairs   = [ p_pairs "," ] p_rest [ "," ] ;   (* rest is last; only a trailing comma may follow *)
+p_pairs        = p_pair { "," p_pair } ;
+p_pair         = string ":" p_guarded ;
+
+p_rest         = "..." [ identifier ] ;
 
 identifier  = letter { letter | digit | "_" } ;
 number      = int_lit | float_lit ;
@@ -136,6 +148,10 @@ float_lit   = int_lit "." digit { digit } [ exp ] | int_lit exp ;
 exp         = ("e" | "E") [ "+" | "-" ] digit { digit } ;
 string      = '"' { char | escape } '"' ;       (* char excludes raw newline; use \n *)
 ```
+
+A context-sensitive rule the grammar cannot express: an object — literal or
+pattern — may not repeat a fixed key (`{"a": …, "a": …}` is a `syntax_error`).
+Keys arriving through `...spread` / `...rest` are dynamic and not checked.
 
 ---
 
@@ -182,7 +198,7 @@ A pattern both tests structure and extracts parts. Pattern forms:
 | Variably arrays, e.g. `[p, ...rest]`       | array with ≥ fixed elements               | `rest` = remaining elements        |
 | Fixed member objects, e.g. `{"a": p}`      | object having key `a` (and others)        | as `p` binds                       |
 | Variable objects, e.g. `{"a": p, ...rest}` | object                                    | `rest` = unmatched key/value pairs |
-| `corepat ? pred`                           | `corepat` matches **and** pred is `true`  | as `corepat` binds                 |
+| `p_core ? pred`                            | `p_core` matches **and** pred is `true`   | as `p_core` binds                  |
 | `!`, `!_`, `!pat`                          | an error; `!pat` destructures the payload | as `pat` binds                     |
 
 Rules:
@@ -208,7 +224,7 @@ Rules:
 - May appear at most once.
 - In an array pattern it may appear in any position and captures the start / middle / end
   of the array.
-- In an object pattern it may appear at the end and captures all keys not explicitly matched.
+- In an object pattern it must be the last member and captures all keys not explicitly matched.
 - A bare `...` with no name matches without binding.
 - An object pattern matches if all its named keys are present; extra keys are allowed
   (and captured by `...rest` if present).
@@ -217,7 +233,7 @@ Rules:
 
 ## 5. The `?` predicate (refinement / types)
 
-`corepat ? predicate` matches when `corepat` matches structurally **and** piping the
+`p_core ? predicate` matches when `p_core` matches structurally **and** piping the
 matched value into `predicate` yields exactly `true`. The predicate is any
 expression evaluating to a function (a name, a member access, or an inline function
 literal).
@@ -271,7 +287,7 @@ In pattern position, `!` introduces an **error pattern**:
 | `!_`                | any error; payload is not bound. Can carry a predicate (`!_ ? @pred`).   |
 | `!pattern`          | any error with a **payload** that matches `pattern`                      |
 
-The payload pattern (the `pattern` in `!pattern`) is a full `guardedpat`:
+The payload pattern (the `pattern` in `!pattern`) is a full `p_guarded`:
 - It uses the same destructuring semantics you know from regular values.
 - It fully supports `?` predicates. Predicates only refer to the payload, not the `!`.
   Caution: `! ? @Integer` is a syntax error. The bare `!` has no payload pattern

@@ -419,6 +419,31 @@ Future work and open questions are tracked separately in our [Roadmap](./roadmap
 
 ---
 
+## 2.11 Object key uniqueness and pattern-rest placement
+
+### Decisions
+
+- 🧑 ✅ A fixed object key may not repeat, in both literals (`{"a": 1, "a": 2}`) and patterns (`{"a": x, "a": y}`). A repeat is a `syntax_error`. Only explicit pairs are checked; keys arriving via `...spread` / `...rest` are dynamic and ignored.
+- 🧑 ✅ In an object pattern, `...rest` must be the last member. Object position is otherwise meaningless, so this is a syntactic-tidiness rule; the grammar had been looser than the long-standing prose, which already said "at the end".
+- 🤖 ✅ Both are rejected at parse time (clean `syntax_error`). The `ObjLit` / `PObj` `TypedData` constraints that also encode key-uniqueness stay unreachable safeguards.
+
+### Alternatives
+
+- 🤖 💭 Last-write-wins for duplicate literal keys (JSON-parser behavior). Rejected: silently dropping a written key hides mistakes.
+- 🤖 💭 Allow object `...rest` in any position, as in arrays. Rejected: for an unordered map, position carries no meaning, so permitting it is only noise.
+
+### Pros
+
+- Duplicate keys and misplaced rests are caught statically, with a precise message.
+- Duplicate-key is the structural sibling of §2.10's duplicate-*binder* rule (caught at runtime); keys, being static, are caught earlier.
+
+### Cons
+
+- Two parse-time checks to maintain, each mirrored by an AST safeguard.
+- A program that previously parsed (`{"a": 1, "a": 2}`, or an object pattern with a non-final rest) is now rejected — a deliberate narrowing.
+
+---
+
 # 3. @ references
 
 ## 3.1 A file contains exactly one value

@@ -146,15 +146,21 @@ module Fusion
       Expression::ArrLit.new(elems: elems)
     end
 
+    # Fixed keys must be distinct (the ObjLit data rule); a repeat is a clean
+    # syntax_error. Keys arriving via `...spread` are dynamic and not checked.
     def parse_object
       expect(:lbrace)
       members = []
+      keys = []
       until at?(:rbrace)
         if at?(:spread)
           advance
           members << ObjectSpread.new(value: parse_expr)
         else
-          key = expect(:string).value
+          key_tok = expect(:string)
+          key = key_tok.value
+          raise ParseError, "duplicate key #{key.inspect} (at #{key_tok.pos})" if keys.include?(key)
+          keys << key
           expect(:colon)
           members << KeyValuePair.new(key: key, value: parse_expr)
         end
@@ -218,12 +224,12 @@ module Fusion
 
     # ---- Patterns ----
     # ---- Pattern grammar (mirrors reference.md §2.5 EBNF) ------------------
-    #   pattern    = errpat | guardedpat
-    #   errpat     = "!" | "!" guardedpat
-    #   guardedpat = corepat [ "?" predicate ]
-    #   corepat    = literalpat | bindpat | wildcard | arraypat | objectpat
-    # Note: `corepat` does NOT include errpat. The "no nested !pat" property
-    # falls out of the grammar shape — `errpat` is only reachable from `pattern`
+    #   pattern   = p_error | p_guarded
+    #   p_error   = "!" | "!" p_guarded
+    #   p_guarded = p_core [ "?" predicate ]
+    #   p_core    = p_literal | p_bind | p_wildcard | p_array | p_object
+    # Note: `p_core` does NOT include p_error. The "no nested !pat" property
+    # falls out of the grammar shape — `p_error` is only reachable from `pattern`
     # (a clause's top level), never from inside arrays, objects, or another
     # error's payload. No flag-threading is needed.
     def parse_pattern
@@ -274,21 +280,27 @@ module Fusion
       end
     end
 
+    # p_array (reference.md §2.5). Items are `p_guarded`s — never error patterns.
+    # The grammar's two arms (with / without a rest) become two phases: the loop
+    # parses leading items up to an optional single `...rest`; once a rest is
+    # consumed, the inner loop parses trailing items only, so a second `...` lands
+    # in `parse_guardedpat` as an unexpected token. There is no `seen_rest` flag —
+    # "at most one rest" is enforced by the shape of the loop.
     def parse_arraypat
-      # Array elements are `guardedpat`s — they cannot be error patterns.
       expect(:lbracket)
       elems = []
-      seen_rest = false
       until at?(:rbracket)
         if at?(:spread)
-          rest = advance
-          raise ParseError, "a pattern may contain at most one `...rest` (at #{rest.pos})" if seen_rest
-          seen_rest = true
-          name = at?(:ident) ? advance.value : nil
-          elems << PatternRest.new(name: name)
-        else
-          elems << PatternItem.new(pattern: parse_guardedpat)
+          elems << parse_pattern_rest
+          while at?(:comma)
+            advance
+            break if at?(:rbracket) # trailing comma
+            raise ParseError, "a pattern may contain at most one `...rest` (at #{peek.pos})" if at?(:spread)
+            elems << PatternItem.new(pattern: parse_guardedpat)
+          end
+          break
         end
+        elems << PatternItem.new(pattern: parse_guardedpat)
         break unless at?(:comma)
         advance
       end
@@ -296,28 +308,48 @@ module Fusion
       Pattern::PArr.new(elems: elems)
     end
 
+    # p_object (reference.md §2.5). Leading pairs up to an optional single
+    # `...rest`, which must come last — only a trailing comma may follow it. Keys
+    # must be distinct (the PObj data rule); a repeat is a clean syntax_error.
     def parse_objectpat
-      # Object members are `guardedpat`s — they cannot be error patterns.
       expect(:lbrace)
       members = []
-      seen_rest = false
+      keys = []
       until at?(:rbrace)
         if at?(:spread)
-          rest = advance
-          raise ParseError, "a pattern may contain at most one `...rest` (at #{rest.pos})" if seen_rest
-          seen_rest = true
-          name = at?(:ident) ? advance.value : nil
-          members << PatternRest.new(name: name)
-        else
-          key = expect(:string).value
-          expect(:colon)
-          members << PatternPair.new(key: key, pattern: parse_guardedpat)
+          members << parse_pattern_rest
+          advance if at?(:comma) && peek(1)&.type == :rbrace # trailing comma
+          unless at?(:rbrace)
+            raise ParseError, "in an object pattern, `...rest` must come last (at #{peek.pos})"
+          end
+          break
         end
+        key_pos = peek.pos
+        pair = parse_pattern_pair
+        raise ParseError, "duplicate key #{pair.key.inspect} (at #{key_pos})" if keys.include?(pair.key)
+        keys << pair.key
+        members << pair
         break unless at?(:comma)
         advance
       end
       expect(:rbrace)
       Pattern::PObj.new(members: members)
+    end
+
+    # p_rest = "..." [ identifier ] — the single rest binder, shared by array and
+    # object patterns. Callers parse it only at a rest position and then continue
+    # with items/pairs only, which is what holds a pattern to one rest.
+    def parse_pattern_rest
+      expect(:spread)
+      name = at?(:ident) ? advance.value : nil
+      PatternRest.new(name: name)
+    end
+
+    # p_pair = string ":" p_guarded
+    def parse_pattern_pair
+      key = expect(:string).value
+      expect(:colon)
+      PatternPair.new(key: key, pattern: parse_guardedpat)
     end
 
     # ---- token helpers ----

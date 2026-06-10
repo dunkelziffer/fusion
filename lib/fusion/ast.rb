@@ -47,7 +47,11 @@ module Fusion
       Lit       = TypedData.define(value: Value)                                                   # atom literal (incl NULL)
       ErrLit    = TypedData.define(payload: ->(v) { Expression === v || v.nil? })                   # !expr or bare ! (payload nil = !null)
       ArrLit    = TypedData.define(elems: ->(v) { v.is_a?(Array) && v.all? { |e| ArrayItem === e || ArraySpread === e } })
-      ObjLit    = TypedData.define(members: ->(v) { v.is_a?(Array) && v.all? { |m| KeyValuePair === m || ObjectSpread === m } })
+      ObjLit    = TypedData.define(members: ->(v) {                                                 # [KeyValuePair|ObjectSpread], distinct fixed keys
+        v.is_a?(Array) &&
+          v.all? { |m| KeyValuePair === m || ObjectSpread === m } &&
+          v.filter_map { |m| m.key if KeyValuePair === m }.then { |keys| keys.uniq.size == keys.size }
+      })
       FuncLit   = TypedData.define(clauses: ->(v) { v.is_a?(Array) && !v.empty? && v.all? { |c| Clause === c } })
       Ident     = TypedData.define(name: Identifier)                                                # read a builtin/bound name
       FileRef   = TypedData.define(variety: ->(v) { %i[self name path].include?(v) }, path: ->(v) { String === v || v.nil? })
@@ -71,10 +75,11 @@ module Fusion
           v.all? { |e| PatternItem === e || PatternRest === e } &&
           v.count { |e| PatternRest === e } <= 1
       })
-      PObj      = TypedData.define(members: ->(v) {                                                 # [PatternPair|PatternRest], at most one rest
+      PObj      = TypedData.define(members: ->(v) {                                                 # [PatternPair|PatternRest], one rest, distinct keys
         v.is_a?(Array) &&
           v.all? { |m| PatternPair === m || PatternRest === m } &&
-          v.count { |m| PatternRest === m } <= 1
+          v.count { |m| PatternRest === m } <= 1 &&
+          v.filter_map { |m| m.key if PatternPair === m }.then { |keys| keys.uniq.size == keys.size }
       })
       PGuard    = TypedData.define(inner: Pattern, pred_expr: Expression)                           # inner ? predicate
 
