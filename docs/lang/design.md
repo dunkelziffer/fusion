@@ -465,7 +465,24 @@ Future work and open questions are tracked separately in our [Roadmap](./roadmap
 
 ---
 
-# 3. @ references
+## 2.13 The empty function `()`
+
+### Decisions
+
+- 🧑 ✅ `()` parses as the empty function (a clause list with zero clauses), not as an empty/invalid grouping. Applied to a value it matches nothing, so by §2.7 it yields `null` for any normal input and propagates any error.
+
+### Alternatives
+
+- 🤖 ⏪ `()` is a syntax error (an empty grouping `( )` has no expression). The original behavior; superseded because the empty clause list is a natural, useful value (a total "send to null, pass errors through").
+
+### Pros
+
+- Removes a special-case hole: a function literal is now any clause list, empty included, so `FuncLit` drops its "non-empty" constraint.
+- Gives a concise constant: `| ()` discards a normal value to `null` while preserving errors.
+
+### Cons
+
+- `()` no longer reads as "empty parentheses"; a reader must know it denotes the empty function.
 
 ## 3.1 A file contains exactly one value
 

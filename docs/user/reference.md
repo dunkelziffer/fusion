@@ -113,7 +113,7 @@ spread      = "..." expr ;
 object      = "{" [ member { "," member } [ "," ] ] "}" ;
 member      = string ":" expr | spread ;
 
-function    = "(" clause { "," clause } [ "," ] ")" ;
+function    = "(" [ clause { "," clause } [ "," ] ] ")" ;   (* "()" is the empty function — matches nothing *)
 clause      = pattern "=>" expr ;
 
 pattern        = p_error | p_guarded ;
@@ -157,7 +157,8 @@ Keys arriving through `...spread` / `...rest` are dynamic and not checked.
 
 ## 3. Functions and application
 
-A function is an ordered list of clauses. Applying a function to a value `v`:
+A function is an ordered list of clauses, possibly empty: `()` is the empty
+function, with no clauses. Applying a function to a value `v`:
 
 1. If the function value itself is an error (e.g. piping into an unresolved name),
    that error is the result.
@@ -168,6 +169,9 @@ A function is an ordered list of clauses. Applying a function to a value `v`:
 4. **If no clause matches:** the result is `v` itself when `v` is an error
    (propagation — an unmatched error is never silently swallowed), and `null`
    otherwise (the lenient default).
+
+The empty function `()` has no clause to match, so rule 4 always applies: `v | ()`
+is `null` for any normal `v` and propagates any error.
 
 A consequence of rule 4: a function with error clauses that only match *some*
 shapes of error (e.g. `(!42 => "got 42", _ => "ok")`) still propagates any

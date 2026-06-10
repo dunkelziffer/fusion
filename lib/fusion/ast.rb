@@ -52,7 +52,7 @@ module Fusion
           v.all? { |m| KeyValuePair === m || ObjectSpread === m } &&
           v.filter_map { |m| m.key if KeyValuePair === m }.then { |keys| keys.uniq.size == keys.size }
       })
-      FuncLit   = TypedData.define(clauses: ->(v) { v.is_a?(Array) && !v.empty? && v.all? { |c| Clause === c } })
+      FuncLit   = TypedData.define(clauses: ->(v) { v.is_a?(Array) && v.all? { |c| Clause === c } }) # [] = the empty function
       Ident     = TypedData.define(name: Identifier)                                                # read a builtin/bound name
       FileRef   = TypedData.define(variety: ->(v) { %i[self name path].include?(v) }, path: ->(v) { String === v || v.nil? })
       Pipe      = TypedData.define(left: Expression, right: Expression)                             # left | right

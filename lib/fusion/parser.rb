@@ -171,12 +171,17 @@ module Fusion
       Expression::ObjLit.new(members: members)
     end
 
-    # A "(" can begin either a grouped expression or a function literal.
-    # Distinguish by trying to parse a clause: a function is a comma-separated
-    # list of `pattern => expr`. We detect a function by scanning for `=>`
-    # before the matching `)` at depth 0.
+    # A "(" begins a grouped expression, a function literal, or — when empty —
+    # the clause-less function `()`. A function is a comma-separated list of
+    # `pattern => expr`; we detect one by scanning for a top-level `=>` before the
+    # matching `)`. `()` matches nothing (so it yields null for any normal input
+    # and propagates errors).
     def parse_function_or_group
       expect(:lparen)
+      if at?(:rparen)
+        advance
+        return Expression::FuncLit.new(clauses: [])
+      end
       if looks_like_function?
         clauses = []
         loop do
