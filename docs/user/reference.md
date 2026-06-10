@@ -119,7 +119,7 @@ clause      = pattern "=>" expr ;
 pattern        = p_error | p_guarded ;
 p_error        = "!" | "!" p_guarded ;              (* bare "!" matches any error, binds nothing *)
 p_guarded      = p_core [ "?" predicate ] ;
-predicate      = prefix ;                           (* any expression yielding a function *)
+predicate      = pipe ;                             (* a `|` chain of functions; the matched value flows in *)
 p_core         = p_literal | p_bind | p_wildcard | p_array | p_object ;
 p_literal      = atom ;
 p_wildcard     = "_" ;
@@ -239,9 +239,16 @@ Rules:
 ## 5. The `?` predicate (refinement / types)
 
 `p_core ? predicate` matches when `p_core` matches structurally **and** piping the
-matched value into `predicate` yields exactly `true`. The predicate is any
+matched value through `predicate` yields a **truthy** result. Truthiness is
+Ruby-style: every value is truthy except `false` and `null` (so `0` and `""` are
+truthy). The built-ins `@truthy` / `@falsey` expose the same test.
+
+The predicate is a `|` chain of functions, and the matched value flows in from the
+left: `a ? b | c` matches when `a` matches and `a | b | c` is truthy. A single-stage
+predicate (`n ? @Integer`) is just the one-function case. Each stage is any
 expression evaluating to a function (a name, a member access, or an inline function
-literal).
+literal). If applying the predicate produces an error, that error bubbles up as the
+function's result (see §6.4).
 
 "Types" are not a separate construct: the built-in predicates `@Integer`, `@String`,
 etc. are ordinary functions returning booleans, reached with `@` and used with `?`

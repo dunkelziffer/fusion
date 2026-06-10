@@ -484,6 +484,33 @@ Future work and open questions are tracked separately in our [Roadmap](./roadmap
 
 - `()` no longer reads as "empty parentheses"; a reader must know it denotes the empty function.
 
+---
+
+## 2.14 Predicate truthiness and chaining
+
+### Decisions
+
+- 🧑 ✅ A `?` predicate succeeds on any **truthy** result, not only `true`. Truthiness is Ruby-style: every value is truthy except `false` and `null` (so `0`, `""`, `[]` are truthy). The same notion is exposed to programs as the stdlib `@truthy` / `@falsey`.
+- 🧑 ✅ A predicate may be a `|` chain of functions, with the matched value flowing in from the left: `a ? b | c` matches when `a` matches and `a | b | c` is truthy. The grammar's `predicate` is now a full `pipe` (was a single `prefix`).
+
+### Alternatives
+
+- 🧑 ⏪ A predicate matched only when it returned exactly `true`; every other value (truthy ones included) failed. Superseded — it forced predicates to be strictly boolean and made composition awkward.
+- 🤖 💭 Keep predicates single-function and compose via an inline `(x => x | b | c)`. Rejected: the wrapper is pure noise next to `b | c`.
+
+### Pros
+
+- Predicates compose directly: `a ? @sanitize | @truthy` reads as a pipeline.
+- Any function usable as a test works as a predicate, not only strict-boolean ones.
+
+### Cons
+
+- A predicate that accidentally returns a truthy non-boolean (e.g. a number) now matches where it previously failed — slightly more rope.
+
+---
+
+# 3. @ references
+
 ## 3.1 A file contains exactly one value
 
 ### Decisions

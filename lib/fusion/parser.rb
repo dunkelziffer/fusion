@@ -259,7 +259,9 @@ module Fusion
       inner = parse_corepat
       if at?(:question)
         advance
-        pred = parse_prefix
+        # A predicate is a full pipe so it may chain functions: `a ? b | c` tests
+        # `a | b | c`. It stops at `=>`, `,`, `]`, `}`, `)` like any expression.
+        pred = parse_pipe
         Pattern::PGuard.new(inner: inner, pred_expr: pred)
       else
         inner

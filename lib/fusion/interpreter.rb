@@ -375,6 +375,20 @@ module Fusion
       end
     end
 
+    # Run a guard predicate against the matched value. The predicate is a `|`
+    # pipeline of functions; the value enters at the leftmost stage and the result
+    # flows through each stage, so `a ? b | c` evaluates `a | b | c`. A non-pipe
+    # predicate is just the single-stage case. #apply propagates any ErrorVal in
+    # either the function or the threaded value position.
+    def apply_predicate(pred_expr, value, env)
+      if pred_expr.is_a?(Expression::Pipe)
+        upstream = apply_predicate(pred_expr.left, value, env)
+        apply(eval_expr(pred_expr.right, env), upstream, code_location(env))
+      else
+        apply(eval_expr(pred_expr, env), value, code_location(env))
+      end
+    end
+
     # Binds matched sub-values into `env` as it goes. Returns true (match),
     # false (no match), or an ErrorVal (predicate errored). A duplicate binder
     # raises Env::DuplicateBinding, caught in #apply.
@@ -419,23 +433,19 @@ module Fusion
           # matching unchanged, so its parent is always that lexical env.
           lexical_env = env.parent
 
-          pred = eval_expr(pattern.pred_expr, lexical_env)
-
-          if pred.is_a?(ErrorVal)
-            # The predicate expression itself errored, e.g. an unresolved @-reference.
-            return pred
-          end
-          # The predicate sees whatever value reached this PGuard, which is
-          # already the right value because `!pat ? pred` parses as
-          # PErr(PGuard(pat, pred)) — by the time PGuard runs, the value is
-          # already the payload.
-          predicate_result = apply(pred, value, code_location(lexical_env))
+          # The predicate is a pipeline fed the matched value: `a ? b | c` tests
+          # `a | b | c`. The value reaching this PGuard is already correct, since
+          # `!pat ? pred` parses as PErr(PGuard(pat, pred)) — by now it is the
+          # payload. #apply_predicate threads it through each `|` stage.
+          predicate_result = apply_predicate(pattern.pred_expr, value, lexical_env)
           if predicate_result.is_a?(ErrorVal)
-            # Predicate raised during application, propagate error
+            # An unresolved @-reference, or an error raised while applying the
+            # predicate, becomes the clause's result.
             return predicate_result
           else
-            # Predicate clause matches, if predicate evaluates to "true"
-            predicate_result == true
+            # Ruby-style truthiness: the clause matches unless the predicate
+            # yields `false` or `null`.
+            truthy?(predicate_result)
           end
         end
       else
@@ -514,6 +524,13 @@ module Fusion
     end
 
     # ---- Equality & helpers ----------------------------------------------
+    # Ruby-style truthiness: `false` and `null` are falsey, everything else
+    # (numbers, strings, arrays, objects, functions — including `0` and `""`) is
+    # truthy. Used by `?` guards and exposed to programs as @truthy / @falsey.
+    def truthy?(value)
+      value != false && value != NULL
+    end
+
     def deep_equal?(a, b)
       return true if a.equal?(b)
       return false if a.class != b.class
