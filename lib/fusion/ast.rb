@@ -36,6 +36,10 @@ module Fusion
     PatternPair  = TypedData.define(key: String, pattern: Pattern)                # "k": pat inside an object pattern
     PatternRest  = TypedData.define(name: ->(v) { Identifier === v || v.nil? })   # ...name (name nil = ignore) in either
 
+    # A REPL statement `name = expression ;` — the only construct that is not an
+    # expression. Files never contain statements; only the REPL parses them.
+    Statement    = TypedData.define(name: Identifier, expression: Expression)
+
     module Expression
       Lit       = TypedData.define(value: Atom)                                                      # atom literal (incl NULL)
       ErrLit    = TypedData.define(payload: ->(v) { Expression === v || v.nil? })                    # !expr or bare ! (payload nil = !null)

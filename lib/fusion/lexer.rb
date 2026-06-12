@@ -17,6 +17,7 @@ module Fusion
       "," => :comma, ":" => :colon,
       "|" => :pipe, "?" => :question, "." => :dot,
       "@" => :at, "/" => :slash,
+      "=" => :equals, ";" => :semicolon,
     }.freeze
 
     def initialize(src)

@@ -372,7 +372,7 @@ There are two origins of error values, and they differ in payload:
 | `syntax_error`        | source code, or the JSON input, fails to parse.                                                                |
 | `reference_error`     | an `@`-reference cannot be resolved: unknown name, file not found, a file-system failure, a non-productive data cycle, or a `@`-self-reference with no current file. |
 | `type_error`          | a value has the wrong type for an operation (expected X / a type mismatch); also applying a non-function, spreading a non-array/object, member access on a non-object, or a wrong-typed index. |
-| `argument_error`      | a built-in receives the wrong number/shape of arguments (e.g. not a pair). Its `message` states the expected shape as a Fusion pattern where possible (the pair-built-ins report `expected [_, _]`). |
+| `argument_error`      | a built-in receives the wrong number/shape of arguments (e.g. not a pair), or an `array`/`object`-mode input envelope has the wrong shape (§9.4). Its `message` states the expected shape as a Fusion pattern where possible (the pair-built-ins report `expected [_, _]`). |
 | `binding_error`       | reading an unbound identifier, or binding the same name twice in one clause.                                   |
 | `access_error`        | a missing object key or an out-of-range array index — and nothing else (a non-object member access or a wrong-typed index is a `type_error`). |
 | `math_error`          | division or modulo by zero, or a non-finite number.                                                            |
@@ -387,7 +387,7 @@ There are two origins of error values, and they differ in payload:
 | `builtin X`     | the built-in named X, e.g. `builtin divide`.                      |
 | `stdlib X`      | the standard-library file X.                                      |
 | `code X`        | the user source file X (basename).                                |
-| `code <inline>` | an inline `-e` program.                                           |
+| `code <inline>` | an inline `-e` program or a REPL statement.                       |
 | `input`         | the input channel (stdin or the CLI-argument).                    |
 | `output`        | the output channel (the serialized result).                       |
 | `interpreter`   | the interpreter itself, e.g. a stack overflow.                    |
@@ -572,10 +572,11 @@ above. Recursion through functions is not a data cycle.
 
 ### 9.3 Runtime contract
 
-The interpreter reads standard input as JSON, converts it to a Fusion value `v`,
-computes `v | programFunction`, and prints the result on standard output as JSON.
+The default use case (**pipe**) reads standard input as JSON, converts it to a
+Fusion value `v`, computes `v | programFunction`, and prints the result on
+standard output as JSON.
 
-- Empty input is treated as `null`.
+- Empty input is treated as `null` (in every input mode).
 - Non-JSON input yields a `syntax_error` at `location: "input"` (§6.5).
 - **If the final result is an error**, the interpreter prints **nothing** to
   standard output, prints the error's **payload** (as JSON) to standard error, and
@@ -583,6 +584,10 @@ computes `v | programFunction`, and prints the result on standard output as JSON
   interpreter exits `0`. This makes Fusion programs first-class Unix filters: the
   stdout stream carries the value-or-nothing, the stderr stream carries the failure
   detail, and the exit code is `0`/`1` accordingly.
+
+This stdout/stderr/exit-code split is the **unix** output mode — the default for
+the pipe use case. §9.4 describes the other ways an error can cross the boundary,
+§9.5 the streaming use case, and §9.6 the REPL.
 
 **Serialization.** A function and a non-finite float number have no JSON form.
 How one is rendered depends on where it sits:
@@ -600,12 +605,103 @@ Note:
   serialize leniently to preserve as much information about the root error as
   possible.
 
-### 9.4 Command-line interface
+### 9.4 Input and output modes
+
+An error value cannot cross the CLI boundary as plain JSON — something must mark
+it as an error. The **input mode** and the **output mode** define that marking.
+They are independent of each other and selected with the `--input` and `--output`
+flags:
+
+- **`unix`** — the input is plain JSON and always a value; the `-!` flag marks
+  the whole input as an error value instead (its JSON becomes the payload).
+  Output: a value goes to stdout with exit code `0`; an error's payload goes to
+  stderr with exit code `1` (§9.3).
+- **`bang`** — a leading `!` marks an error value; the payload is the JSON after
+  the `!`. A lone `!` is `!null`, like the language's bare `!`. Output is always
+  on stdout and the exit code is always `0`. A `!`-marked line is not valid JSON;
+  that is the price of the most lightweight marking.
+- **`array`** — everything is wrapped in an envelope: `[0, value]` for a value,
+  `[1, payload]` for an error. Output is always on stdout, exit code always `0`.
+- **`object`** — the envelope is `{"value": value}` for a value, `{"error": payload}`
+  for an error. Output is always on stdout, exit code always `0`.
+
+A malformed `array`/`object` input envelope (any other shape; the array tag must
+be exactly the integer `0` or `1`) is an `argument_error` at `location: "input"`.
+Like any input failure it flows into the program as an error and is catchable.
+
+Mode support per use case (defaults in bold):
+
+| Use case   | `unix`   | `bang`   | `array` | `object` |
+| ---------- | -------- | -------- | ------- | -------- |
+| pipe       | **yes**  | yes      | yes     | yes      |
+| `--stream` | no       | **yes**  | yes     | yes      |
+| `--repl`   | —        | —        | —       | —        |
+
+The unix mode spends the process's only exit code and both standard streams on a
+single result, so it cannot mark errors per record in a stream; the stream use
+case therefore excludes it. The REPL is interactive and has no modes at all.
+
+### 9.5 Streaming (`--stream`)
+
+`fusion --stream` loads the program once, then treats standard input and output
+as NDJSON streams: each input line is decoded per the input mode, piped through
+the program, and printed as one output line encoded per the output mode.
+
+- Blank lines are skipped; every other input line produces exactly one output line.
+- Errors stay in-band, so a failing record — including a stack overflow — becomes
+  that record's output line and the stream continues. The exit code is always `0`.
+- A program that fails to load answers every record with that same load error.
+
+### 9.6 The REPL (`--repl`)
+
+`fusion --repl` starts an interactive session. It loads no program, reads no
+input, produces no pipeline output, and always exits `0`. The REPL accepts
+**statements** — the only construct in the language that is not an expression:
+
+```ebnf
+statement = identifier "=" expr ";" ;
+```
+
+Each statement evaluates `expr`, prints the result, and binds it to `identifier`
+for later statements. Bare identifiers in a statement's expression read earlier
+bindings; `@`-references resolve relative to the working directory.
+
+- A statement may span multiple lines; it ends at the `;`.
+- Results print leniently (§9.3): a function prints as `"<function>"` instead of
+  becoming a `serialization_error`.
+- An error prints as `!payload` but binds nothing — mirroring patterns, where a
+  binder never captures an error. The session continues.
+- Rebinding a name is allowed; later statements see the new value.
+- A bound function can call itself through its own name
+  (`fact = (0 => 1, n => [n, [n,1] | @subtract | fact] | @multiply);`), because
+  the name is looked up at application time.
+- REPL statements report errors at `location: "code <inline>"`, like `-e` programs.
+- End the session with Ctrl-D.
+
+### 9.7 Command-line interface
 
 ```
-fusion <file.fsn> [json-input]
-fusion -e '<source>' [json-input]
+usage: fusion [options] <file.fsn> [json-input]
+       fusion [options] -e '<source>' [json-input]
+       fusion --repl
+
+use cases:
+  (default)       pipe: apply the program to one input
+  --stream        apply the program to each line of an NDJSON stream
+  --repl          interactive `identifier = expression;` statements
+
+options:
+  -e '<source>'   inline program instead of a file
+  --input MODE    how the input marks an error value (§9.4)
+  --output MODE   how the output marks an error value (§9.4)
+  -!              treat the input as an error value (unix input mode only)
 ```
 
-Input comes from the `[json-input]` argument if present, otherwise from standard
-input.
+In the pipe use case, input comes from the `[json-input]` argument if present,
+otherwise from standard input. The stream use case always reads standard input
+and accepts no input argument.
+
+A command-line misuse (an unknown flag, an unsupported mode combination, a
+missing program) is reported as plain usage text on stderr with exit code `1`.
+It happens before the input/output contract begins, so it is not a payloaded
+error.

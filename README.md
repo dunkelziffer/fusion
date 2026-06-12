@@ -59,12 +59,16 @@ echo '5' | fusion examples/factorial.fsn        # => 120
 echo '15' | fusion examples/fizzbuzz.fsn        # => "FizzBuzz"
 fusion examples/factorial.fsn 5                 # => 120 (input as an argument)
 fusion -e '(n => [n,2] | @multiply)' 21         # => 42 (inline program)
+printf '[1, 2]\n[3, 4]\n' | fusion --stream examples/double.fsn   # => [2,4] [6,8] (NDJSON, one value per line)
+fusion --repl                                   # interactive `name = expression;` statements
 ```
 
 - Input is read from stdin (or the 2nd CLI arg) as JSON and parsed into a Fusion value.
 - The file's function gets applied to this value: `value | function`
 - The result gets printed as JSON to stdout.
 - Errors get printed to stderr instead and set exit code `1`.
+- How errors cross the boundary is configurable per side (`--input` / `--output`);
+  see the [reference](docs/user/reference.md) §9.4.
 
 ## Documentation
 

@@ -34,6 +34,28 @@ module Fusion
       Interpreter::ErrorVal.internal(kind: "syntax_error", location: location, operation: "parsing", input: src, message: err.message)
     end
 
+    # Parse a sequence of REPL statements (`identifier "=" expr ";"`), returning
+    # an Array<AST::Statement> — or, like parse_file, a standardized syntax_error
+    # value instead of ever raising.
+    def self.parse_statements(src, location:)
+      toks = Lexer.new(src).tokens
+      p = new(toks)
+      statements = []
+      statements << p.parse_statement until p.at?(:eof)
+      statements
+    rescue ParseError => err
+      Interpreter::ErrorVal.internal(kind: "syntax_error", location: location, operation: "parsing", input: src, message: err.message)
+    end
+
+    # statement = identifier "=" expr ";"   (REPL only; files contain one expr)
+    def parse_statement
+      name = expect(:ident).value
+      expect(:equals)
+      expression = parse_expr
+      expect(:semicolon)
+      AST::Statement.new(name: name, expression: expression)
+    end
+
     def parse_expr
       parse_pipe
     end

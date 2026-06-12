@@ -10,6 +10,34 @@ module Fusion
     module Serializer
       extend self
 
+      # Encode a runtime value per the output mode (see docs/user/reference.md
+      # §9.4). Returns [status, text]: status is 0 for a value and 1 for an
+      # error; only the unix mode maps it onto stderr and the exit code — the
+      # other modes mark the error inside the text itself.
+      def encode(runtime_value, mode:)
+        status, json = to_json(runtime_value)
+        text =
+          case mode
+          when :unix then json
+          when :bang then status.zero? ? json : "!#{json}"
+          when :array then "[#{status},#{json}]"
+          when :object then status.zero? ? %({"value":#{json}}) : %({"error":#{json}})
+          else raise Unreachable, "Unknown output mode #{mode}"
+          end
+        [status, text]
+      end
+
+      # Render a runtime value for interactive display (the REPL): an error
+      # shows as !payload, and values without a JSON form render leniently
+      # ("<function>", "<Infinity>", …) instead of erroring.
+      def render(runtime_value)
+        if runtime_value.is_a?(Interpreter::ErrorVal)
+          "!#{convert(runtime_value.payload, lenient: true).to_json}"
+        else
+          convert(runtime_value, lenient: true).to_json
+        end
+      end
+
       # Serialize a runtime value into [exit_code, json] per the CLI/serialization
       # contract in docs/user/reference.md §9.3.
       def to_json(runtime_value)
