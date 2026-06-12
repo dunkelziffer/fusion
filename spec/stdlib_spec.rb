@@ -166,29 +166,4 @@ RSpec.describe "stdlib error handling" do
         .out("❌", '{"kind":"argument_error","location":"stdlib mapValues.fsn","operation":"mapValues","input":5,"message":"expected {\"f\": _, \"object\": _}"}')
     end
   end
-
-  describe "@truthy / @falsey" do
-    {
-      "0"     => ["true",  "false"], # numbers are truthy, even zero
-      '""'    => ["true",  "false"], # strings are truthy, even empty
-      "[]"    => ["true",  "false"], # arrays are truthy, even empty
-      "false" => ["false", "true"],
-      "null"  => ["false", "true"],
-    }.each do |input, (truthy, falsey)|
-      it "classifies #{input} as truthy=#{truthy}" do
-        expect_pipe.in("✅", input).code("@truthy").out("✅", truthy)
-      end
-
-      it "classifies #{input} as falsey=#{falsey}" do
-        expect_pipe.in("✅", input).code("@falsey").out("✅", falsey)
-      end
-    end
-
-    it "propagates an error input (no clause matches it)" do
-      expect_pipe
-        .in("❌", '"boom"')
-        .code("@truthy")
-        .out("❌", '"boom"')
-    end
-  end
 end

@@ -143,29 +143,27 @@ module Fusion
 
       # --- boolean ---
 
+      # `and`/`or`/`not` judge truthiness (Ruby-style: `false` and `null` are
+      # falsey, everything else truthy), not strict booleans, and always return a
+      # boolean. They share the interpreter's `truthy?`, the same test `?` guards use.
       def and_(v)
         return v if v.is_a?(ErrorVal)
         return error("argument_error", "and", v, "expected [_, _]") unless pair?(v)
-        return error("type_error", "and", v, "expected booleans") unless boolean?(v[0])
-        return error("type_error", "and", v, "expected booleans") unless boolean?(v[1])
 
-        v[0] && v[1]
+        @interp.truthy?(v[0]) && @interp.truthy?(v[1])
       end
 
       def or_(v)
         return v if v.is_a?(ErrorVal)
         return error("argument_error", "or", v, "expected [_, _]") unless pair?(v)
-        return error("type_error", "or", v, "expected booleans") unless boolean?(v[0])
-        return error("type_error", "or", v, "expected booleans") unless boolean?(v[1])
 
-        v[0] || v[1]
+        @interp.truthy?(v[0]) || @interp.truthy?(v[1])
       end
 
       def not_(v)
         return v if v.is_a?(ErrorVal)
-        return error("type_error", "not", v, "expected a boolean") unless boolean?(v)
 
-        !v
+        !@interp.truthy?(v)
       end
 
       # --- strings and structure bridges ---

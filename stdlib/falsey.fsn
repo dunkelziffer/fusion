@@ -1,7 +1,0 @@
-# True for `false` and `null`, false for every other value. An error input
-# propagates (no clause matches it). The complement of @truthy.
-(
-  false => true,
-  null => true,
-  _ => false
-)

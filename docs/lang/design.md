@@ -490,7 +490,7 @@ Future work and open questions are tracked separately in our [Roadmap](./roadmap
 
 ### Decisions
 
-- 🧑 ✅ A `?` predicate succeeds on any **truthy** result, not only `true`. Truthiness is Ruby-style: every value is truthy except `false` and `null` (so `0`, `""`, `[]` are truthy). The same notion is exposed to programs as the stdlib `@truthy` / `@falsey`.
+- 🧑 ✅ A `?` predicate succeeds on any **truthy** result, not only `true`. Truthiness is Ruby-style: every value is truthy except `false` and `null` (so `0`, `""`, `[]` are truthy). The same notion drives the `@and` / `@or` / `@not` built-ins (see 2.15).
 - 🧑 ✅ A predicate may be a `|` chain of functions, with the matched value flowing in from the left: `a ? b | c` matches when `a` matches and `a | b | c` is truthy. The grammar's `predicate` is now a full `pipe` (was a single `prefix`).
 
 ### Alternatives
@@ -500,12 +500,34 @@ Future work and open questions are tracked separately in our [Roadmap](./roadmap
 
 ### Pros
 
-- Predicates compose directly: `a ? @sanitize | @truthy` reads as a pipeline.
+- Predicates compose directly: `a ? @sanitize | @not` reads as a pipeline.
 - Any function usable as a test works as a predicate, not only strict-boolean ones.
 
 ### Cons
 
 - A predicate that accidentally returns a truthy non-boolean (e.g. a number) now matches where it previously failed — slightly more rope.
+
+---
+
+## 2.15 `@and` / `@or` / `@not` judge truthiness; `@truthy` / `@falsey` dropped
+
+### Decisions
+
+- 🔢 ✅ `@and`, `@or`, `@not` operate on **truthiness** (the same Ruby-style test as `?` predicates — `false` and `null` are falsey, everything else truthy), not strict booleans, and each returns a boolean. So `null | @not` is `true` and `[true, 0] | @and` is `true`. They share the interpreter's `truthy?`.
+- 🧑 ✅ The stdlib `@truthy` / `@falsey` are removed as superfluous: `@not` *is* `@falsey`, and `@truthy` is `@not | @not`.
+
+### Alternatives
+
+- 🧑 ⏪ `@and`/`@or`/`@not` were strict-boolean (a non-boolean operand — including `null` — was a `type_error`), with `@truthy` / `@falsey` as the separate truthiness test. Superseded: with predicates already truthiness-based, two parallel notions of "boolean" was redundant, and a strict `@not` could not negate a `null`.
+
+### Pros
+
+- One notion of boolean across `?` predicates and the boolean built-ins.
+- `@not` handles `null` (and every value), so it composes in predicate chains without raising.
+
+### Cons
+
+- `@and`/`@or` no longer flag a mistyped non-boolean operand; a wrong-typed value is silently judged by its truthiness.
 
 ---
 

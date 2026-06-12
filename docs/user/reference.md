@@ -231,7 +231,7 @@ Rules:
 `p_core ? predicate` matches when `p_core` matches structurally **and** piping the
 matched value through `predicate` yields a **truthy** result. Truthiness is
 Ruby-style: every value is truthy except `false` and `null` (so `0` and `""` are
-truthy). The built-ins `@truthy` / `@falsey` expose the same test.
+truthy). The built-ins `@and` / `@or` / `@not` apply the same test.
 
 The predicate is a `|` chain of functions, and the matched value flows in from the
 left: `a ? b | c` matches when `a` matches and `a | b | c` is truthy. A single-stage
@@ -431,11 +431,14 @@ for the standard library, derivable from `equals` and `lessThan`.
 
 ### 7.3 Boolean (operations)
 
-| Name  | Input                | Result        |
-| ----- | -------------------- | ------------- |
-| `and` | `[boolean, boolean]` | logical and   |
-| `or`  | `[boolean, boolean]` | logical or    |
-| `not` | `boolean`            | logical not   |
+These judge **truthiness** (the same Ruby-style test as `?` predicates: every value
+is truthy except `false` and `null`), not strict booleans, and always return a boolean.
+
+| Name  | Input    | Result                                              |
+| ----- | -------- | --------------------------------------------------- |
+| `and` | `[_, _]` | `true` if both operands are truthy                  |
+| `or`  | `[_, _]` | `true` if either operand is truthy                  |
+| `not` | `_`      | `true` if the operand is falsey (`false` or `null`) |
 
 ### 7.4 Strings and structure bridges (operations)
 

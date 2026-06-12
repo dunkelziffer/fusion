@@ -340,26 +340,35 @@ RSpec.describe "builtins" do
     end
   end
 
+  # @and/@or/@not judge truthiness (false and null are falsey, everything else —
+  # including 0 and "" — is truthy) and always return a boolean.
   describe "@and" do
-    it "is true only when both are true" do
+    it "is true when both operands are truthy" do
       expect_pipe
         .in("✅", "[true,true]")
         .code("(p => p | @and)")
         .out("✅", "true")
     end
 
-    it "is false when one is false" do
+    it "is false when one operand is falsey" do
       expect_pipe
         .in("✅", "[true,false]")
         .code("(p => p | @and)")
         .out("✅", "false")
     end
 
-    it "errors with type_error on a non-boolean element" do
+    it "treats null as falsey" do
       expect_pipe
-        .in("✅", "[true,1]")
+        .in("✅", "[true,null]")
         .code("(p => p | @and)")
-        .out("❌", '{"kind":"type_error","location":"builtin and","operation":"and","input":[true,1],"message":"expected booleans"}')
+        .out("✅", "false")
+    end
+
+    it "treats a non-boolean truthy value (e.g. 0) as truthy" do
+      expect_pipe
+        .in("✅", "[true,0]")
+        .code("(p => p | @and)")
+        .out("✅", "true")
     end
 
     it "errors with argument_error on a non-pair" do
@@ -371,25 +380,32 @@ RSpec.describe "builtins" do
   end
 
   describe "@or" do
-    it "is true when one is true" do
+    it "is true when one operand is truthy" do
       expect_pipe
         .in("✅", "[false,true]")
         .code("(p => p | @or)")
         .out("✅", "true")
     end
 
-    it "is false when both are false" do
+    it "is false when both operands are falsey" do
       expect_pipe
         .in("✅", "[false,false]")
         .code("(p => p | @or)")
         .out("✅", "false")
     end
 
-    it "errors with type_error on a non-boolean element" do
+    it "treats null as falsey" do
       expect_pipe
-        .in("✅", "[1,true]")
+        .in("✅", "[false,null]")
         .code("(p => p | @or)")
-        .out("❌", a_string_including('"kind":"type_error"', '"message":"expected booleans"'))
+        .out("✅", "false")
+    end
+
+    it "treats a non-boolean truthy value (e.g. 0) as truthy" do
+      expect_pipe
+        .in("✅", "[false,0]")
+        .code("(p => p | @or)")
+        .out("✅", "true")
     end
 
     it "errors with argument_error on a non-pair" do
@@ -401,25 +417,32 @@ RSpec.describe "builtins" do
   end
 
   describe "@not" do
-    it "negates true" do
+    it "negates a truthy value to false" do
       expect_pipe
         .in("✅", "true")
         .code("(b => b | @not)")
         .out("✅", "false")
     end
 
-    it "negates false" do
+    it "negates a falsey value to true" do
       expect_pipe
         .in("✅", "false")
         .code("(b => b | @not)")
         .out("✅", "true")
     end
 
-    it "errors with type_error on a non-boolean" do
+    it "treats null as falsey, so @not is true" do
       expect_pipe
-        .in("✅", "1")
+        .in("✅", "null")
         .code("(b => b | @not)")
-        .out("❌", '{"kind":"type_error","location":"builtin not","operation":"not","input":1,"message":"expected a boolean"}')
+        .out("✅", "true")
+    end
+
+    it "treats a non-boolean truthy value (e.g. 0) as truthy, so @not is false" do
+      expect_pipe
+        .in("✅", "0")
+        .code("(b => b | @not)")
+        .out("✅", "false")
     end
   end
 

@@ -1,7 +1,0 @@
-# True for every value except `false` and `null`; those two are false. An error
-# input propagates (no clause matches it). Mirrors the truthiness `?` guards use.
-(
-  false => false,
-  null => false,
-  _ => true
-)

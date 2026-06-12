@@ -155,10 +155,10 @@ RSpec.describe "pattern matching" do
     end
 
     it "chains functions in the predicate: a ? b | c tests a | b | c" do
-      # 5 | @falsey = false, false | @falsey = true → truthy → matches.
+      # 5 | @not = false, false | @not = true → truthy → matches.
       expect_pipe
         .in("✅", "5")
-        .code('(x ? @falsey | @falsey => "even-negations", _ => "no")')
+        .code('(x ? @not | @not => "even-negations", _ => "no")')
         .out("✅", '"even-negations"')
     end
 

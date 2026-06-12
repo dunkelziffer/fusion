@@ -526,7 +526,7 @@ module Fusion
     # ---- Equality & helpers ----------------------------------------------
     # Ruby-style truthiness: `false` and `null` are falsey, everything else
     # (numbers, strings, arrays, objects, functions — including `0` and `""`) is
-    # truthy. Used by `?` guards and exposed to programs as @truthy / @falsey.
+    # truthy. Used by `?` guards and the `@and` / `@or` / `@not` built-ins.
     def truthy?(value)
       value != false && value != NULL
     end
