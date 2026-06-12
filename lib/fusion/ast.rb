@@ -46,8 +46,8 @@ module Fusion
     module Expression
       Lit       = TypedData.define(value: Value)                                                   # atom literal (incl NULL)
       ErrLit    = TypedData.define(payload: ->(v) { Expression === v || v.nil? })                   # !expr or bare ! (payload nil = !null)
-      ArrLit    = TypedData.define(elems: ->(v) { v.is_a?(Array) && v.all? { |e| ArrayItem === e || ArraySpread === e } })
-      ObjLit    = TypedData.define(members: ->(v) {                                                 # [KeyValuePair|ObjectSpread], distinct fixed keys
+      ArrLit    = TypedData.define(items: ->(v) { v.is_a?(Array) && v.all? { |e| ArrayItem === e || ArraySpread === e } })
+      ObjLit    = TypedData.define(pairs: ->(v) {                                                   # [KeyValuePair|ObjectSpread], distinct fixed keys
         v.is_a?(Array) &&
           v.all? { |m| KeyValuePair === m || ObjectSpread === m } &&
           v.filter_map { |m| m.key if KeyValuePair === m }.then { |keys| keys.uniq.size == keys.size }
@@ -70,12 +70,12 @@ module Fusion
       PErr      = TypedData.define(inner: Pattern)                                                  # ! or !pat ; inner=PWild matches any error
       PBind     = TypedData.define(name: Identifier)                                                # binds
       PWild     = TypedData.define(dummy: NilClass)                                                 # _
-      PArr      = TypedData.define(elems: ->(v) {                                                   # [PatternItem|PatternRest], at most one rest
+      PArr      = TypedData.define(items: ->(v) {                                                   # [PatternItem|PatternRest], at most one rest
         v.is_a?(Array) &&
           v.all? { |e| PatternItem === e || PatternRest === e } &&
           v.count { |e| PatternRest === e } <= 1
       })
-      PObj      = TypedData.define(members: ->(v) {                                                 # [PatternPair|PatternRest], one rest, distinct keys
+      PObj      = TypedData.define(pairs: ->(v) {                                                   # [PatternPair|PatternRest], one rest, distinct keys
         v.is_a?(Array) &&
           v.all? { |m| PatternPair === m || PatternRest === m } &&
           v.count { |m| PatternRest === m } <= 1 &&

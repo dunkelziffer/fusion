@@ -131,44 +131,44 @@ module Fusion
 
     def parse_array
       expect(:lbracket)
-      elems = []
+      items = []
       until at?(:rbracket)
         if at?(:spread)
           advance
-          elems << ArraySpread.new(value: parse_expr)
+          items << ArraySpread.new(value: parse_expr)
         else
-          elems << ArrayItem.new(value: parse_expr)
+          items << ArrayItem.new(value: parse_expr)
         end
         break unless at?(:comma)
         advance
       end
       expect(:rbracket)
-      Expression::ArrLit.new(elems: elems)
+      Expression::ArrLit.new(items: items)
     end
 
     # Fixed keys must be distinct (the ObjLit data rule); a repeat is a clean
     # syntax_error. Keys arriving via `...spread` are dynamic and not checked.
     def parse_object
       expect(:lbrace)
-      members = []
+      pairs = []
       keys = []
       until at?(:rbrace)
         if at?(:spread)
           advance
-          members << ObjectSpread.new(value: parse_expr)
+          pairs << ObjectSpread.new(value: parse_expr)
         else
           key_tok = expect(:string)
           key = key_tok.value
           raise ParseError, "duplicate key #{key.inspect} (at #{key_tok.pos})" if keys.include?(key)
           keys << key
           expect(:colon)
-          members << KeyValuePair.new(key: key, value: parse_expr)
+          pairs << KeyValuePair.new(key: key, value: parse_expr)
         end
         break unless at?(:comma)
         advance
       end
       expect(:rbrace)
-      Expression::ObjLit.new(members: members)
+      Expression::ObjLit.new(pairs: pairs)
     end
 
     # A "(" begins a grouped expression, a function literal, or — when empty —
@@ -295,24 +295,24 @@ module Fusion
     # "at most one rest" is enforced by the shape of the loop.
     def parse_arraypat
       expect(:lbracket)
-      elems = []
+      items = []
       until at?(:rbracket)
         if at?(:spread)
-          elems << parse_pattern_rest
+          items << parse_pattern_rest
           while at?(:comma)
             advance
             break if at?(:rbracket) # trailing comma
             raise ParseError, "a pattern may contain at most one `...rest` (at #{peek.pos})" if at?(:spread)
-            elems << PatternItem.new(pattern: parse_guardedpat)
+            items << PatternItem.new(pattern: parse_guardedpat)
           end
           break
         end
-        elems << PatternItem.new(pattern: parse_guardedpat)
+        items << PatternItem.new(pattern: parse_guardedpat)
         break unless at?(:comma)
         advance
       end
       expect(:rbracket)
-      Pattern::PArr.new(elems: elems)
+      Pattern::PArr.new(items: items)
     end
 
     # p_object (reference.md §2.5). Leading pairs up to an optional single
@@ -320,11 +320,11 @@ module Fusion
     # must be distinct (the PObj data rule); a repeat is a clean syntax_error.
     def parse_objectpat
       expect(:lbrace)
-      members = []
+      pairs = []
       keys = []
       until at?(:rbrace)
         if at?(:spread)
-          members << parse_pattern_rest
+          pairs << parse_pattern_rest
           advance if at?(:comma) && peek(1)&.type == :rbrace # trailing comma
           unless at?(:rbrace)
             raise ParseError, "in an object pattern, `...rest` must come last (at #{peek.pos})"
@@ -335,12 +335,12 @@ module Fusion
         pair = parse_pattern_pair
         raise ParseError, "duplicate key #{pair.key.inspect} (at #{key_pos})" if keys.include?(pair.key)
         keys << pair.key
-        members << pair
+        pairs << pair
         break unless at?(:comma)
         advance
       end
       expect(:rbrace)
-      Pattern::PObj.new(members: members)
+      Pattern::PObj.new(pairs: pairs)
     end
 
     # p_rest = "..." [ identifier ] — the single rest binder, shared by array and

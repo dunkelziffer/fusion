@@ -93,99 +93,89 @@ by the same rule.
 ### 2.5 Grammar (EBNF)
 
 ```ebnf
-file        = expr ;
+file           = expr ;
 
-expr        = pipe ;
-pipe        = prefix { "|" prefix } ;
-prefix      = "!" [ prefix ] | postfix ;            (* bare "!" -> !null *)
-postfix     = primary { "." identifier | "[" expr "]" } ;
-primary     = atom | array | object | function | identifier | fileref | "(" expr ")" ;
+expr           = pipe ;
+pipe           = prefix { "|" prefix } ;
+prefix         = "!" [ prefix ] | postfix ;            (* bare "!" -> !null *)
+postfix        = primary { "." identifier | "[" expr "]" } ;
+primary        = atom | array | object | function | identifier | fileref | "(" expr ")" ;
 
-fileref     = "@" [ refpath ] ;                     (* bare "@" = current file *)
-refpath     = { "../" } segment { "/" segment } ;   (* ".fsn" implied *)
-segment     = identifier ;
+identifier     = letter { letter | digit | "_" } ;
 
-atom        = "null" | "true" | "false" | number | string ;
-                                                    (* errors are `!`+payload (see prefix) *)
-array       = "[" [ elem { "," elem } [ "," ] ] "]" ;
-elem        = expr | spread ;
-spread      = "..." expr ;
-object      = "{" [ member { "," member } [ "," ] ] "}" ;
-member      = string ":" expr | spread ;
+atom           = "null" | "true" | "false" | number | string ;
+number         = int_lit | float_lit ;
+int_lit        = [ "-" ] digit { digit } ;
+float_lit      = int_lit "." digit { digit } [ exp ] | int_lit exp ;
+exp            = ("e" | "E") [ "+" | "-" ] digit { digit } ;
+string         = '"' { char | escape } '"' ;           (* char excludes raw newline; use \n *)
 
-function    = "(" [ clause { "," clause } [ "," ] ] ")" ;   (* "()" is the empty function — matches nothing *)
-clause      = pattern "=>" expr ;
+array          = "[" [ item { "," item } [ "," ] ] "]" ;
+item           = expr | spread ;
+object         = "{" [ pair { "," pair } [ "," ] ] "}" ;
+pair           = string ":" expr | spread ;
+spread         = "..." expr ;
+
+function       = "(" [ clause { "," clause } [ "," ] ] ")" ;   (* "()" is the empty function *)
+clause         = pattern "=>" expr ;
+
+fileref        = "@" [ refpath ] ;                     (* bare "@" = current file *)
+refpath        = { "../" } segment { "/" segment } ;   (* ".fsn" implied *)
+segment        = identifier ;
 
 pattern        = p_error | p_guarded ;
-p_error        = "!" | "!" p_guarded ;              (* bare "!" matches any error, binds nothing *)
+p_error        = "!" | "!" p_guarded ;                 (* bare "!" matches any error, binds nothing *)
 p_guarded      = p_core [ "?" predicate ] ;
-predicate      = pipe ;                             (* a `|` chain of functions; the matched value flows in *)
+predicate      = pipe ;                                (* a `|` chain of functions; the matched value flows in *)
 p_core         = p_literal | p_bind | p_wildcard | p_array | p_object ;
 p_literal      = atom ;
 p_wildcard     = "_" ;
 p_bind         = identifier ;
 
-(* A pattern's array/object splits into two arms — one with a "..." rest, one    *)
-(* without — so "at most one rest" is structural, not a side-condition.          *)
-p_array        = "[" p_fixed_items | p_rest_items "]" ;
+p_array        = "[" ( p_fixed_items | p_rest_items ) "]" ;
 p_fixed_items  = [ p_items [ "," ] ] ;
 p_rest_items   = [ p_items "," ] p_rest [ "," p_items ] [ "," ] ;
 p_items        = p_item { "," p_item } ;
 p_item         = p_guarded ;
 
-p_object       = "{" p_fixed_pairs | p_rest_pairs "}" ;
+p_object       = "{" ( p_fixed_pairs | p_rest_pairs ) "}" ;
 p_fixed_pairs  = [ p_pairs [ "," ] ] ;
-p_rest_pairs   = [ p_pairs "," ] p_rest [ "," ] ;   (* rest is last; only a trailing comma may follow *)
+p_rest_pairs   = [ p_pairs "," ] p_rest [ "," ] ;
 p_pairs        = p_pair { "," p_pair } ;
 p_pair         = string ":" p_guarded ;
 
 p_rest         = "..." [ identifier ] ;
 
-identifier  = letter { letter | digit | "_" } ;
-number      = int_lit | float_lit ;
-int_lit     = [ "-" ] digit { digit } ;
-float_lit   = int_lit "." digit { digit } [ exp ] | int_lit exp ;
-exp         = ("e" | "E") [ "+" | "-" ] digit { digit } ;
-string      = '"' { char | escape } '"' ;       (* char excludes raw newline; use \n *)
 ```
 
-A context-sensitive rule the grammar cannot express: an object — literal or
-pattern — may not repeat a fixed key (`{"a": …, "a": …}` is a `syntax_error`).
-Keys arriving through `...spread` / `...rest` are dynamic and not checked.
+### 2.6 Context-sensitive rules the grammar cannot express
+
+Object literals and object patterns may not repeat a fixed key. `{"a": …, "a": …}`
+is a `syntax_error`. Keys arriving through `...spread` / `...rest` are dynamic and
+not checked.
 
 ---
 
 ## 3. Functions and application
 
-A function is an ordered list of clauses, possibly empty: `()` is the empty
-function, with no clauses. Applying a function to a value `v`:
-
-1. If the function value itself is an error (e.g. piping into an unresolved name),
-   that error is the result.
-2. Otherwise clauses are tried in order. The first clause whose pattern matches
-   `v` produces the result, evaluated with that clause's bindings in scope.
-3. If a `?` predicate evaluates to an error during matching, that error becomes
-   the function's result; no further clauses are tried (see §6.4).
-4. **If no clause matches:** the result is `v` itself when `v` is an error
-   (propagation — an unmatched error is never silently swallowed), and `null`
-   otherwise (the lenient default).
-
-The empty function `()` has no clause to match, so rule 4 always applies: `v | ()`
-is `null` for any normal `v` and propagates any error.
-
-A consequence of rule 4: a function with error clauses that only match *some*
-shapes of error (e.g. `(!42 => "got 42", _ => "ok")`) still propagates any
-other-shaped error it receives — `!"oops"` is not caught by `!42`, the `_`
-clause rejects errors, no clause matches, so `!"oops"` propagates. To handle
-"any unrecognized error" you must add a catch-all error clause: `!` (or
-equivalently `!_`) for "catch any error, ignore the payload"; `!msg` to bind
-the payload.
+A function is an ordered list of clauses `pattern => expression`. The literal `()`
+is the empty function, with no clauses.
 
 Functions take exactly one argument. Multiple arguments are passed as an array or
-object. Currying is done by returning a function: `(x => (y => [x, y] | @add))`.
+object.
+
+Applying a function to a value (`value | function`):
+1. Clauses are tried in order. The first clause whose pattern matches `value`
+   produces the result, evaluated with that clause's bindings in scope.
+2. If a `?` predicate evaluates to an error during matching, that error becomes
+   the function's result; no further clauses are tried (see §6.4).
+3. If no clause matches:
+   - Unmatched errors propagate.
+   - For unmatched regular values the function returns `null`.
 
 Functions are values: they may be elements of arrays, values of object keys, results
-of clauses, and arguments to other functions.
+of clauses, and arguments to other functions. However, they may not cross the CLI
+boundary (see §9.3).
 
 ---
 
@@ -193,17 +183,17 @@ of clauses, and arguments to other functions.
 
 A pattern both tests structure and extracts parts. Pattern forms:
 
-| Form                                       | Matches                                   | Binds                              |
-| ------------------------------------------ | ----------------------------------------- | ---------------------------------- |
-| literal (`42`, `"x"`, `true`, `null`)      | exactly that value                        | nothing                            |
-| `_` (wildcard)                             | anything **except** an error              | nothing                            |
-| identifier (`a`)                           | anything **except** an error              | the value, under that name         |
-| Fixed size arrays, e.g. `[x_1, x_2]`       | array of matching length, elementwise     | each `x_i` binds                   |
-| Variably arrays, e.g. `[p, ...rest]`       | array with ≥ fixed elements               | `rest` = remaining elements        |
-| Fixed member objects, e.g. `{"a": p}`      | object whose keys are **exactly** `a`     | as `p` binds                       |
+| Form                                       | Matches                                    | Binds                              |
+| ------------------------------------------ | ------------------------------------------ | ---------------------------------- |
+| literal (`42`, `"x"`, `true`, `null`)      | exactly that value                         | nothing                            |
+| `_` (wildcard)                             | anything **except** an error               | nothing                            |
+| identifier (`a`)                           | anything **except** an error               | the value, under that name         |
+| Fixed size arrays, e.g. `[x_1, x_2]`       | array of matching length, elementwise      | each `x_i` binds                   |
+| Variable arrays, e.g. `[p, ...rest]`       | array with ≥ fixed elements                | `rest` = remaining elements        |
+| Fixed member objects, e.g. `{"a": p}`      | object whose keys are **exactly** `a`      | as `p` binds                       |
 | Variable objects, e.g. `{"a": p, ...rest}` | object having key `a` (extra keys allowed) | `rest` = unmatched key/value pairs |
-| `p_core ? pred`                            | `p_core` matches **and** pred is `true`   | as `p_core` binds                  |
-| `!`, `!_`, `!pat`                          | an error; `!pat` destructures the payload | as `pat` binds                     |
+| `p_core ? pred`                            | `p_core` matches **and** pred is `true`    | as `p_core` binds                  |
+| `!`, `!_`, `!pat`                          | an error; `!pat` destructures the payload  | as `pat` binds                     |
 
 Rules:
 
@@ -230,9 +220,9 @@ Rules:
   of the array.
 - In an object pattern it must be the last member and captures all keys not explicitly matched.
 - A bare `...` with no name matches without binding.
-- An object pattern is **closed** unless it carries a `...rest`: without one it matches only
-  an object whose keys are *exactly* the named keys. A `...rest` (named or bare `...`) opens
-  it — extra keys are then allowed, and a named rest captures them.
+- An object pattern is **open** if it carries a `...rest` (named or bare `...`). Otherwise
+  it is **closed**. A **closed** object pattern matches only objects whose keys are *exactly*
+  the named keys. An **open** object pattern also matches objects with additional keys.
 
 ---
 

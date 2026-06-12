@@ -204,15 +204,15 @@ module Fusion
     def eval_array(node, env)
       out = []
 
-      node.elems.each do |elem|
-        value = eval_expr(elem.value, env)
+      node.items.each do |item|
+        value = eval_expr(item.value, env)
 
         if value.is_a?(ErrorVal)
           # Propagate errors
           return value
         end
 
-        case elem
+        case item
         when ArrayItem
           out.append(value)
         when ArraySpread
@@ -222,7 +222,7 @@ module Fusion
             return ErrorVal.internal(kind: "type_error", location: code_location(env), operation: "[...] array spread", input: value, message: "expected an array")
           end
         else
-          raise Unreachable, "Unknown array element #{elem.class}"
+          raise Unreachable, "Unknown array item #{item.class}"
         end
       end
 
@@ -232,17 +232,17 @@ module Fusion
     def eval_object(node, env)
       out = {}
 
-      node.members.each do |member|
-        value = eval_expr(member.value, env)
+      node.pairs.each do |pair|
+        value = eval_expr(pair.value, env)
 
         if value.is_a?(ErrorVal)
           # Propagate errors
           return value
         end
 
-        case member
+        case pair
         when KeyValuePair
-          out[member.key] = value
+          out[pair.key] = value
         when ObjectSpread
           if value.is_a?(Hash)
             out.merge!(value)
@@ -250,7 +250,7 @@ module Fusion
             return ErrorVal.internal(kind: "type_error", location: code_location(env), operation: "{...} object spread", input: value, message: "expected an object")
           end
         else
-          raise Unreachable, "Unknown object member #{member.class}"
+          raise Unreachable, "Unknown object pair #{pair.class}"
         end
       end
 
@@ -456,34 +456,34 @@ module Fusion
     def match_array(pattern, value, env)
       return false unless value.is_a?(Array)
 
-      elems = pattern.elems
-      rest_index = elems.index { |e| e.is_a?(PatternRest) }
+      items = pattern.items
+      rest_index = items.index { |e| e.is_a?(PatternRest) }
 
       if rest_index.nil?
-        return false unless value.length == elems.length
+        return false unless value.length == items.length
 
-        elems.each_with_index do |elem, i|
-          r = match(elem.pattern, value[i], env)
+        items.each_with_index do |item, i|
+          r = match(item.pattern, value[i], env)
           return r if r.is_a?(ErrorVal)
           return false unless r
         end
         true
       else
-        before = elems[0...rest_index]
-        after  = elems[(rest_index + 1)..]
+        before = items[0...rest_index]
+        after  = items[(rest_index + 1)..]
         return false if value.length < before.length + after.length
-        before.each_with_index do |elem, i|
-          r = match(elem.pattern, value[i], env)
+        before.each_with_index do |item, i|
+          r = match(item.pattern, value[i], env)
           return r if r.is_a?(ErrorVal)
           return false unless r
         end
-        after.each_with_index do |elem, k|
+        after.each_with_index do |item, k|
           vi = value.length - after.length + k
-          r = match(elem.pattern, value[vi], env)
+          r = match(item.pattern, value[vi], env)
           return r if r.is_a?(ErrorVal)
           return false unless r
         end
-        rest_name = elems[rest_index].name
+        rest_name = items[rest_index].name
         if rest_name
           mid = value[before.length...(value.length - after.length)]
           env.bind(rest_name, mid)
@@ -497,18 +497,18 @@ module Fusion
 
       matched_keys = []
       rest_name = :__none__
-      pattern.members.each do |member|
-        case member
+      pattern.pairs.each do |pair|
+        case pair
         when PatternRest
-          rest_name = member.name # may be nil (ignore) or a string
+          rest_name = pair.name # may be nil (ignore) or a string
         when PatternPair
-          return false unless value.key?(member.key)
-          r = match(member.pattern, value[member.key], env)
+          return false unless value.key?(pair.key)
+          r = match(pair.pattern, value[pair.key], env)
           return r if r.is_a?(ErrorVal)
           return false unless r
-          matched_keys << member.key
+          matched_keys << pair.key
         else
-          raise Unreachable, "Unknown object pattern member #{member.class}"
+          raise Unreachable, "Unknown object pattern pair #{pair.class}"
         end
       end
       case rest_name
