@@ -30,7 +30,7 @@ module Fusion
       # returns a runtime value
       def convert(ruby_value)
         case ruby_value
-        when nil then Interpreter::NULL
+        when nil then NULL
         when Array then ruby_value.map { |item| convert(item) }
         when Hash then ruby_value.transform_values { |value| convert(value) }
         else ruby_value

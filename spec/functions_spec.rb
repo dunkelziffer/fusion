@@ -15,4 +15,20 @@ RSpec.describe "functions" do
       .code("(pair => pair[0] | (n => (m => [n,m] | @add)) | (g => pair[1] | g))")
       .out("✅", "15")
   end
+
+  describe "the empty function ()" do
+    it "matches nothing, so a normal input becomes null" do
+      expect_pipe
+        .in("✅", "5")
+        .code("()")
+        .out("✅", "null")
+    end
+
+    it "propagates an error input" do
+      expect_pipe
+        .in("❌", '"boom"')
+        .code("()")
+        .out("❌", '"boom"')
+    end
+  end
 end

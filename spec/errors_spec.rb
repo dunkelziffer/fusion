@@ -120,7 +120,7 @@ RSpec.describe "payloaded errors" do
     it "destructures an object payload with !{\"code\":c}" do
       expect_pipe
         .in("✅", "null")
-        .code('(_ => !{"code":"X","msg":"hi"} | (!{"code":c} => c))')
+        .code('(_ => !{"code":"X","msg":"hi"} | (!{"code":c, ...} => c))')
         .out("✅", '"X"')
     end
   end

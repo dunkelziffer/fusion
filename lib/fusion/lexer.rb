@@ -6,7 +6,7 @@
 # Output: Array<Token>
 
 require_relative "token"
-require_relative "interpreter/null"
+require_relative "null"
 
 module Fusion
   class Lexer
@@ -43,20 +43,20 @@ module Fusion
       skip_trivia
       start = @i
       c = peek
-      return Token.new(:eof, nil, start) if c.nil?
+      return Token.new(type: :eof, value: nil, pos: start) if c.nil?
 
       # "=>" and "..." handled specially ("#" line comments handled in skip_trivia)
       if c == "=" && peek(1) == ">"
         @i += 2
-        return Token.new(:arrow, "=>", start)
+        return Token.new(type: :arrow, value: "=>", pos: start)
       end
       if c == "." && peek(1) == "." && peek(2) == "."
         @i += 3
-        return Token.new(:spread, "...", start)
+        return Token.new(type: :spread, value: "...", pos: start)
       end
       if c == "!"
         @i += 1
-        return Token.new(:bang, "!", start)
+        return Token.new(type: :bang, value: "!", pos: start)
       end
       if c == '"'
         return lex_string(start)
@@ -69,7 +69,7 @@ module Fusion
       end
       if (type = PUNCT[c])
         @i += 1
-        return Token.new(type, c, start)
+        return Token.new(type: type, value: c, pos: start)
       end
       raise ParseError, "Unexpected character #{c.inspect} at #{start}"
     end
@@ -102,7 +102,7 @@ module Fusion
       while (c = peek)
         if c == '"'
           @i += 1
-          return Token.new(:string, buf, start)
+          return Token.new(type: :string, value: buf, pos: start)
         elsif c == "\\"
           @i += 1
           e = peek
@@ -159,7 +159,7 @@ module Fusion
       text = @src[@i...j]
       @i = j
       val = is_float ? text.to_f : text.to_i
-      Token.new(:number, val, start)
+      Token.new(type: :number, value: val, pos: start)
     end
 
     def lex_word(start)
@@ -168,10 +168,10 @@ module Fusion
       text = @src[@i...j]
       @i = j
       case text
-      when "true"  then Token.new(:true_kw, true, start)
-      when "false" then Token.new(:false_kw, false, start)
-      when "null"  then Token.new(:null_kw, Interpreter::NULL, start)
-      else Token.new(:ident, text, start)
+      when "true"  then Token.new(type: :true_kw, value: true, pos: start)
+      when "false" then Token.new(type: :false_kw, value: false, pos: start)
+      when "null"  then Token.new(type: :null_kw, value: NULL, pos: start)
+      else Token.new(type: :ident, value: text, pos: start)
       end
     end
 

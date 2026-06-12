@@ -41,6 +41,29 @@ RSpec.describe "pattern matching" do
     end
   end
 
+  describe "object patterns are closed without a rest" do
+    it "matches when the keys are exactly the named ones" do
+      expect_pipe
+        .in("✅", '{"a":1}')
+        .code('({"a": x} => x)')
+        .out("✅", "1")
+    end
+
+    it "does not match when a superfluous key is present" do
+      expect_pipe
+        .in("✅", '{"a":1,"b":2}')
+        .code('({"a": x} => x)')
+        .out("✅", "null")
+    end
+
+    it "a bare ... reopens it to ignore extra keys" do
+      expect_pipe
+        .in("✅", '{"a":1,"b":2}')
+        .code('({"a": x, ...} => x)')
+        .out("✅", "1")
+    end
+  end
+
   describe "duplicate binders" do
     it "rejects a repeated binder in an array pattern" do
       expect_pipe
@@ -114,6 +137,54 @@ RSpec.describe "pattern matching" do
         .in("✅", "[1,2]")
         .code("([a, b ? a] => \"matched\")")
         .out("❌", '{"kind":"binding_error","location":"code <inline>","operation":"reading identifier a","input":"a","message":"unbound identifier"}')
+    end
+
+    it "matches on any truthy predicate result, not only true" do
+      # The predicate returns 1 (truthy), so the guard holds.
+      expect_pipe
+        .in("✅", "0")
+        .code('(n ? (_ => 1) => "yes", _ => "no")')
+        .out("✅", '"yes"')
+    end
+
+    it "fails the guard when the predicate yields null or false" do
+      expect_pipe
+        .in("✅", "7")
+        .code('(n ? (_ => null) => "yes", _ => "no")')
+        .out("✅", '"no"')
+    end
+
+    it "chains functions in the predicate: a ? b | c tests a | b | c" do
+      # 5 | @not = false, false | @not = true → truthy → matches.
+      expect_pipe
+        .in("✅", "5")
+        .code('(x ? @not | @not => "even-negations", _ => "no")')
+        .out("✅", '"even-negations"')
+    end
+
+    describe "an error bubbles only at the end of the predicate chain" do
+      # The first stage `(_ => !"boom")` always raises; what matters is whether a
+      # later stage catches it before the chain ends.
+      it "matches when a later stage catches the error and returns truthy" do
+        expect_pipe
+          .in("✅", "5")
+          .code('(n ? (_ => !"boom") | (!x => true) => "matched", _ => "no match")')
+          .out("✅", '"matched"')
+      end
+
+      it "fails without bubbling when a later stage catches it and returns falsey" do
+        expect_pipe
+          .in("✅", "5")
+          .code('(n ? (_ => !"boom") | (!x => false) => "matched", _ => "no match")')
+          .out("✅", '"no match"')
+      end
+
+      it "bubbles when no later stage catches the error" do
+        expect_pipe
+          .in("✅", "5")
+          .code('(n ? (_ => !"boom") | @Integer => "matched", _ => "no match")')
+          .out("❌", '"boom"')
+      end
     end
   end
 end

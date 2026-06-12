@@ -19,7 +19,7 @@
 #   func   -> Func (closure over an Env)
 
 require_relative "ast"
-require_relative "interpreter/null"
+require_relative "null"
 require_relative "interpreter/error_val"
 require_relative "interpreter/func"
 require_relative "interpreter/native_func"
@@ -204,22 +204,25 @@ module Fusion
     def eval_array(node, env)
       out = []
 
-      node.elems.each do |kind, expr|
-        value = eval_expr(expr, env)
+      node.items.each do |item|
+        value = eval_expr(item.value, env)
 
         if value.is_a?(ErrorVal)
           # Propagate errors
           return value
         end
 
-        if kind == :spread
+        case item
+        when ArrayItem
+          out.append(value)
+        when ArraySpread
           if value.is_a?(Array)
             out.concat(value)
           else
             return ErrorVal.internal(kind: "type_error", location: code_location(env), operation: "[...] array spread", input: value, message: "expected an array")
           end
         else
-          out.append(value)
+          raise Unreachable, "Unknown array item #{item.class}"
         end
       end
 
@@ -229,30 +232,25 @@ module Fusion
     def eval_object(node, env)
       out = {}
 
-      node.members.each do |m|
-        if m[0] == :spread
-          value = eval_expr(m[1], env)
+      node.pairs.each do |pair|
+        value = eval_expr(pair.value, env)
 
-          if value.is_a?(ErrorVal)
-            # Propagate errors
-            return value
-          end
+        if value.is_a?(ErrorVal)
+          # Propagate errors
+          return value
+        end
 
+        case pair
+        when KeyValuePair
+          out[pair.key] = value
+        when ObjectSpread
           if value.is_a?(Hash)
             out.merge!(value)
           else
             return ErrorVal.internal(kind: "type_error", location: code_location(env), operation: "{...} object spread", input: value, message: "expected an object")
           end
         else
-          _, key, expr = m
-          value = eval_expr(expr, env)
-
-          if value.is_a?(ErrorVal)
-            # Propagate errors
-            return value
-          end
-
-          out[key] = value
+          raise Unreachable, "Unknown object pair #{pair.class}"
         end
       end
 
@@ -344,14 +342,14 @@ module Fusion
           ErrorVal.internal(kind: kind, location: "builtin #{f.name}", operation: f.name, input: v, message: err.message)
         end
       elsif f.is_a?(Func)
-        f.clauses.each do |pattern, body|
+        f.clauses.each do |clause|
           # Bindings are inserted directly into a fresh child env as the pattern
           # matches; a duplicate binder (e.g. `[a, a]`) trips Env#bind, which we
           # convert to a binding_error here. A failed/abandoned clause just drops
           # its env, so partial bindings never leak.
           clause_env = f.env.child
           m = begin
-            match(pattern, v, clause_env)
+            match(clause.pattern, v, clause_env)
           rescue Env::DuplicateBinding => e
             return ErrorVal.internal(kind: "binding_error", location: code_location(clause_env), operation: "binding identifier #{e.name}", input: e.name, message: "identifier already bound")
           end
@@ -362,7 +360,7 @@ module Fusion
             return m
           elsif m
             # Successful match
-            return eval_expr(body, clause_env)
+            return eval_expr(clause.body, clause_env)
           else
             # Try next pattern
             next
@@ -374,6 +372,20 @@ module Fusion
         v.is_a?(ErrorVal) ? v : NULL
       else
         ErrorVal.internal(kind: "type_error", location: location, operation: "|", input: [v, f], message: "applied a non-function")
+      end
+    end
+
+    # Run a guard predicate against the matched value. The predicate is a `|`
+    # pipeline of functions; the value enters at the leftmost stage and the result
+    # flows through each stage, so `a ? b | c` evaluates `a | b | c`. A non-pipe
+    # predicate is just the single-stage case. #apply propagates any ErrorVal in
+    # either the function or the threaded value position.
+    def apply_predicate(pred_expr, value, env)
+      if pred_expr.is_a?(Expression::Pipe)
+        upstream = apply_predicate(pred_expr.left, value, env)
+        apply(eval_expr(pred_expr.right, env), upstream, code_location(env))
+      else
+        apply(eval_expr(pred_expr, env), value, code_location(env))
       end
     end
 
@@ -421,23 +433,19 @@ module Fusion
           # matching unchanged, so its parent is always that lexical env.
           lexical_env = env.parent
 
-          pred = eval_expr(pattern.pred_expr, lexical_env)
-
-          if pred.is_a?(ErrorVal)
-            # The predicate expression itself errored, e.g. an unresolved @-reference.
-            return pred
-          end
-          # The predicate sees whatever value reached this PGuard, which is
-          # already the right value because `!pat ? pred` parses as
-          # PErr(PGuard(pat, pred)) — by the time PGuard runs, the value is
-          # already the payload.
-          predicate_result = apply(pred, value, code_location(lexical_env))
+          # The predicate is a pipeline fed the matched value: `a ? b | c` tests
+          # `a | b | c`. The value reaching this PGuard is already correct, since
+          # `!pat ? pred` parses as PErr(PGuard(pat, pred)) — by now it is the
+          # payload. #apply_predicate threads it through each `|` stage.
+          predicate_result = apply_predicate(pattern.pred_expr, value, lexical_env)
           if predicate_result.is_a?(ErrorVal)
-            # Predicate raised during application, propagate error
+            # An unresolved @-reference, or an error raised while applying the
+            # predicate, becomes the clause's result.
             return predicate_result
           else
-            # Predicate clause matches, if predicate evaluates to "true"
-            predicate_result == true
+            # Ruby-style truthiness: the clause matches unless the predicate
+            # yields `false` or `null`.
+            truthy?(predicate_result)
           end
         end
       else
@@ -448,34 +456,34 @@ module Fusion
     def match_array(pattern, value, env)
       return false unless value.is_a?(Array)
 
-      elems = pattern.elems
-      rest_index = elems.index { |e| e[0] == :rest }
+      items = pattern.items
+      rest_index = items.index { |e| e.is_a?(PatternRest) }
 
       if rest_index.nil?
-        return false unless value.length == elems.length
+        return false unless value.length == items.length
 
-        elems.each_with_index do |(_, p), i|
-          r = match(p, value[i], env)
+        items.each_with_index do |item, i|
+          r = match(item.pattern, value[i], env)
           return r if r.is_a?(ErrorVal)
           return false unless r
         end
         true
       else
-        before = elems[0...rest_index]
-        after  = elems[(rest_index + 1)..]
+        before = items[0...rest_index]
+        after  = items[(rest_index + 1)..]
         return false if value.length < before.length + after.length
-        before.each_with_index do |(_, p), i|
-          r = match(p, value[i], env)
+        before.each_with_index do |item, i|
+          r = match(item.pattern, value[i], env)
           return r if r.is_a?(ErrorVal)
           return false unless r
         end
-        after.each_with_index do |(_, p), k|
+        after.each_with_index do |item, k|
           vi = value.length - after.length + k
-          r = match(p, value[vi], env)
+          r = match(item.pattern, value[vi], env)
           return r if r.is_a?(ErrorVal)
           return false unless r
         end
-        rest_name = elems[rest_index][1]
+        rest_name = items[rest_index].name
         if rest_name
           mid = value[before.length...(value.length - after.length)]
           env.bind(rest_name, mid)
@@ -489,26 +497,40 @@ module Fusion
 
       matched_keys = []
       rest_name = :__none__
-      pattern.members.each do |m|
-        if m[0] == :rest
-          rest_name = m[1] # may be nil (ignore) or a string
-        else
-          _, key, p = m
-          return false unless value.key?(key)
-          r = match(p, value[key], env)
+      pattern.pairs.each do |pair|
+        case pair
+        when PatternRest
+          rest_name = pair.name # may be nil (ignore) or a string
+        when PatternPair
+          return false unless value.key?(pair.key)
+          r = match(pair.pattern, value[pair.key], env)
           return r if r.is_a?(ErrorVal)
           return false unless r
-          matched_keys << key
+          matched_keys << pair.key
+        else
+          raise Unreachable, "Unknown object pattern pair #{pair.class}"
         end
       end
-      if rest_name != :__none__ && rest_name
-        remaining = value.reject { |k, _| matched_keys.include?(k) }
-        env.bind(rest_name, remaining)
+      case rest_name
+      when :__none__
+        # No `...rest`: the pattern is closed — a superfluous key means no match.
+        return false unless value.size == matched_keys.size
+      when nil
+        # Bare `...`: extra keys are allowed but bound to nothing.
+      else
+        env.bind(rest_name, value.reject { |k, _| matched_keys.include?(k) })
       end
       true
     end
 
     # ---- Equality & helpers ----------------------------------------------
+    # Ruby-style truthiness: `false` and `null` are falsey, everything else
+    # (numbers, strings, arrays, objects, functions — including `0` and `""`) is
+    # truthy. Used by `?` guards and the `@and` / `@or` / `@not` built-ins.
+    def truthy?(value)
+      value != false && value != NULL
+    end
+
     def deep_equal?(a, b)
       return true if a.equal?(b)
       return false if a.class != b.class

@@ -1,0 +1,4 @@
+(
+  [first, ..., last] => [first, last],
+  _ => !{ "message": "Requires an array with at least 2 elements!" }
+)

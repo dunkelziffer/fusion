@@ -37,7 +37,7 @@ module Fusion
       # Use "lenient: true" only for best-effort serialization of internal errors.
       def convert(runtime_value, lenient: false)
         case runtime_value
-        when Interpreter::NULL
+        when NULL
           nil
         when Float
           return runtime_value if runtime_value.finite?

@@ -137,6 +137,7 @@ Future work and open questions are tracked separately in our [Roadmap](./roadmap
 - 🧑 ✅ Every function takes exactly one argument and returns one value.
 - 🧑 ✅ A function literal is `(pattern => result, pattern => result, ...)`.
 - 🧑 ✅ Clauses are tried top to bottom; the first match wins.
+- 🧑 ✅ The clause list may be empty: `()` is the empty function (not an empty/invalid grouping).
 
 ### Alternatives
 
@@ -216,6 +217,7 @@ Future work and open questions are tracked separately in our [Roadmap](./roadmap
 - 🧑 ✅ Predicate functions double as a runtime type system: the built-in "types" (`Integer`, `String`, …) are ordinary predicate functions, so `a ? @Integer` matches only integers (inspired by the Ruby gem "literal").
 - 🔢 ✅ The `?` refinement may follow *any* pattern, not just a lone binder; the clause then matches iff the pattern matches structurally **and** the matched value piped into the predicate yields `true` (Claude offered a restrictive per-binder form vs. this permissive any-pattern form; the designer chose permissive).
 - 🧑 ✅ The predicate is any function.
+- 🧑 ✅ A predicate may be a `|` chain of functions, the matched value flowing in from the left: `a ? b | c` matches when `a` matches and `a | b | c` is truthy. The grammar's `predicate` is a full `pipe` (was a single `prefix`).
 
 ### Alternatives
 
@@ -223,12 +225,14 @@ Future work and open questions are tracked separately in our [Roadmap](./roadmap
 - 🤖 ❌ Typed pattern keywords (`n: int`).
 - 🤖 💭 A separate static type system.
 - 🤖 ❌ `if`-style guards with arbitrary boolean expressions.
+- 🤖 💭 Keep predicates single-function and compose via an inline `(x => x | b | c)`. Rejected: pure noise next to `b | c`.
 
 ### Pros
 
 - Unifies three things (structural matching, type checks, value guards) into one mechanism.
 - The "type system" is user-extensible with ordinary functions.
 - Nothing new to learn beyond `?`.
+- Predicates compose directly (`a ? @ends | @equals`) instead of requiring a wrapping function (`a ? (x => x | @ends | @equals)`).
 
 ### Cons
 
@@ -416,6 +420,50 @@ Future work and open questions are tracked separately in our [Roadmap](./roadmap
 
 - Slightly less expressive pattern language.
 - Invalid patterns will only raise an error as soon as a value actually matches. No static guarantees.
+
+---
+
+## 2.11 Stricter objects: unique keys, rest last, closed by default
+
+### Decisions
+
+- 🧑 ✅ A fixed object key may not repeat (in expressions and patterns). Keys arriving via `...spread` / `...rest` are dynamic and not checked.
+- 🧑 ✅ In an object pattern, `...rest` must come last.
+- 🧑 ✅ An object pattern without a `...rest` is *closed*. It matches only an object whose keys are *exactly* the pattern's
+
+### Alternatives
+
+- 🤖 💭 Last-write-wins for duplicate literal keys (JSON behavior). Rejected: silently dropping a written key hides mistakes.
+- 🧑 ⏪ Object patterns always open — extra keys ignored regardless of a rest. Superseded: it gave no way to assert "exactly these keys".
+
+### Pros
+
+- Duplicate keys and misplaced rests are caught statically with a precise message.
+- Closed matching regains full-shape matching, with `...` the explicit opt-in to extra keys — symmetric with arrays.
+
+### Cons
+
+- More verbose common case: ignoring extra keys now needs a trailing `...`.
+
+---
+
+## 2.12 Switching to Ruby's truthiness model
+
+### Decisions
+
+- 🧑 ✅ Truthiness is Ruby-style: every value is truthy except `false` and `null`. This applies to the `@and`/`@or`/`@not` built-ins and `?` predicates.
+
+### Alternatives
+
+- 🧑 ⏪ The builtins `@and`/`@or`/`@not` are strict and return a `type_error` for non booleans. Predicates match only on exactly `true`.
+
+### Pros
+
+- Booleans operations return `type_error`s less frequently and are more useful. A lot more functions work as predicates.
+
+### Cons
+
+- If you really wanted "strict booleans", you'd now need to build them yourselves.
 
 ---
 
