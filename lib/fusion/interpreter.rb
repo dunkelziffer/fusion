@@ -19,7 +19,7 @@
 #   func   -> Func (closure over an Env)
 
 require_relative "ast"
-require_relative "interpreter/null"
+require_relative "null"
 require_relative "interpreter/error_val"
 require_relative "interpreter/func"
 require_relative "interpreter/native_func"

@@ -7,7 +7,7 @@
 # - input of the parser
 
 require_relative "typed_data"
-require_relative "ast"
+require_relative "atom"
 
 module Fusion
   # type:  one of the lexer's token-type symbols (:number, :ident, :lparen, ...).
@@ -16,7 +16,7 @@ module Fusion
   # pos:   the token's source offset.
   Token = TypedData.define(
     type: Symbol,
-    value: ->(v) { AST::Value === v || v.nil? },
+    value: ->(v) { Atom === v || v.nil? },
     pos: Integer,
   )
 end

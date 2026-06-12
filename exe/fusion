@@ -43,7 +43,7 @@ rescue Exception => err # rubocop:disable Lint/RescueException
       kind: kind,
       location: "interpreter",
       operation: "running the program",
-      input: Fusion::Interpreter::NULL,
+      input: Fusion::NULL,
       message: message
     )
   )

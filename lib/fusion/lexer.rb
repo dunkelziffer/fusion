@@ -6,7 +6,7 @@
 # Output: Array<Token>
 
 require_relative "token"
-require_relative "interpreter/null"
+require_relative "null"
 
 module Fusion
   class Lexer
@@ -170,7 +170,7 @@ module Fusion
       case text
       when "true"  then Token.new(type: :true_kw, value: true, pos: start)
       when "false" then Token.new(type: :false_kw, value: false, pos: start)
-      when "null"  then Token.new(type: :null_kw, value: Interpreter::NULL, pos: start)
+      when "null"  then Token.new(type: :null_kw, value: NULL, pos: start)
       else Token.new(type: :ident, value: text, pos: start)
       end
     end
