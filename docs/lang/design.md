@@ -137,6 +137,7 @@ Future work and open questions are tracked separately in our [Roadmap](./roadmap
 - 🧑 ✅ Every function takes exactly one argument and returns one value.
 - 🧑 ✅ A function literal is `(pattern => result, pattern => result, ...)`.
 - 🧑 ✅ Clauses are tried top to bottom; the first match wins.
+- 🧑 ✅ The clause list may be empty: `()` is the empty function (not an empty/invalid grouping).
 
 ### Alternatives
 
@@ -216,6 +217,7 @@ Future work and open questions are tracked separately in our [Roadmap](./roadmap
 - 🧑 ✅ Predicate functions double as a runtime type system: the built-in "types" (`Integer`, `String`, …) are ordinary predicate functions, so `a ? @Integer` matches only integers (inspired by the Ruby gem "literal").
 - 🔢 ✅ The `?` refinement may follow *any* pattern, not just a lone binder; the clause then matches iff the pattern matches structurally **and** the matched value piped into the predicate yields `true` (Claude offered a restrictive per-binder form vs. this permissive any-pattern form; the designer chose permissive).
 - 🧑 ✅ The predicate is any function.
+- 🧑 ✅ A predicate may be a `|` chain of functions, the matched value flowing in from the left: `a ? b | c` matches when `a` matches and `a | b | c` is truthy. The grammar's `predicate` is a full `pipe` (was a single `prefix`).
 
 ### Alternatives
 
@@ -223,12 +225,14 @@ Future work and open questions are tracked separately in our [Roadmap](./roadmap
 - 🤖 ❌ Typed pattern keywords (`n: int`).
 - 🤖 💭 A separate static type system.
 - 🤖 ❌ `if`-style guards with arbitrary boolean expressions.
+- 🤖 💭 Keep predicates single-function and compose via an inline `(x => x | b | c)`. Rejected: pure noise next to `b | c`.
 
 ### Pros
 
 - Unifies three things (structural matching, type checks, value guards) into one mechanism.
 - The "type system" is user-extensible with ordinary functions.
 - Nothing new to learn beyond `?`.
+- Predicates compose directly (`a ? @ends | @equals`) instead of requiring a wrapping function (`a ? (x => x | @ends | @equals)`).
 
 ### Cons
 
@@ -419,115 +423,47 @@ Future work and open questions are tracked separately in our [Roadmap](./roadmap
 
 ---
 
-## 2.11 Object key uniqueness and pattern-rest placement
+## 2.11 Stricter objects: unique keys, rest last, closed by default
 
 ### Decisions
 
-- 🧑 ✅ A fixed object key may not repeat, in both literals (`{"a": 1, "a": 2}`) and patterns (`{"a": x, "a": y}`). A repeat is a `syntax_error`. Only explicit pairs are checked; keys arriving via `...spread` / `...rest` are dynamic and ignored.
-- 🧑 ✅ In an object pattern, `...rest` must be the last member. Object position is otherwise meaningless, so this is a syntactic-tidiness rule; the grammar had been looser than the long-standing prose, which already said "at the end".
-- 🤖 ✅ Both are rejected at parse time (clean `syntax_error`). The `ObjLit` / `PObj` `TypedData` constraints that also encode key-uniqueness stay unreachable safeguards.
+- 🧑 ✅ A fixed object key may not repeat (in expressions and patterns). Keys arriving via `...spread` / `...rest` are dynamic and not checked.
+- 🧑 ✅ In an object pattern, `...rest` must come last.
+- 🧑 ✅ An object pattern without a `...rest` is *closed*. It matches only an object whose keys are *exactly* the pattern's
 
 ### Alternatives
 
-- 🤖 💭 Last-write-wins for duplicate literal keys (JSON-parser behavior). Rejected: silently dropping a written key hides mistakes.
-- 🤖 💭 Allow object `...rest` in any position, as in arrays. Rejected: for an unordered map, position carries no meaning, so permitting it is only noise.
+- 🤖 💭 Last-write-wins for duplicate literal keys (JSON behavior). Rejected: silently dropping a written key hides mistakes.
+- 🧑 ⏪ Object patterns always open — extra keys ignored regardless of a rest. Superseded: it gave no way to assert "exactly these keys".
 
 ### Pros
 
-- Duplicate keys and misplaced rests are caught statically, with a precise message.
-- Duplicate-key is the structural sibling of §2.10's duplicate-*binder* rule (caught at runtime); keys, being static, are caught earlier.
+- Duplicate keys and misplaced rests are caught statically with a precise message.
+- Closed matching regains full-shape matching, with `...` the explicit opt-in to extra keys — symmetric with arrays.
 
 ### Cons
 
-- Two parse-time checks to maintain, each mirrored by an AST safeguard.
-- A program that previously parsed (`{"a": 1, "a": 2}`, or an object pattern with a non-final rest) is now rejected — a deliberate narrowing.
+- More verbose common case: ignoring extra keys now needs a trailing `...`.
 
 ---
 
-## 2.12 Object patterns are closed unless they carry a `...rest`
+## 2.12 Switching to Ruby's truthiness model
 
 ### Decisions
 
-- 🧑 ✅ An object pattern without a `...rest` matches only an object whose keys are *exactly* the pattern's keys — a superfluous key makes the match fail. A `...rest` (named, or bare `...`) reopens it: extra keys are then allowed, and a named rest captures them.
+- 🧑 ✅ Truthiness is Ruby-style: every value is truthy except `false` and `null`. This applies to the `@and`/`@or`/`@not` built-ins and `?` predicates.
 
 ### Alternatives
 
-- 🧑 ⏪ Object patterns are always open — extra keys are ignored whether or not a rest is present. The original behavior; superseded because it costs expressive power: there was no way to assert "an object with *exactly* these keys".
+- 🧑 ⏪ The builtins `@and`/`@or`/`@not` are strict and return a `type_error` for non booleans. Predicates match only on exactly `true`.
 
 ### Pros
 
-- Regains the ability to match an object's full shape, not just a lower bound on its keys.
-- `...rest` becomes the explicit opt-in to extra keys, symmetric with how it works in arrays.
+- Booleans operations return `type_error`s less frequently and are more useful. A lot more functions work as predicates.
 
 ### Cons
 
-- More verbose in the common case: ignoring extra keys now needs an explicit trailing `...`.
-
----
-
-## 2.13 The empty function `()`
-
-### Decisions
-
-- 🧑 ✅ `()` parses as the empty function (a clause list with zero clauses), not as an empty/invalid grouping. Applied to a value it matches nothing, so by §2.7 it yields `null` for any normal input and propagates any error.
-
-### Alternatives
-
-- 🤖 ⏪ `()` is a syntax error (an empty grouping `( )` has no expression). The original behavior; superseded because the empty clause list is a natural, useful value (a total "send to null, pass errors through").
-
-### Pros
-
-- Removes a special-case hole: a function literal is now any clause list, empty included, so `FuncLit` drops its "non-empty" constraint.
-- Gives a concise constant: `| ()` discards a normal value to `null` while preserving errors.
-
-### Cons
-
-- `()` no longer reads as "empty parentheses"; a reader must know it denotes the empty function.
-
----
-
-## 2.14 Predicate truthiness and chaining
-
-### Decisions
-
-- 🧑 ✅ A `?` predicate succeeds on any **truthy** result, not only `true`. Truthiness is Ruby-style: every value is truthy except `false` and `null` (so `0`, `""`, `[]` are truthy). The same notion drives the `@and` / `@or` / `@not` built-ins (see 2.15).
-- 🧑 ✅ A predicate may be a `|` chain of functions, with the matched value flowing in from the left: `a ? b | c` matches when `a` matches and `a | b | c` is truthy. The grammar's `predicate` is now a full `pipe` (was a single `prefix`).
-
-### Alternatives
-
-- 🧑 ⏪ A predicate matched only when it returned exactly `true`; every other value (truthy ones included) failed. Superseded — it forced predicates to be strictly boolean and made composition awkward.
-- 🤖 💭 Keep predicates single-function and compose via an inline `(x => x | b | c)`. Rejected: the wrapper is pure noise next to `b | c`.
-
-### Pros
-
-- Predicates compose directly: `a ? @sanitize | @not` reads as a pipeline.
-- Any function usable as a test works as a predicate, not only strict-boolean ones.
-
-### Cons
-
-- A predicate that accidentally returns a truthy non-boolean (e.g. a number) now matches where it previously failed — slightly more rope.
-
----
-
-## 2.15 `@and` / `@or` / `@not` judge truthiness; `@truthy` / `@falsey` dropped
-
-### Decisions
-
-- 🔢 ✅ `@and`, `@or`, `@not` operate on **truthiness** (the same Ruby-style test as `?` predicates — `false` and `null` are falsey, everything else truthy), not strict booleans, and each returns a boolean. So `null | @not` is `true` and `[true, 0] | @and` is `true`. They share the interpreter's `truthy?`.
-- 🧑 ✅ The stdlib `@truthy` / `@falsey` are removed as superfluous: `@not` *is* `@falsey`, and `@truthy` is `@not | @not`.
-
-### Alternatives
-
-- 🧑 ⏪ `@and`/`@or`/`@not` were strict-boolean (a non-boolean operand — including `null` — was a `type_error`), with `@truthy` / `@falsey` as the separate truthiness test. Superseded: with predicates already truthiness-based, two parallel notions of "boolean" was redundant, and a strict `@not` could not negate a `null`.
-
-### Pros
-
-- One notion of boolean across `?` predicates and the boolean built-ins.
-- `@not` handles `null` (and every value), so it composes in predicate chains without raising.
-
-### Cons
-
-- `@and`/`@or` no longer flag a mistyped non-boolean operand; a wrong-typed value is silently judged by its truthiness.
+- If you really wanted "strict booleans", you'd now need to build them yourselves.
 
 ---
 
