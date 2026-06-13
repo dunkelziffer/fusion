@@ -34,6 +34,38 @@ module Fusion
       Interpreter::ErrorVal.internal(kind: "syntax_error", location: location, operation: "parsing", input: src, message: err.message)
     end
 
+    # Parse one REPL entry — a statement (`identifier "=" expr`) or a bare
+    # expression — returning an AST::Statement::Assignment / AST::Expression, or, like
+    # parse_file, a standardized syntax_error value instead of ever raising. The
+    # REPL uses the error/non-error distinction to tell "keep editing" (didn't
+    # parse yet) from "evaluate now" (a complete statement or expression).
+    def self.parse_repl(src, location:)
+      toks = Lexer.new(src).tokens
+      p = new(toks)
+      entry = p.parse_repl_entry
+      p.expect(:eof)
+      entry
+    rescue ParseError => err
+      Interpreter::ErrorVal.internal(kind: "syntax_error", location: location, operation: "parsing", input: src, message: err.message)
+    end
+
+    # A leading `identifier =` marks a statement; anything else is an expression.
+    # (A bare identifier is itself a valid expression, so the `=` is the decider.)
+    def parse_repl_entry
+      if at?(:ident) && peek(1)&.type == :equals
+        parse_statement
+      else
+        parse_expr
+      end
+    end
+
+    # statement = identifier "=" expr   (REPL only; files contain one expr)
+    def parse_statement
+      name = expect(:ident).value
+      expect(:equals)
+      AST::Statement::Assignment.new(name: name, expression: parse_expr)
+    end
+
     def parse_expr
       parse_pipe
     end

@@ -42,7 +42,6 @@ pleasant to *write* in, not just to implement.
 
 ## 4. Runtime and tooling
 
-- **Streaming I/O** (NDJSON): map a program over a stream of JSON values.
 - **A faster implementation** once semantics are frozen.
 
 ## 5. Open semantic questions to settle

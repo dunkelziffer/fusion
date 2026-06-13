@@ -714,6 +714,12 @@ All access goes through `@`:
 
 ---
 
+## 4.4 CLI use cases (pipe/stream/repl) and input/output modes
+
+TODO
+
+---
+
 # 5. Misc
 
 ## 5.1 No operator sugar (deferred)

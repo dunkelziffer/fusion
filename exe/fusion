@@ -7,44 +7,24 @@
 #   echo '[1,2,3]' | fusion path/to/main.fsn
 #   fusion path/to/main.fsn '<json-input>'        # input as an argument
 #   fusion -e '(n => [n,2] | @multiply)' '21'     # inline program
+#   fusion --stream path/to/main.fsn              # NDJSON in, NDJSON out
+#   fusion --repl                                 # interactive expressions/statements
+#
+# Run `fusion --help` for the input/output modes (--input / --output / -!).
 
 require_relative "../lib/fusion"
 
-args = ARGV.dup
-inline = nil
-if args[0] == "-e"
-  inline = args[1]
-  program_path = nil
-  explicit_input = args[2]
-else
-  program_path = args[0]
-  explicit_input = args[1]
+if ARGV.intersect?(["--help", "-h"])
+  puts Fusion::CLI::Options::USAGE
+  exit 0
 end
 
-abort("usage: fusion <file.fsn> [json-input]   or   fusion -e '<src>' [json-input]") unless inline || program_path
-
-begin
-  function = Fusion::CLI.load(inline, program_path)
-  input = Fusion::CLI.read_input(explicit_input)
-  output = Fusion::CLI.apply(input, function)
-  Fusion::CLI.emit_output(output)
-rescue SystemExit
-  # Let exit/abort through untouched.
-  raise
-rescue Fusion::Unreachable
-  # If this internal safeguard was reached, it's a bug. Allowed to surface as a Ruby error.
-  raise
-rescue Exception => err # rubocop:disable Lint/RescueException
-  # Final safety net: SystemStackError and any other escaped Ruby error become a
-  # payloaded error rather than a raw backtrace on stderr.
-  kind, message = err.is_a?(SystemStackError) ? ["stack_error", "recursion too deep"] : ["type_error", err.message]
-  Fusion::CLI.emit_output(
-    Fusion::Interpreter::ErrorVal.internal(
-      kind: kind,
-      location: "interpreter",
-      operation: "running the program",
-      input: Fusion::NULL,
-      message: message
-    )
-  )
+options = begin
+  Fusion::CLI::Options.parse(ARGV)
+rescue Fusion::CLI::Options::UsageError => err
+  # A command-line misuse happens before the input/output contract begins, so
+  # it is plain text on stderr, not a payloaded error.
+  abort("fusion: #{err.message}\n\n#{Fusion::CLI::Options::USAGE}")
 end
+
+Fusion::CLI.run(options)
