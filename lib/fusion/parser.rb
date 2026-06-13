@@ -35,7 +35,7 @@ module Fusion
     end
 
     # Parse one REPL entry — a statement (`identifier "=" expr`) or a bare
-    # expression — returning an AST::Statement / AST::Expression, or, like
+    # expression — returning an AST::Statement::Assignment / AST::Expression, or, like
     # parse_file, a standardized syntax_error value instead of ever raising. The
     # REPL uses the error/non-error distinction to tell "keep editing" (didn't
     # parse yet) from "evaluate now" (a complete statement or expression).
@@ -63,7 +63,7 @@ module Fusion
     def parse_statement
       name = expect(:ident).value
       expect(:equals)
-      AST::Statement.new(name: name, expression: parse_expr)
+      AST::Statement::Assignment.new(name: name, expression: parse_expr)
     end
 
     def parse_expr

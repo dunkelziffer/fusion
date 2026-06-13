@@ -72,7 +72,7 @@ module Fusion
         return Serializer.render(entry) if entry.is_a?(Interpreter::ErrorVal)
 
         value = evaluate(entry)
-        if entry.is_a?(AST::Statement) && !value.is_a?(Interpreter::ErrorVal)
+        if entry.is_a?(AST::Statement::Assignment) && !value.is_a?(Interpreter::ErrorVal)
           @session_env.define(entry.name, value)
         end
         Serializer.render(value)
@@ -85,7 +85,7 @@ module Fusion
       # session survives it. A statement carries its expression; a bare
       # expression entry is the expression itself.
       def evaluate(entry)
-        expression = entry.is_a?(AST::Statement) ? entry.expression : entry
+        expression = entry.is_a?(AST::Statement::Assignment) ? entry.expression : entry
         @interpreter.eval_expr(expression, @session_env)
       rescue Unreachable
         raise # an interpreter bug; allowed to surface (see design 4.2)
