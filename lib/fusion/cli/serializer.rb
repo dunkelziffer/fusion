@@ -27,25 +27,14 @@ module Fusion
         [status, text]
       end
 
-      # Render a runtime value for interactive display (the REPL): an error
-      # shows as !payload, and values without a JSON form render leniently
-      # ("<function>", "<Infinity>", …) instead of erroring.
-      def render(runtime_value)
-        if runtime_value.is_a?(Interpreter::ErrorVal)
-          "!#{convert(runtime_value.payload, lenient: true).to_json}"
-        else
-          convert(runtime_value, lenient: true).to_json
-        end
-      end
-
       # Serialize a runtime value into [exit_code, json] per the CLI/serialization
       # contract in docs/user/reference.md §9.3.
-      def to_json(runtime_value)
+      def to_json(runtime_value, lenient: false)
         message = catch(:unserializable) do
           if runtime_value.is_a?(Interpreter::ErrorVal)
-            return [1, convert(runtime_value.payload, lenient: runtime_value.internal_error?).to_json]
+            return [1, convert(runtime_value.payload, lenient: lenient || runtime_value.internal_error?).to_json]
           else
-            return [0, convert(runtime_value).to_json]
+            return [0, convert(runtime_value, lenient: lenient).to_json]
           end
         end
 
@@ -57,7 +46,7 @@ module Fusion
           message: message
         )
 
-        to_json(internal_error)
+        to_json(internal_error, lenient: true)
       end
 
       private

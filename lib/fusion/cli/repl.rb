@@ -14,6 +14,8 @@
 # line). The prompt, the echoed input, and all terminal control codes go to
 # stderr — like bash's prompt — so stdout stays a clean stream of results.
 
+require_relative "serializer"
+
 module Fusion
   module CLI
     class Repl
@@ -69,23 +71,46 @@ module Fusion
       # never captures an error, mirroring pattern matching).
       def evaluate_entry(buffer)
         entry = Fusion::Parser.parse_repl(buffer, location: LOCATION)
-        return Serializer.render(entry) if entry.is_a?(Interpreter::ErrorVal)
 
-        value = evaluate(entry)
-        if entry.is_a?(AST::Statement::Assignment) && !value.is_a?(Interpreter::ErrorVal)
-          @session_env.define(entry.name, value)
+        result = case entry
+        when Interpreter::ErrorVal
+          # Reline checks with `complete?` and should therefore never hand a "syntax_error" to us.
+          raise Unreachable, "Unhandled AST node #{entry.class}"
+        when AST::Expression
+          evaluate(entry)
+        when AST::Statement::Assignment
+          value = evaluate(entry.expression)
+
+          # TODO: Decide, whether we want this. Why should we prevent errors from being stored in variables?
+          @session_env.define(entry.name, value) unless value.is_a?(Interpreter::ErrorVal)
+
+          value
+        else
+          raise Unreachable, "Unhandled AST node #{entry.class}"
         end
-        Serializer.render(value)
+
+        emit_output(result)
       end
 
       private
 
-      # Evaluate an entry's expression behind the same per-run safety net as
+      # Render a runtime value for interactive display (the REPL): an error
+      # shows as !payload, and values without a JSON form render leniently
+      # ("<function>", "<Infinity>", …) instead of erroring.
+      def emit_output(runtime_value)
+        status, json = Serializer.to_json(runtime_value, lenient: true)
+        if status.zero?
+          json
+        else
+          "!#{json}"
+        end
+      end
+
+      # Evaluate an expression behind the same per-run safety net as
       # exe/fusion, so a Ruby-level failure becomes a printed payload and the
       # session survives it. A statement carries its expression; a bare
       # expression entry is the expression itself.
-      def evaluate(entry)
-        expression = entry.is_a?(AST::Statement::Assignment) ? entry.expression : entry
+      def evaluate(expression)
         @interpreter.eval_expr(expression, @session_env)
       rescue Unreachable
         raise # an interpreter bug; allowed to surface (see design 4.2)
