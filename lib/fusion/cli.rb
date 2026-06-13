@@ -26,7 +26,7 @@ module Fusion
       interpreter = Fusion::Interpreter.new
       function = load(interpreter, options.inline_source, options.program_path)
       input = read_input(options)
-      output = interpreter.apply(function, input)
+      output = apply(input, function)
       emit_output(output, output_mode: options.output_mode)
     end
 
@@ -41,7 +41,7 @@ module Fusion
         next if line.strip.empty?
 
         input = Parser.decode(line, mode: options.input_mode)
-        output = apply_record(interpreter, function, input)
+        output = apply(input, function)
         _status, text = Serializer.encode(output, mode: options.output_mode)
         $stdout.puts(text)
       end
@@ -94,19 +94,37 @@ module Fusion
     # Apply the program to one stream record behind a per-record safety net: a
     # Ruby-level failure (notably a stack overflow) becomes that record's error
     # output and the stream continues with the next line.
-    def apply_record(interpreter, function, input)
+    def apply(input, function)
+      interpreter = Fusion::Interpreter.new
       interpreter.apply(function, input)
+    rescue SystemExit
+      # Let exit/abort through untouched.
+      raise
     rescue Unreachable
-      raise # an interpreter bug; allowed to surface (see design 4.2)
+      # If this internal safeguard was reached, it's a bug. Allowed to surface as a Ruby error.
+      raise
+    rescue StandardError => err
+      Interpreter::ErrorVal.internal(
+        kind: "type_error", location: "interpreter", operation: "running the program",
+        input: NULL, message: err.message
+      )
     rescue SystemStackError
       Interpreter::ErrorVal.internal(
         kind: "stack_error", location: "interpreter", operation: "running the program",
         input: NULL, message: "recursion too deep"
       )
-    rescue StandardError => err
-      Interpreter::ErrorVal.internal(
-        kind: "type_error", location: "interpreter", operation: "running the program",
-        input: NULL, message: err.message
+    rescue Exception => err # rubocop:disable Lint/RescueException
+      # Final safety net: SystemStackError and any other escaped Ruby error become a
+      # payloaded error rather than a raw backtrace on stderr.
+      Fusion::CLI.emit_output(
+        Fusion::Interpreter::ErrorVal.internal(
+          kind: "type_error", # TODO: other error type
+          location: "interpreter",
+          operation: "running the program",
+          input: Fusion::NULL,
+          message: err.message
+        ),
+        output_mode: options&.output_mode || :unix
       )
     end
 

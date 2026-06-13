@@ -19,32 +19,12 @@ if ARGV.intersect?(["--help", "-h"])
   exit 0
 end
 
-options = nil
-begin
-  options = Fusion::CLI::Options.parse(ARGV)
-  Fusion::CLI.run(options)
+options = begin
+  Fusion::CLI::Options.parse(ARGV)
 rescue Fusion::CLI::Options::UsageError => err
   # A command-line misuse happens before the input/output contract begins, so
   # it is plain text on stderr, not a payloaded error.
   abort("fusion: #{err.message}\n\n#{Fusion::CLI::Options::USAGE}")
-rescue SystemExit
-  # Let exit/abort through untouched.
-  raise
-rescue Fusion::Unreachable
-  # If this internal safeguard was reached, it's a bug. Allowed to surface as a Ruby error.
-  raise
-rescue Exception => err # rubocop:disable Lint/RescueException
-  # Final safety net: SystemStackError and any other escaped Ruby error become a
-  # payloaded error rather than a raw backtrace on stderr.
-  kind, message = err.is_a?(SystemStackError) ? ["stack_error", "recursion too deep"] : ["type_error", err.message]
-  Fusion::CLI.emit_output(
-    Fusion::Interpreter::ErrorVal.internal(
-      kind: kind,
-      location: "interpreter",
-      operation: "running the program",
-      input: Fusion::NULL,
-      message: message
-    ),
-    output_mode: options&.output_mode || :unix
-  )
 end
+
+Fusion::CLI.run(options)
