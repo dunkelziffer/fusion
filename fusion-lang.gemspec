@@ -38,4 +38,8 @@ Gem::Specification.new do |spec|
   # === DEPENDENCIES ===
 
   spec.required_ruby_version = ">= 3.3.0"
+
+  # Line editing for the `--repl` use case. A default gem since Ruby 2.7, but
+  # declared so the REPL keeps working if it is ever uninstalled.
+  spec.add_dependency "reline", "~> 0.6"
 end

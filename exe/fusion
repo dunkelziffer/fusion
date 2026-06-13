@@ -8,7 +8,7 @@
 #   fusion path/to/main.fsn '<json-input>'        # input as an argument
 #   fusion -e '(n => [n,2] | @multiply)' '21'     # inline program
 #   fusion --stream path/to/main.fsn              # NDJSON in, NDJSON out
-#   fusion --repl                                 # interactive statements
+#   fusion --repl                                 # interactive expressions/statements
 #
 # Run `fusion --help` for the input/output modes (--input / --output / -!).
 

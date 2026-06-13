@@ -22,7 +22,7 @@ module Fusion
         use cases:
           (default)       pipe: apply the program to one input
           --stream        apply the program to each line of an NDJSON stream
-          --repl          interactive `identifier = expression;` statements
+          --repl          interactive expressions and `identifier = expression`
 
         options:
           -e '<source>'   inline program instead of a file

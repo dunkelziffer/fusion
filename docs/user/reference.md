@@ -654,29 +654,39 @@ the program, and printed as one output line encoded per the output mode.
 
 ### 9.6 The REPL (`--repl`)
 
-`fusion --repl` starts an interactive session. It loads no program, reads no
-input, produces no pipeline output, and always exits `0`. The REPL accepts
-**statements** — the only construct in the language that is not an expression:
+`fusion --repl` starts an interactive session. It loads no program, takes no
+pipeline input, has no input/output mode, and always exits `0`. Each entry is
+read, evaluated, and its result printed. An entry is one of:
+
+- an **expression** — evaluated and printed; or
+- a **statement** — an assignment that also binds a name:
 
 ```ebnf
-statement = identifier "=" expr ";" ;
+statement = identifier "=" expr ;
 ```
 
-Each statement evaluates `expr`, prints the result, and binds it to `identifier`
-for later statements. Bare identifiers in a statement's expression read earlier
-bindings; `@`-references resolve relative to the working directory.
+A statement evaluates `expr`, prints the result, and binds it to `identifier`
+for later entries. Bare identifiers read earlier bindings; `@`-references resolve
+relative to the working directory.
 
-- A statement may span multiple lines; it ends at the `;`.
 - Results print leniently (§9.3): a function prints as `"<function>"` instead of
   becoming a `serialization_error`.
 - An error prints as `!payload` but binds nothing — mirroring patterns, where a
   binder never captures an error. The session continues.
-- Rebinding a name is allowed; later statements see the new value.
+- Rebinding a name is allowed; later entries see the new value.
 - A bound function can call itself through its own name
-  (`fact = (0 => 1, n => [n, [n,1] | @subtract | fact] | @multiply);`), because
+  (`fact = (0 => 1, n => [n, [n,1] | @subtract | fact] | @multiply)`), because
   the name is looked up at application time.
-- REPL statements report errors at `location: "code <inline>"`, like `-e` programs.
-- End the session with Ctrl-D.
+- Entries report errors at `location: "code <inline>"`, like `-e` programs.
+
+**Input editing.** An entry is submitted only once it parses as a complete
+statement or expression; until then — whether still unfinished or not yet valid —
+the session opens a new line so the entry can be finished or corrected. An entry
+may therefore span multiple lines (continuation lines show `...> `); on an empty
+continuation line, backspace returns to the previous line. The prompt and the
+echoed input render on **stderr** (like a shell prompt), so stdout carries only
+the stream of results. End the session with Ctrl-D; Ctrl-C discards the entry
+being typed.
 
 ### 9.7 Command-line interface
 
@@ -688,7 +698,7 @@ usage: fusion [options] <file.fsn> [json-input]
 use cases:
   (default)       pipe: apply the program to one input
   --stream        apply the program to each line of an NDJSON stream
-  --repl          interactive `identifier = expression;` statements
+  --repl          interactive expressions and `identifier = expression`
 
 options:
   -e '<source>'   inline program instead of a file

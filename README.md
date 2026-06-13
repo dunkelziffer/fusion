@@ -60,7 +60,7 @@ echo '15' | fusion examples/fizzbuzz.fsn        # => "FizzBuzz"
 fusion examples/factorial.fsn 5                 # => 120 (input as an argument)
 fusion -e '(n => [n,2] | @multiply)' 21         # => 42 (inline program)
 printf '[1, 2]\n[3, 4]\n' | fusion --stream examples/double.fsn   # => [2,4] [6,8] (NDJSON, one value per line)
-fusion --repl                                   # interactive `name = expression;` statements
+fusion --repl                                   # interactive expressions and `name = expression`
 ```
 
 - Input is read from stdin (or the 2nd CLI arg) as JSON and parsed into a Fusion value.

@@ -26,6 +26,12 @@ RSpec.describe "CLI (exe/fusion)" do
     Open3.capture3(RbConfig.ruby, EXE, *args, stdin_data: stdin)
   end
 
+  # Drop terminal control codes (and bare CRs) so the REPL's stderr — where the
+  # prompt and the echoed input land — can be asserted as plain text.
+  def strip_ansi(text)
+    text.gsub(/\e\[[\d;?]*[ -\/]*[@-~]/, "").delete("\r")
+  end
+
   describe "the result/error channel split" do
     it "prints the result to stdout and exits 0 on success" do
       out, err, status = run_cli(File.join(FIX, "fact.fsn"), stdin: "5")
@@ -338,77 +344,33 @@ RSpec.describe "CLI (exe/fusion)" do
     end
   end
 
+  # The REPL's parse/evaluate/bind semantics are specced in-process (see
+  # repl_spec.rb). These boundary tests confirm only what driving the real
+  # Reline-backed binary proves: entries are read from stdin over one session,
+  # results form a clean stdout stream, and the interactive UI lands on stderr.
   describe "--repl" do
-    it "evaluates each statement, prints its value, and binds the identifier" do
-      out, err, status = run_cli("--repl", stdin: "x = 5;\ny = [x, 1] | @add;\n")
+    it "evaluates statements over one session, printing clean results to stdout" do
+      out, _err, status = run_cli("--repl", stdin: "x = 5\ny = [x, 1] | @add\n")
       expect(out).to eq("5\n6\n")
-      expect(err).to eq("")
       expect(status.exitstatus).to eq(0)
     end
 
-    it "renders a function leniently" do
-      out, _err, status = run_cli("--repl", stdin: "double = (n => [n, 2] | @multiply);\n")
-      expect(out).to eq("\"<function>\"\n")
+    it "evaluates a bare expression" do
+      out, _err, status = run_cli("--repl", stdin: "[1, 2, 3] | @length\n")
+      expect(out).to eq("3\n")
       expect(status.exitstatus).to eq(0)
     end
 
-    it "lets a statement span lines until the terminating semicolon" do
-      out, _err, status = run_cli("--repl", stdin: "x = [\n  1,\n  2\n];\n")
-      expect(out).to eq("[1,2]\n")
+    it "completes a multi-line entry once it parses (no terminator needed)" do
+      out, _err, status = run_cli("--repl", stdin: "[\n  10,\n  20\n]\n")
+      expect(out).to eq("[10,20]\n")
       expect(status.exitstatus).to eq(0)
     end
 
-    it "supports recursion through the bound name" do
-      statements = <<~REPL
-        fact = (
-          0 => 1,
-          n => [n, [n, 1] | @subtract | fact] | @multiply
-        );
-        x = 5 | fact;
-      REPL
-      out, _err, status = run_cli("--repl", stdin: statements)
-      expect(out).to eq("\"<function>\"\n120\n")
-      expect(status.exitstatus).to eq(0)
-    end
-
-    it "prints an error without binding the identifier" do
-      out, err, status = run_cli("--repl", stdin: "bad = [1, 0] | @divide;\nprobe = bad;\n")
-      expect(out).to eq(
-        "!#{division_by_zero}\n" +
-        %(!{"kind":"binding_error","location":"code <inline>","operation":"reading identifier bad","input":"bad","message":"unbound identifier"}\n)
-      )
-      expect(err).to eq("")
-      expect(status.exitstatus).to eq(0)
-    end
-
-    it "allows rebinding a name" do
-      out, _err, status = run_cli("--repl", stdin: "x = 1;\nx = 2;\ny = x;\n")
-      expect(out).to eq("1\n2\n2\n")
-      expect(status.exitstatus).to eq(0)
-    end
-
-    it "recovers from a syntax error and continues the session" do
-      out, _err, status = run_cli("--repl", stdin: "x = ;\nx = 1;\n")
-      lines = out.lines
-      expect(lines[0]).to include('"kind":"syntax_error"', '"location":"code <inline>"')
-      expect(lines[1]).to eq("1\n")
-      expect(status.exitstatus).to eq(0)
-    end
-
-    it "rejects a bare expression (only statements are accepted)" do
-      out, _err, status = run_cli("--repl", stdin: "[1, 2] | @length;\n")
-      expect(out).to include('"kind":"syntax_error"')
-      expect(status.exitstatus).to eq(0)
-    end
-
-    it "survives a stack overflow and continues the session" do
-      out, err, status = run_cli("--repl", stdin: "loop = (n => n | loop);\na = 1 | loop;\nb = \"alive\";\n")
-      expect(out).to eq(
-        "\"<function>\"\n" +
-        %(!{"kind":"stack_error","location":"interpreter","operation":"running the statement","input":null,"message":"recursion too deep"}\n) +
-        "\"alive\"\n"
-      )
-      expect(err).to eq("")
+    it "keeps stdout clean and renders the prompts on stderr" do
+      out, err, status = run_cli("--repl", stdin: "x = [\n  1\n]\n")
+      expect(out).to eq("[1]\n")
+      expect(strip_ansi(err)).to include("fsn> ", "...> ") # first line, then continuations
       expect(status.exitstatus).to eq(0)
     end
   end
