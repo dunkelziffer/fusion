@@ -23,8 +23,7 @@ module Fusion
 
     # pipe: load the program, pipe one input through it, emit one output.
     def run_pipe(options)
-      interpreter = Fusion::Interpreter.new
-      function = load(interpreter, options.inline_source, options.program_path)
+      function = load(options.inline_source, options.program_path)
       input = read_input(options)
       output = apply(input, function)
       emit_output(output, output_mode: options.output_mode)
@@ -34,8 +33,7 @@ module Fusion
     # one input per line, one output line per input. Errors stay in-band (the
     # unix mode is not available here), so the exit code is always 0.
     def run_stream(options)
-      interpreter = Fusion::Interpreter.new
-      function = load(interpreter, options.inline_source, options.program_path)
+      function = load(options.inline_source, options.program_path)
       $stdout.sync = true
       $stdin.each_line do |line|
         next if line.strip.empty?
@@ -48,7 +46,8 @@ module Fusion
     end
 
     # Load the program / code / function
-    def load(interpreter, inline, program_path)
+    def load(inline, program_path)
+      interpreter = Fusion::Interpreter.new
       if inline
         ast = Fusion::Parser.parse_file(inline, location: "code <inline>")
         if ast.is_a?(Fusion::Interpreter::ErrorVal)
