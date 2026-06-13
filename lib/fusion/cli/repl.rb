@@ -78,9 +78,9 @@ module Fusion
           # Reline checks with `complete?` and should therefore never hand a "syntax_error" to us.
           raise Unreachable, "Unhandled AST node #{entry.class}"
         when AST::Expression
-          evaluate(entry)
+          Interpreter.safe_evaluate(entry, @session_env)
         when AST::Statement::Assignment
-          value = evaluate(entry.expression)
+          value = Interpreter.safe_evaluate(entry.expression, @session_env)
 
           # TODO: Decide, whether we want this. Why should we prevent errors from being stored in variables?
           @session_env.define(entry.name, value) unless value.is_a?(Interpreter::ErrorVal)
@@ -91,27 +91,6 @@ module Fusion
         end
       end
 
-      private
-
-      # Evaluate an expression behind the same per-run safety net as
-      # exe/fusion, so a Ruby-level failure becomes a printed payload and the
-      # session survives it. A statement carries its expression; a bare
-      # expression entry is the expression itself.
-      def evaluate(expression)
-        @interpreter.eval_expr(expression, @session_env)
-      rescue Unreachable
-        raise # an interpreter bug; allowed to surface (see design 4.2)
-      rescue SystemStackError
-        Interpreter::ErrorVal.internal(
-          kind: "stack_error", location: "interpreter", operation: "running the entry",
-          input: NULL, message: "recursion too deep"
-        )
-      rescue StandardError => err
-        Interpreter::ErrorVal.internal(
-          kind: "type_error", location: "interpreter", operation: "running the entry",
-          input: NULL, message: err.message
-        )
-      end
     end
   end
 end

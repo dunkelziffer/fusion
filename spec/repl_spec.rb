@@ -104,7 +104,7 @@ RSpec.describe Fusion::CLI::Repl do
         Fusion::WirePair.new(
           status: 1,
           data: '{"kind":"stack_error","location":"interpreter",' \
-        '"operation":"running the entry","input":null,"message":"recursion too deep"}'
+        '"operation":"running the program","input":null,"message":"recursion too deep"}'
         )
       )
       expect(serialize(repl.evaluate_entry('"still alive"'))).to eq(Fusion::WirePair.new(status: 0, data: '"still alive"'))

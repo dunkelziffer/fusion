@@ -45,6 +45,54 @@ module Fusion
       @root_env = Env.new # holds no builtins now; bare identifiers are holes only
     end
 
+    # Apply the program to one input behind a safety net: a Ruby-level failure
+    # (notably a stack overflow) becomes a payloaded error rather than a raw
+    # backtrace, so the stdout/stderr contract always holds. In the stream the
+    # error is one record's output and the next line continues.
+    def self.safe_apply(function, input)
+      safe do
+        new.apply(function, input)
+      end
+    end
+
+    # Evaluate an expression behind the same per-run safety net as
+    # exe/fusion, so a Ruby-level failure becomes a printed payload and the
+    # session survives it. A statement carries its expression; a bare
+    # expression entry is the expression itself.
+    def self.safe_evaluate(expression, environment)
+      safe do
+        new.eval_expr(expression, environment)
+      end
+    end
+
+    def self.safe
+      yield
+    rescue Unreachable
+      # An interpreter bug. Allowed to surface.
+      raise
+    rescue StandardError => err
+      # TODO: change type
+      Interpreter::ErrorVal.internal(
+        kind: "type_error", location: "interpreter", operation: "running the program",
+        input: NULL, message: err.message
+      )
+    rescue SystemExit
+      # Let exit/abort through.
+      raise
+    rescue SystemStackError
+      Interpreter::ErrorVal.internal(
+        kind: "stack_error", location: "interpreter", operation: "running the program",
+        input: NULL, message: "recursion too deep"
+      )
+    rescue Exception => err # rubocop:disable Lint/RescueException
+      # Final net: any other escaped Ruby error becomes a payloaded error too.
+      # TODO: change type
+      Interpreter::ErrorVal.internal(
+        kind: "type_error", location: "interpreter", operation: "running the program",
+        input: NULL, message: err.message
+      )
+    end
+
     # ---- File loading -----------------------------------------------------
     def load_file(abspath)
       @file_cache[abspath] ||= FileThunk.new(self, abspath)

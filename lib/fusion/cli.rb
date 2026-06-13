@@ -11,6 +11,7 @@ require_relative "cli/options"
 
 require_relative "cli/decoder"
 require_relative "cli/parser"
+require_relative "interpreter"
 require_relative "cli/serializer"
 require_relative "cli/encoder"
 
@@ -34,7 +35,7 @@ module Fusion
     def run_pipe(options)
       function = load_program(options)
       input    = parse(load_input(options))
-      output   = apply(function, input)
+      output   = apply(input, function)
       emit_output(serialize(output), output_mode: options.output_mode)
     end
 
@@ -48,7 +49,7 @@ module Fusion
         next if line.strip.empty?
 
         input  = parse(decode(line, mode: options.input_mode))
-        output = apply(function, input)
+        output = apply(input, function)
         $stdout.puts(encode(serialize(output), mode: options.output_mode))
       end
     end
@@ -64,6 +65,17 @@ module Fusion
       Parser.parse(wire_pair)
     end
 
+    # input | function -> output
+    def apply(input, function)
+      Interpreter.safe_apply(function, input)
+    end
+
+    # expression -> runtime value
+    # Mutates environment (REPL variable binding)
+    def evaluate(expression, environment)
+      Interpreter.safe_evaluate(expression, environment)
+    end
+
     # runtime value -> WirePair
     def serialize(runtime_value)
       Serializer.serialize(runtime_value)
@@ -74,8 +86,6 @@ module Fusion
     def encode(wire_pair, mode:)
       Encoder.encode(wire_pair, mode:)
     end
-
-    # === Utilities ===
 
     private
 
@@ -121,29 +131,6 @@ module Fusion
       else
         interpreter.load_file(File.expand_path(options.program_path)).force
       end
-    end
-
-    # Apply the program to one input behind a safety net: a Ruby-level failure
-    # (notably a stack overflow) becomes a payloaded error rather than a raw
-    # backtrace, so the stdout/stderr contract always holds. In the stream the
-    # error is one record's output and the next line continues.
-    def apply(function, input)
-      interpreter = Fusion::Interpreter.new
-      interpreter.apply(function, input)
-    rescue SystemExit, Unreachable
-      # exit/abort and the interpreter's own assertions are allowed through.
-      raise
-    rescue SystemStackError
-      Interpreter::ErrorVal.internal(
-        kind: "stack_error", location: "interpreter", operation: "running the program",
-        input: NULL, message: "recursion too deep"
-      )
-    rescue Exception => err # rubocop:disable Lint/RescueException
-      # Final net: any other escaped Ruby error becomes a payloaded error too.
-      Interpreter::ErrorVal.internal(
-        kind: "type_error", location: "interpreter", operation: "running the program",
-        input: NULL, message: err.message
-      )
     end
   end
 end
