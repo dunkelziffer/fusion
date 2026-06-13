@@ -28,5 +28,5 @@ jobs:
         with:
           ruby-version: ${{ matrix.ruby }}
           bundler-cache: true
-      - name: Run all specs (including the slow ones)
+      - name: Run specs
         run: bundle exec rake spec:all
