@@ -1,4 +1,4 @@
 --format documentation
 --color
 --require spec_helper
---tag ~slow
+--exclude-pattern **/{cli_spec,repl_pty_spec}.rb

@@ -12,7 +12,7 @@ require "rbconfig"
 # particular, a stack overflow raises Ruby's SystemStackError (not a
 # StandardError), which is converted to a payload only by that net; the
 # in-process harness cannot model it (see error_kinds_spec.rb).
-RSpec.describe "CLI (exe/fusion)", :slow do
+RSpec.describe "CLI (exe/fusion)" do
   ROOT = File.expand_path("..", __dir__)
   EXE  = File.join(ROOT, "exe", "fusion")
   FIX  = File.expand_path("fixtures", __dir__)

@@ -81,17 +81,9 @@ After checking out the repo, run `bin/setup` to install dependencies. Run `bin/c
 ### Tests
 
 ```sh
-bundle exec rspec        # fast suite (default) — skips the slow specs
-bundle exec rake spec:all   # everything, including the slow specs
-```
-
-The slow specs (tagged `:slow`) drive the real `exe/fusion` binary as a
-subprocess and the REPL inside a pseudo-terminal. `.rspec` excludes them by
-default; `rake spec:all` runs them via `.rspec-ci`, and so does CI. To run a
-single slow file directly, add `--tag slow` (otherwise `.rspec` filters it out):
-
-```sh
-bundle exec rspec --tag slow spec/cli_spec.rb
+bundle exec rspec                    # fast suite (default) — skips the slow specs
+bundle exec rspec spec/cli_spec.rb   # naming a slow file runs it anyway
+bundle exec rake spec:all            # everything, including the slow specs
 ```
 
 ## License

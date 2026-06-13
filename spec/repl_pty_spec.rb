@@ -20,7 +20,7 @@ rescue LoadError
   PTY_AVAILABLE = false
 end
 
-RSpec.describe "REPL in a pseudo-terminal (exe/fusion --repl)", :slow, if: PTY_AVAILABLE do
+RSpec.describe "REPL in a pseudo-terminal (exe/fusion --repl)", if: PTY_AVAILABLE do
   let(:exe) { File.expand_path("../exe/fusion", __dir__) }
 
   # Drives one REPL session in a pty. Closes the pty and reaps the child no
