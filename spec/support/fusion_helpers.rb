@@ -76,7 +76,7 @@ module FusionHelpers
     def run
       interp = Fusion::Interpreter.new(env_vars: @env_vars)
       value = interp.apply(program(interp), input_value)
-      pair = Fusion::CLI.send(:serialize, value)
+      pair = Fusion::CLI.serialize(value)
       [pair.status.zero? ? OK : ERR, pair.data]
     end
 
@@ -105,7 +105,7 @@ module FusionHelpers
     # error-wrapping from the status.
     def input_value
       marker, payload = @input
-      Fusion::CLI.send(:parse, Fusion::WirePair.new(status: marker == ERR ? 1 : 0, data: payload))
+      Fusion::CLI.parse(Fusion::WirePair.new(status: marker == ERR ? 1 : 0, data: payload))
     end
   end
 end
