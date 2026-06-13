@@ -78,6 +78,22 @@ Refer to the [Documentation](docs/index.md) for further information.
 
 After checking out the repo, run `bin/setup` to install dependencies. Run `bin/console` for an interactive prompt that will allow you to experiment.
 
+### Tests
+
+```sh
+bundle exec rspec        # fast suite (default) — skips the slow specs
+bundle exec rake spec:all   # everything, including the slow specs
+```
+
+The slow specs (tagged `:slow`) drive the real `exe/fusion` binary as a
+subprocess and the REPL inside a pseudo-terminal. `.rspec` excludes them by
+default; `rake spec:all` runs them via `.rspec-ci`, and so does CI. To run a
+single slow file directly, add `--tag slow` (otherwise `.rspec` filters it out):
+
+```sh
+bundle exec rspec --tag slow spec/cli_spec.rb
+```
+
 ## License
 
 The gem is available as open source under the terms of the [MIT License](https://opensource.org/licenses/MIT).
