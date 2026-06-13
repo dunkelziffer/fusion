@@ -3,7 +3,7 @@
 require "bundler/gem_tasks"
 require "rspec/core/rake_task"
 
-# task :spec (skips tag ":slow")
+# task :spec (skips slow files, see .rspec)
 RSpec::Core::RakeTask.new(:spec)
 
 namespace :spec do
