@@ -19,6 +19,7 @@
 #
 # Both input and output are (marker, payload) pairs mirroring the CLI (see
 # exe/fusion): "✅" for exit 0 (a value), "❌" for exit 1 (an error payload).
+
 module FusionHelpers
   FIXTURES = File.expand_path("../fixtures", __dir__)
 
@@ -75,8 +76,8 @@ module FusionHelpers
     def run
       interp = Fusion::Interpreter.new(env_vars: @env_vars)
       value = interp.apply(program(interp), input_value)
-      status, json = Fusion::CLI.send(:serialize, value)
-      [status.zero? ? OK : ERR, json]
+      pair = Fusion::CLI.send(:serialize, value)
+      [pair.status.zero? ? OK : ERR, pair.data]
     end
 
     private
@@ -99,11 +100,12 @@ module FusionHelpers
       end
     end
 
-    # An input may itself be an error ("❌"); all current specs use "✅".
+    # An input may itself be an error ("❌"); all current specs use "✅". The
+    # (marker, payload) pair mirrors the CLI's wire pair, so `parse` does the
+    # error-wrapping from the status.
     def input_value
       marker, payload = @input
-      parsed = Fusion::CLI.send(:parse, payload)
-      marker == ERR ? Fusion::Interpreter::ErrorVal.new(parsed) : parsed
+      Fusion::CLI.send(:parse, Fusion::WirePair.new(status: marker == ERR ? 1 : 0, data: payload))
     end
   end
 end

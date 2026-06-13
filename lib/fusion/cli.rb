@@ -1,7 +1,12 @@
 # frozen_string_literal: true
 
 # === CLI tools ===
+#
+# Core data types:
+# - WirePair
+# - Fusion runtime value
 
+require_relative "wire_pair"
 require_relative "cli/options"
 require_relative "cli/parser"
 require_relative "cli/serializer"
@@ -23,120 +28,194 @@ module Fusion
 
     # pipe: load the program, pipe one input through it, emit one output.
     def run_pipe(options)
-      function = load(options.inline_source, options.program_path)
-      input = read_input(options)
-      output = apply(input, function)
-      emit_output(output, output_mode: options.output_mode)
+      function = load_program(options)
+      input    = parse(load_input(options))
+      output   = apply(function, input)
+      emit_output(serialize(output), output_mode: options.output_mode)
     end
 
     # stream: load the program once, then treat stdin/stdout as NDJSON streams —
     # one input per line, one output line per input. Errors stay in-band (the
-    # unix mode is not available here), so the exit code is always 0.
+    # unix mode is unavailable here), so the exit code is always 0.
     def run_stream(options)
-      function = load(options.inline_source, options.program_path)
+      function = load_program(options)
       $stdout.sync = true
       $stdin.each_line do |line|
         next if line.strip.empty?
 
-        input = Parser.decode(line, mode: options.input_mode)
-        output = apply(input, function)
-        _status, text = Serializer.encode(output, mode: options.output_mode)
-        $stdout.puts(text)
+        input  = parse(decode(line, mode: options.input_mode))
+        output = apply(function, input)
+        $stdout.puts(frame(serialize(output), mode: options.output_mode))
       end
     end
 
-    # Load the program / code / function
-    def load(inline, program_path)
-      interpreter = Fusion::Interpreter.new
-      if inline
-        ast = Fusion::Parser.parse_file(inline, location: "code <inline>")
-        if ast.is_a?(Fusion::Interpreter::ErrorVal)
-          ast # a parse error becomes the program value and propagates below
-        else
-          env = interpreter.root_env.child
-          env.define("__dir__", Dir.pwd)
-          interpreter.eval_expr(ast, env)
-        end
+    # WirePair -> runtime value
+    def parse(wire_pair)
+      Parser.parse(wire_pair)
+    end
+
+    # runtime value -> WirePair
+    def serialize(runtime_value)
+      Serializer.serialize(runtime_value)
+    end
+
+    # === Utilities ===
+
+    private
+
+    # input -> WirePair
+    def load_input(options)
+      text = options.explicit_input || ($stdin.tty? ? "" : $stdin.read)
+      empty = text.strip.empty?
+
+      if options.input_mode == :unix || empty
+        WirePair.new(
+          status: options.error_input? ? 1 : 0,
+          data: empty ? "null" : text
+        )
       else
-        interpreter.load_file(File.expand_path(program_path)).force
+        decode(text, mode: options.input_mode)
       end
     end
 
-    # Read the one pipe input: the explicit argument wins, else stdin. Empty
-    # input is null in every input mode; -! wraps the input as an error value.
-    def read_input(options)
-      input_text = options.explicit_input || ($stdin.tty? ? "" : $stdin.read)
-      input = input_text.strip.empty? ? NULL : Parser.decode(input_text, mode: options.input_mode)
-
-      if options.error_input? && !input.is_a?(Interpreter::ErrorVal)
-        input = Interpreter::ErrorVal.new(input)
-      end
-
-      input
-    end
-
-    # Emit the one pipe output and exit. Only the unix mode uses stderr and the
-    # exit code as the error channel; the other modes mark the error in-band.
-    def emit_output(runtime_value, output_mode: :unix)
-      status, text = Serializer.encode(runtime_value, mode: output_mode)
+    # WirePair -> output
+    def emit_output(wire_pair, output_mode:)
       if output_mode == :unix
-        (status.zero? ? $stdout : $stderr).puts(text)
-        exit status
+        channel = wire_pair.status.zero? ? $stdout : $stderr
+        channel.puts(wire_pair.data)
+        exit(wire_pair.status)
       else
-        $stdout.puts(text)
+        $stdout.puts(frame(wire_pair, mode: output_mode))
         exit 0
       end
     end
 
-    private
+    # Load the program (a `.fsn` file or an inline `-e` source) into the runtime
+    # value it evaluates to — usually a function. A parse error or a non-function
+    # value flows on as the program value and surfaces when `apply` runs it.
+    def load_program(options)
+      interpreter = Fusion::Interpreter.new
+      if options.inline_source
+        ast = Fusion::Parser.parse_file(options.inline_source, location: "code <inline>")
+        return ast if ast.is_a?(Fusion::Interpreter::ErrorVal) # a parse error
 
-    # Apply the program to one stream record behind a per-record safety net: a
-    # Ruby-level failure (notably a stack overflow) becomes that record's error
-    # output and the stream continues with the next line.
-    def apply(input, function)
+        env = interpreter.root_env.child
+        env.define("__dir__", Dir.pwd)
+        interpreter.eval_expr(ast, env)
+      else
+        interpreter.load_file(File.expand_path(options.program_path)).force
+      end
+    end
+
+    # Apply the program to one input behind a safety net: a Ruby-level failure
+    # (notably a stack overflow) becomes a payloaded error rather than a raw
+    # backtrace, so the stdout/stderr contract always holds. In the stream the
+    # error is one record's output and the next line continues.
+    def apply(function, input)
       interpreter = Fusion::Interpreter.new
       interpreter.apply(function, input)
-    rescue SystemExit
-      # Let exit/abort through untouched.
+    rescue SystemExit, Unreachable
+      # exit/abort and the interpreter's own assertions are allowed through.
       raise
-    rescue Unreachable
-      # If this internal safeguard was reached, it's a bug. Allowed to surface as a Ruby error.
-      raise
-    rescue StandardError => err
-      Interpreter::ErrorVal.internal(
-        kind: "type_error", location: "interpreter", operation: "running the program",
-        input: NULL, message: err.message
-      )
     rescue SystemStackError
       Interpreter::ErrorVal.internal(
         kind: "stack_error", location: "interpreter", operation: "running the program",
         input: NULL, message: "recursion too deep"
       )
     rescue Exception => err # rubocop:disable Lint/RescueException
-      # Final safety net: SystemStackError and any other escaped Ruby error become a
-      # payloaded error rather than a raw backtrace on stderr.
-      Fusion::CLI.emit_output(
-        Fusion::Interpreter::ErrorVal.internal(
-          kind: "type_error", # TODO: other error type
-          location: "interpreter",
-          operation: "running the program",
-          input: Fusion::NULL,
-          message: err.message
-        ),
-        output_mode: options&.output_mode || :unix
+      # Final net: any other escaped Ruby error becomes a payloaded error too.
+      Interpreter::ErrorVal.internal(
+        kind: "type_error", location: "interpreter", operation: "running the program",
+        input: NULL, message: err.message
       )
     end
 
-    # Parse the input
-    # Returns a runtime value
-    def parse(json)
-      Parser.parse(json)
+    # ---- Input/output mode framing (the wire pair <-> framed bytes) -------
+
+    private
+
+    ENVELOPE_SHAPES = {
+      array: "[0, _] or [1, _]",
+      object: '{"value": _} or {"error": _}',
+    }.freeze
+
+    # Strip an input mode's in-band framing into the wire pair [status, json]
+    # (see docs/user/reference.md §9.4). unix carries no in-band framing (see
+    # load_input) and never reaches here; bang/array/object read their value-or-
+    # error status from the text. Only the array/object envelopes are inspected;
+    # all JSON parsing (and its syntax_error) stays in the parse codec, so a
+    # malformed envelope is the one error this layer mints (a catchable
+    # argument_error pair).
+    def decode(text, mode:)
+      case mode
+      when :bang
+        decode_bang(text)
+      when :array
+        decode_envelope(text, mode) do |raw|
+          next unless raw.is_a?(Array) && raw.length == 2 && raw[0].is_a?(Integer)
+
+          # The tag must be exactly the integer 0 or 1 (no 0.0 — Fusion equality is exact).
+          [raw[0], raw[1]] if raw[0] == 0 || raw[0] == 1
+        end
+      when :object
+        decode_envelope(text, mode) do |raw|
+          next unless raw.is_a?(Hash) && raw.size == 1
+
+          if raw.key?("value") then [0, raw["value"]]
+          elsif raw.key?("error") then [1, raw["error"]]
+          end
+        end
+      else
+        raise Unreachable, "Unknown input mode #{mode}"
+      end
     end
 
-    # Serialize the output
-    # Returns [exit_code, json]
-    def serialize(runtime_value)
-      Serializer.to_json(runtime_value)
+    # WirePair -> String
+    # Doesn't support mode `:unix`
+    def frame(wire_pair, mode:)
+      case mode
+      when :bang
+        bang = wire_pair.status.zero? ? "" : "!"
+        "#{bang}#{wire_pair.data}"
+      when :array
+        "[#{wire_pair.status},#{wire_pair.data}]"
+      when :object
+        key = wire_pair.status.zero? ? "value" : "error"
+        "{\"#{key}\":#{wire_pair.data}}"
+      else
+        raise Unreachable, "Unknown output mode #{mode}"
+      end
+    end
+
+    # bang: a leading "!" marks an error value; its payload is the JSON after
+    # the "!". A lone "!" is the error !null, mirroring the language's bare !.
+    def decode_bang(text)
+      stripped = text.strip
+      return WirePair.new(status: 0, data: text) unless stripped.start_with?("!")
+
+      payload = stripped.delete_prefix("!")
+      WirePair.new(status: 1, data: payload.strip.empty? ? "null" : payload)
+    end
+
+    # array/object: the input is an envelope around the actual value. The block
+    # inspects the JSON (raw Ruby, so nulls are nil) and returns [status, inner]
+    # or nil for a wrong shape. The inner is re-emitted as JSON text for the
+    # pair; invalid JSON falls through to `parse` as a value to fail on, so the
+    # syntax_error stays in one place.
+    def decode_envelope(text, mode)
+      raw = JSON.parse(text)
+      status, inner = yield(raw)
+      return WirePair.new(status: status, data: JSON.generate(inner)) if status
+
+      WirePair.new(status: 1, data: JSON.generate(
+        "kind" => "argument_error",
+        "location" => "input",
+        "operation" => "decoding input",
+        "input" => raw,
+        "message" => "expected #{ENVELOPE_SHAPES.fetch(mode)}"
+      ))
+    rescue JSON::ParserError
+      WirePair.new(status: 0, data: text)
     end
   end
 end

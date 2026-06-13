@@ -51,7 +51,9 @@ module Fusion
           break if entry.nil? # Ctrl-D on an empty line ends the session
           next if entry.strip.empty?
 
-          $stdout.puts(evaluate_entry(entry))
+          runtime_value = evaluate_entry(entry)
+          wire_pair = Serializer.serialize(runtime_value, lenient: true)
+          $stdout.puts(CLI.send(:frame, wire_pair, mode: :bang))
         end
       end
 
@@ -66,13 +68,11 @@ module Fusion
         !Fusion::Parser.parse_repl(buffer, location: LOCATION).is_a?(Interpreter::ErrorVal)
       end
 
-      # Evaluate one entry and return the string to print. A statement also binds
-      # its identifier — unless the value is an error, which never binds (a binder
-      # never captures an error, mirroring pattern matching).
+      # returns the REPL output string
       def evaluate_entry(buffer)
         entry = Fusion::Parser.parse_repl(buffer, location: LOCATION)
 
-        result = case entry
+        case entry
         when Interpreter::ErrorVal
           # Reline checks with `complete?` and should therefore never hand a "syntax_error" to us.
           raise Unreachable, "Unhandled AST node #{entry.class}"
@@ -88,8 +88,6 @@ module Fusion
         else
           raise Unreachable, "Unhandled AST node #{entry.class}"
         end
-
-        emit_output(result)
       end
 
       private
@@ -97,12 +95,14 @@ module Fusion
       # Render a runtime value for interactive display (the REPL): an error
       # shows as !payload, and values without a JSON form render leniently
       # ("<function>", "<Infinity>", …) instead of erroring.
-      def emit_output(runtime_value)
-        status, json = Serializer.to_json(runtime_value, lenient: true)
-        if status.zero?
-          json
+      def render(runtime_value)
+
+
+        # TODO: this is "frame"
+        if wire_pair.status.zero?
+          wire_pair.data
         else
-          "!#{json}"
+          "!#{wire_pair.data}"
         end
       end
 

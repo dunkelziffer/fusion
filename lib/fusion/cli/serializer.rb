@@ -1,40 +1,23 @@
 # frozen_string_literal: true
 
 # === CLI internals ===
-#
-# Input: Interpreter runtime value
-# Output: [exit_code, JSON]
+
+require_relative "../wire_pair"
 
 module Fusion
   module CLI
     module Serializer
       extend self
 
-      # Encode a runtime value per the output mode (see docs/user/reference.md
-      # §9.4). Returns [status, text]: status is 0 for a value and 1 for an
-      # error; only the unix mode maps it onto stderr and the exit code — the
-      # other modes mark the error inside the text itself.
-      def encode(runtime_value, mode:)
-        status, json = to_json(runtime_value)
-        text =
-          case mode
-          when :unix then json
-          when :bang then status.zero? ? json : "!#{json}"
-          when :array then "[#{status},#{json}]"
-          when :object then status.zero? ? %({"value":#{json}}) : %({"error":#{json}})
-          else raise Unreachable, "Unknown output mode #{mode}"
-          end
-        [status, text]
-      end
-
-      # Serialize a runtime value into [exit_code, json] per the CLI/serialization
-      # contract in docs/user/reference.md §9.3.
-      def to_json(runtime_value, lenient: false)
+      # runtime value -> WirePair
+      # Only use "lenient: true" in the REPL!
+      def serialize(runtime_value, lenient: false)
         message = catch(:unserializable) do
           if runtime_value.is_a?(Interpreter::ErrorVal)
-            return [1, convert(runtime_value.payload, lenient: lenient || runtime_value.internal_error?).to_json]
+            data = convert(runtime_value.payload, lenient: lenient || runtime_value.internal_error?).to_json
+            return WirePair.new(status: 1, data: data)
           else
-            return [0, convert(runtime_value, lenient: lenient).to_json]
+            return WirePair.new(status: 0, data: convert(runtime_value, lenient: lenient).to_json)
           end
         end
 
@@ -46,12 +29,12 @@ module Fusion
           message: message
         )
 
-        to_json(internal_error, lenient: true)
+        serialize(internal_error, lenient: true)
       end
 
       private
 
-      # Use "lenient: true" only for best-effort serialization of internal errors.
+      # Use "lenient: true" only for best-effort serialization of internal errors and the REPL.
       def convert(runtime_value, lenient: false)
         case runtime_value
         when NULL
