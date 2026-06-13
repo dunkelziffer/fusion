@@ -15,6 +15,7 @@
 # stderr — like bash's prompt — so stdout stays a clean stream of results.
 
 require_relative "serializer"
+require_relative "encoder"
 
 module Fusion
   module CLI
@@ -53,7 +54,7 @@ module Fusion
 
           runtime_value = evaluate_entry(entry)
           wire_pair = Serializer.serialize(runtime_value, lenient: true)
-          $stdout.puts(CLI.send(:frame, wire_pair, mode: :bang))
+          $stdout.puts(Encoder.encode(wire_pair, mode: :bang))
         end
       end
 
@@ -91,20 +92,6 @@ module Fusion
       end
 
       private
-
-      # Render a runtime value for interactive display (the REPL): an error
-      # shows as !payload, and values without a JSON form render leniently
-      # ("<function>", "<Infinity>", …) instead of erroring.
-      def render(runtime_value)
-
-
-        # TODO: this is "frame"
-        if wire_pair.status.zero?
-          wire_pair.data
-        else
-          "!#{wire_pair.data}"
-        end
-      end
 
       # Evaluate an expression behind the same per-run safety net as
       # exe/fusion, so a Ruby-level failure becomes a printed payload and the

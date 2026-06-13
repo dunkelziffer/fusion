@@ -8,8 +8,12 @@
 
 require_relative "wire_pair"
 require_relative "cli/options"
+
+require_relative "cli/decoder"
 require_relative "cli/parser"
 require_relative "cli/serializer"
+require_relative "cli/encoder"
+
 require_relative "cli/repl"
 
 module Fusion
@@ -45,8 +49,14 @@ module Fusion
 
         input  = parse(decode(line, mode: options.input_mode))
         output = apply(function, input)
-        $stdout.puts(frame(serialize(output), mode: options.output_mode))
+        $stdout.puts(encode(serialize(output), mode: options.output_mode))
       end
+    end
+
+    # String -> WirePair
+    # Doesn't support mode `:unix`
+    def decode(string, mode:)
+      Decoder.decode(string, mode:)
     end
 
     # WirePair -> runtime value
@@ -57,6 +67,12 @@ module Fusion
     # runtime value -> WirePair
     def serialize(runtime_value)
       Serializer.serialize(runtime_value)
+    end
+
+    # WirePair -> String
+    # Doesn't support mode `:unix`
+    def encode(wire_pair, mode:)
+      Encoder.encode(wire_pair, mode:)
     end
 
     # === Utilities ===
@@ -85,7 +101,7 @@ module Fusion
         channel.puts(wire_pair.data)
         exit(wire_pair.status)
       else
-        $stdout.puts(frame(wire_pair, mode: output_mode))
+        $stdout.puts(encode(wire_pair, mode: output_mode))
         exit 0
       end
     end
@@ -128,94 +144,6 @@ module Fusion
         kind: "type_error", location: "interpreter", operation: "running the program",
         input: NULL, message: err.message
       )
-    end
-
-    # ---- Input/output mode framing (the wire pair <-> framed bytes) -------
-
-    private
-
-    ENVELOPE_SHAPES = {
-      array: "[0, _] or [1, _]",
-      object: '{"value": _} or {"error": _}',
-    }.freeze
-
-    # Strip an input mode's in-band framing into the wire pair [status, json]
-    # (see docs/user/reference.md §9.4). unix carries no in-band framing (see
-    # load_input) and never reaches here; bang/array/object read their value-or-
-    # error status from the text. Only the array/object envelopes are inspected;
-    # all JSON parsing (and its syntax_error) stays in the parse codec, so a
-    # malformed envelope is the one error this layer mints (a catchable
-    # argument_error pair).
-    def decode(text, mode:)
-      case mode
-      when :bang
-        decode_bang(text)
-      when :array
-        decode_envelope(text, mode) do |raw|
-          next unless raw.is_a?(Array) && raw.length == 2 && raw[0].is_a?(Integer)
-
-          # The tag must be exactly the integer 0 or 1 (no 0.0 — Fusion equality is exact).
-          [raw[0], raw[1]] if raw[0] == 0 || raw[0] == 1
-        end
-      when :object
-        decode_envelope(text, mode) do |raw|
-          next unless raw.is_a?(Hash) && raw.size == 1
-
-          if raw.key?("value") then [0, raw["value"]]
-          elsif raw.key?("error") then [1, raw["error"]]
-          end
-        end
-      else
-        raise Unreachable, "Unknown input mode #{mode}"
-      end
-    end
-
-    # WirePair -> String
-    # Doesn't support mode `:unix`
-    def frame(wire_pair, mode:)
-      case mode
-      when :bang
-        bang = wire_pair.status.zero? ? "" : "!"
-        "#{bang}#{wire_pair.data}"
-      when :array
-        "[#{wire_pair.status},#{wire_pair.data}]"
-      when :object
-        key = wire_pair.status.zero? ? "value" : "error"
-        "{\"#{key}\":#{wire_pair.data}}"
-      else
-        raise Unreachable, "Unknown output mode #{mode}"
-      end
-    end
-
-    # bang: a leading "!" marks an error value; its payload is the JSON after
-    # the "!". A lone "!" is the error !null, mirroring the language's bare !.
-    def decode_bang(text)
-      stripped = text.strip
-      return WirePair.new(status: 0, data: text) unless stripped.start_with?("!")
-
-      payload = stripped.delete_prefix("!")
-      WirePair.new(status: 1, data: payload.strip.empty? ? "null" : payload)
-    end
-
-    # array/object: the input is an envelope around the actual value. The block
-    # inspects the JSON (raw Ruby, so nulls are nil) and returns [status, inner]
-    # or nil for a wrong shape. The inner is re-emitted as JSON text for the
-    # pair; invalid JSON falls through to `parse` as a value to fail on, so the
-    # syntax_error stays in one place.
-    def decode_envelope(text, mode)
-      raw = JSON.parse(text)
-      status, inner = yield(raw)
-      return WirePair.new(status: status, data: JSON.generate(inner)) if status
-
-      WirePair.new(status: 1, data: JSON.generate(
-        "kind" => "argument_error",
-        "location" => "input",
-        "operation" => "decoding input",
-        "input" => raw,
-        "message" => "expected #{ENVELOPE_SHAPES.fetch(mode)}"
-      ))
-    rescue JSON::ParserError
-      WirePair.new(status: 0, data: text)
     end
   end
 end
