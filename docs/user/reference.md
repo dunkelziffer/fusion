@@ -671,7 +671,10 @@ relative to the working directory.
 
 - Results print leniently (§9.3): a function prints as `"<function>"` instead of
   becoming a `serialization_error`.
-- An error prints as `!payload`.
+- An error prints as `!payload`. A statement binds an error result like any other
+  result; reading that identifier later propagates the error, exactly as reading an
+  `@`-reference that resolved to one. (Pattern binders never capture an error, but a
+  statement is an assignment, not a pattern match.)
 - Rebinding a name is allowed; later entries see the new value.
 - A bound function can call itself through its own name
   (`fact = (0 => 1, n => [n, [n,1] | @subtract | fact] | @multiply)`), because
