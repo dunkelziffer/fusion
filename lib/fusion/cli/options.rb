@@ -22,17 +22,20 @@ module Fusion
                fusion --repl
 
         use cases (default: --repl with no arguments, otherwise --pipe):
-          --pipe          apply the program to stdin; with no input, the
+          -p, --pipe      apply the program to stdin; with no input, the
                           program's own value is the result
-          --stream        apply the program to each line of an NDJSON stream
-          --repl          interactive expressions and `identifier = expression`
+          -s, --stream    apply the program to each line of an NDJSON stream
+          -r, --repl      interactive expressions and `identifier = expression`
 
         options:
-          -e '<source>'   inline program instead of a file
-          --input MODE    how the input marks an error value
-          --output MODE   how the output marks an error value
+          -e, --execute '<source>'
+                          inline program instead of a file
+          -i, --input MODE
+                          how the input marks an error value
+          -o, --output MODE
+                          how the output marks an error value
           -!              treat the input as an error value (unix input mode only)
-          --skip-blank-lines
+          -b, --skip-blank-lines
                           drop blank input lines instead of echoing them (--stream only)
 
         modes: unix, bang, array, object
@@ -70,21 +73,21 @@ module Fusion
         pipe = false
         stream = false
         repl = false
-        input_mode = nil
-        output_mode = nil
+        input_modes = []
+        output_modes = []
         error_input = false
         skip_blank_lines = false
         inline_source = nil
 
         parser = OptionParser.new do |option|
-          option.on("--pipe") { pipe = true }
-          option.on("--stream") { stream = true }
-          option.on("--repl") { repl = true }
-          option.on("--input MODE") { |mode| input_mode = to_mode(mode, "--input") }
-          option.on("--output MODE") { |mode| output_mode = to_mode(mode, "--output") }
-          option.on("-e SOURCE") { |source| inline_source = source }
+          option.on("-p", "--pipe") { pipe = true }
+          option.on("-s", "--stream") { stream = true }
+          option.on("-r", "--repl") { repl = true }
+          option.on("-i", "--input MODE") { |mode| input_modes << to_mode(mode, "--input") }
+          option.on("-o", "--output MODE") { |mode| output_modes << to_mode(mode, "--output") }
+          option.on("-e", "--execute SOURCE") { |source| inline_source = source }
           option.on("-!") { error_input = true }
-          option.on("--skip-blank-lines") { skip_blank_lines = true }
+          option.on("-b", "--skip-blank-lines") { skip_blank_lines = true }
         end
         parser.require_exact = true # no abbreviations: "--s" is not a stand-in for "--stream"
 
@@ -92,6 +95,8 @@ module Fusion
         positional = run_parser(parser, argv)
 
         use_case = resolve_use_case(pipe: pipe, stream: stream, repl: repl, no_arguments: argv.empty?)
+        input_mode = resolve_mode(input_modes, "--input")
+        output_mode = resolve_mode(output_modes, "--output")
 
         validate(use_case, input_mode, output_mode, error_input, skip_blank_lines, inline_source, positional)
       end
@@ -106,6 +111,18 @@ module Fusion
         when 0 then no_arguments ? :repl : :pipe
         when 1 then selected.first
         else raise UsageError, "choose one use case: --pipe, --stream, or --repl"
+        end
+      end
+
+      # The single mode for one direction, or nil if unset. Repeats of the same
+      # mode are fine; two different modes for the same flag are a misuse.
+      def self.resolve_mode(modes, flag)
+        distinct = modes.uniq
+
+        case distinct.length
+        when 0 then nil
+        when 1 then distinct.first
+        else raise UsageError, "conflicting #{flag} modes: #{distinct.join(', ')}"
         end
       end
 
@@ -129,10 +146,12 @@ module Fusion
       end
 
       # Mirror the old per-flag wording when a value-taking option has no value.
+      # OptionParser reports whichever alias the user typed, so match both.
       def self.missing_argument_message(flag)
         case flag
-        when "-e" then "-e requires a source argument"
-        when "--input", "--output" then "#{flag} expects one of: #{MODES.join(', ')} (got nothing)"
+        when "-e", "--execute" then "-e/--execute requires a source argument"
+        when "-i", "--input" then "--input expects one of: #{MODES.join(', ')} (got nothing)"
+        when "-o", "--output" then "--output expects one of: #{MODES.join(', ')} (got nothing)"
         else "#{flag} requires an argument"
         end
       end
@@ -177,7 +196,7 @@ module Fusion
         )
       end
 
-      private_class_method :validate, :resolve_use_case, :run_parser, :to_mode, :missing_argument_message
+      private_class_method :validate, :resolve_use_case, :resolve_mode, :run_parser, :to_mode, :missing_argument_message
     end
   end
 end

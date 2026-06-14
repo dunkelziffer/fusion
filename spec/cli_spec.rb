@@ -68,6 +68,32 @@ RSpec.describe "CLI (exe/fusion)" do
     end
   end
 
+  describe "short flags and repeated modes" do
+    it "accepts the short forms of the use-case and mode flags" do
+      out, _err, status = run_cli("-p", "-i", "array", "-o", "object", "-e", "(n => n)", stdin: "[0,5]")
+      expect(out).to eq(%({"value":5}\n))
+      expect(status.exitstatus).to eq(0)
+    end
+
+    it "accepts --execute as the long form of -e" do
+      out, _err, status = run_cli("--execute", "(n => [n, 1] | @add)", stdin: "5")
+      expect(out).to eq("6\n")
+      expect(status.exitstatus).to eq(0)
+    end
+
+    it "allows a mode to be repeated with the same value" do
+      out, _err, status = run_cli("-i", "array", "--input", "array", "-e", "(n => n)", stdin: "[0,5]")
+      expect(out).to eq("5\n")
+      expect(status.exitstatus).to eq(0)
+    end
+
+    it "rejects two different modes for the same direction" do
+      _out, err, status = run_cli("--input", "array", "-i", "object", "-e", "(n => n)", stdin: "[0,5]")
+      expect(err).to start_with("fusion: conflicting --input modes: array, object")
+      expect(status.exitstatus).to eq(1)
+    end
+  end
+
   describe "the pipe use case with no input" do
     it "emits the program's own value when stdin is empty" do
       out, err, status = run_cli("-e", "[1, [2, 3] | @add]")

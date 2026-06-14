@@ -724,17 +724,20 @@ usage: fusion [options] <file.fsn>
        fusion --repl
 
 use cases (default: --repl with no arguments, otherwise --pipe):
-  --pipe          apply the program to stdin; with no input, the
+  -p, --pipe      apply the program to stdin; with no input, the
                   program's own value is the result
-  --stream        apply the program to each line of an NDJSON stream
-  --repl          interactive expressions and `identifier = expression`
+  -s, --stream    apply the program to each line of an NDJSON stream
+  -r, --repl      interactive expressions and `identifier = expression`
 
 options:
-  -e '<source>'   inline program instead of a file
-  --input MODE    how the input marks an error value (§9.4)
-  --output MODE   how the output marks an error value (§9.4)
+  -e, --execute '<source>'
+                  inline program instead of a file
+  -i, --input MODE
+                  how the input marks an error value (§9.4)
+  -o, --output MODE
+                  how the output marks an error value (§9.4)
   -!              treat the input as an error value (unix input mode only)
-  --skip-blank-lines
+  -b, --skip-blank-lines
                   drop blank input lines instead of echoing them (--stream, §9.5)
 ```
 
@@ -747,7 +750,11 @@ In the pipe use case, input comes from standard input; when standard input is
 empty, the program's own value is the result (§9.3). The stream use case also
 reads standard input. Neither accepts an input argument.
 
-A command-line misuse (an unknown flag, more than one use case, an unsupported
-mode combination, a missing program) is reported as plain usage text on stderr
-with exit code `1`. It happens before the input/output contract begins, so it is
-not a payloaded error.
+Every flag has a short and a long form (`-p`/`--pipe`, `-i`/`--input`, …), except
+`-!`, which has only the short form. Each `--input`/`--output` may be repeated only
+with the *same* mode; two different modes for one direction is a misuse.
+
+A command-line misuse (an unknown flag, more than one use case, two different
+modes for one direction, an unsupported mode combination, a missing program) is
+reported as plain usage text on stderr with exit code `1`. It happens before the
+input/output contract begins, so it is not a payloaded error.

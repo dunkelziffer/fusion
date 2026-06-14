@@ -779,6 +779,11 @@ TODO — to summarize at end of session. Covers:
 - Use case selection: explicit `--pipe` flag added; at most one of
   `--pipe`/`--stream`/`--repl` (two = misuse). With none, a bare `fusion` (no
   arguments) starts the REPL; any other invocation defaults to pipe.
+- Every flag has a short + long form (`-p`/`--pipe`, `-s`/`--stream`,
+  `-r`/`--repl`, `-i`/`--input`, `-o`/`--output`, `-e`/`--execute`,
+  `-b`/`--skip-blank-lines`); `-!` is short-only.
+- `--input`/`--output` may repeat only with the same mode; two different modes
+  for one direction is a misuse (parallels the use-case safeguard).
 - Supersede with ⏪: 4.1 "empty stdin is null"; 4.4 "stream = bang/bang",
   "empty input is null in every mode", and "pipe is the default use case".
   Decide whether 4.5 folds into 4.4.
