@@ -7,11 +7,12 @@
 # exercised by spec/cli_spec.rb; everything here calls the session methods
 # directly, the way the rest of the language is specced in-process.
 
-require "fusion/wire_pair"
-require "fusion/cli/serializer"
-
 RSpec.describe Fusion::CLI::Repl do
   subject(:repl) { described_class.new }
+
+  # A fresh session environment, built the way #run does, so a binding made by
+  # one entry is visible to the next within an example.
+  let(:environment) { Fusion::Interpreter::Env.new.define("__dir__", Dir.pwd) }
 
   let(:division_by_zero) do
     '{"kind":"math_error","location":"builtin divide","operation":"divide","input":[1,0],"message":"division by zero"}'
@@ -42,66 +43,51 @@ RSpec.describe Fusion::CLI::Repl do
     end
   end
 
-  describe "#evaluate_entry + #serialize (expressions)" do
-    def serialize(value)
-      Fusion::CLI::Serializer.serialize(value, lenient: true)
-    end
-
+  describe "#handle (expressions)" do
     it "evaluates and renders an expression without binding anything" do
-      expect(serialize(repl.evaluate_entry("[1, 2, 3] | @length"))).to eq(Fusion::WirePair.new(status: 0, data: "3"))
+      expect(repl.handle("[1, 2, 3] | @length", environment)).to eq("3")
     end
 
-    it "renders an error expression as its payload" do
-      expect(serialize(repl.evaluate_entry("[1, 0] | @divide"))).to eq(Fusion::WirePair.new(status: 1, data: division_by_zero))
+    it "renders an error expression with a `!` prefix" do
+      expect(repl.handle("[1, 0] | @divide", environment)).to eq("!#{division_by_zero}")
     end
 
     it "renders a function leniently" do
-      expect(serialize(repl.evaluate_entry("(n => [n, 2] | @multiply)"))).to eq(Fusion::WirePair.new(status: 0, data: '"<function>"'))
+      expect(repl.handle("(n => [n, 2] | @multiply)", environment)).to eq('"<function>"')
     end
   end
 
-  describe "#evaluate_entry + #serialize (statements)" do
-    def serialize(value)
-      Fusion::CLI::Serializer.serialize(value, lenient: true)
-    end
-
+  describe "#handle (statements)" do
     it "evaluates, renders, and binds the identifier for later entries" do
-      expect(serialize(repl.evaluate_entry("x = 5"))).to eq(Fusion::WirePair.new(status: 0, data: "5"))
-      expect(serialize(repl.evaluate_entry("[x, 1] | @add"))).to eq(Fusion::WirePair.new(status: 0, data: "6"))
+      expect(repl.handle("x = 5", environment)).to eq("5")
+      expect(repl.handle("[x, 1] | @add", environment)).to eq("6")
     end
 
     it "allows rebinding a name" do
-      expect(serialize(repl.evaluate_entry("x = 1"))).to eq(Fusion::WirePair.new(status: 0, data: "1"))
-      expect(serialize(repl.evaluate_entry("x = 2"))).to eq(Fusion::WirePair.new(status: 0, data: "2"))
-      expect(serialize(repl.evaluate_entry("x"))).to eq(Fusion::WirePair.new(status: 0, data: "2"))
+      expect(repl.handle("x = 1", environment)).to eq("1")
+      expect(repl.handle("x = 2", environment)).to eq("2")
+      expect(repl.handle("x", environment)).to eq("2")
     end
 
     it "supports recursion through the bound name" do
-      repl.evaluate_entry("fact = (0 => 1, n => [n, [n, 1] | @subtract | fact] | @multiply)")
-      expect(serialize(repl.evaluate_entry("5 | fact"))).to eq(Fusion::WirePair.new(status: 0, data: "120"))
+      repl.handle("fact = (0 => 1, n => [n, [n, 1] | @subtract | fact] | @multiply)", environment)
+      expect(repl.handle("5 | fact", environment)).to eq("120")
     end
 
     it "allows binding errors to identifiers and renders errors with a `!` prefix" do
-      expect(serialize(repl.evaluate_entry("bad = [1, 0] | @divide"))).to eq(Fusion::WirePair.new(status: 1, data: division_by_zero))
-      expect(serialize(repl.evaluate_entry("bad"))).to eq(Fusion::WirePair.new(status: 1, data: division_by_zero))
+      expect(repl.handle("bad = [1, 0] | @divide", environment)).to eq("!#{division_by_zero}")
+      expect(repl.handle("bad", environment)).to eq("!#{division_by_zero}")
     end
   end
 
-  describe "#evaluate_entry + #serialize (per-entry safety net)" do
-    def serialize(value)
-      Fusion::CLI::Serializer.serialize(value, lenient: true)
-    end
-
+  describe "#handle (per-entry safety net)" do
     it "turns a stack overflow into a stack_error and keeps the session alive" do
-      repl.evaluate_entry("loop = (n => n | loop)")
-      expect(serialize(repl.evaluate_entry("1 | loop"))).to eq(
-        Fusion::WirePair.new(
-          status: 1,
-          data: '{"kind":"stack_error","location":"interpreter",' \
+      repl.handle("loop = (n => n | loop)", environment)
+      expect(repl.handle("1 | loop", environment)).to eq(
+        '!{"kind":"stack_error","location":"interpreter",' \
         '"operation":"running the program","input":null,"message":"recursion too deep"}'
-        )
       )
-      expect(serialize(repl.evaluate_entry('"still alive"'))).to eq(Fusion::WirePair.new(status: 0, data: '"still alive"'))
+      expect(repl.handle('"still alive"', environment)).to eq('"still alive"')
     end
   end
 end
