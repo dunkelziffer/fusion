@@ -649,7 +649,7 @@ All access goes through `@`:
 
 - 🧑 ✅ Read stdin as JSON → value `v`; compute `v | program`; print the result as JSON.
 - 🧑 ✅ A final `!` produces a nonzero exit code.
-- 🤖 ✅ Empty stdin is treated as `null`.
+- 🤖 ⏪ Empty stdin was treated as `null`. Superseded in 4.4: empty stdin means *no input*, so the program's own value is the result.
 - 🤖 ✅ Non-JSON stdin yields `!`.
 
 ### Alternatives
@@ -723,17 +723,25 @@ error value can cross the boundary.
 
 **Use cases:**
 
-- 🧑 ✅ The CLI supports three use cases: **pipe** (apply the program to one input — the 4.1 model, the default), **stream** (apply it to each line of an NDJSON stream), **repl** (interactive).
-- 🧑 ✅ **stream** keeps errors in-band and always exits `0`; a failing record (including a stack overflow) becomes that record's output line and the stream continues. Blank input lines are skipped.
+- 🧑 ✅ The CLI supports three use cases: **pipe** (apply the program to one input — the 4.1 model), **stream** (apply it to each line of an NDJSON stream), **repl** (interactive).
+- 🧑 ✅ At most one of `--pipe`, `--stream`, `--repl` may be given (two is a misuse). With none: a bare `fusion` (no arguments at all) starts the **repl**, any other invocation is **pipe**.
+- 🧑 ✅ **pipe** reads input only from stdin (no input argument). Empty or whitespace-only stdin means *no input*: the program's own value is the result, so a `.fsn` file doubles as enriched JSON (computations, `@ENV`, `@`-references). `-!` still always supplies an error (empty → `!null`).
+- 🧑 ✅ **stream** keeps errors in-band and always exits `0`; a failing record (including a stack overflow) becomes that record's output line and the stream continues.
+- 🧑 ✅ **stream** conforms to NDJSON: UTF-8 throughout, `\n` or `\r\n` input delimiters, one single-line JSON text per output record terminated by `\n`.
+- 🤖 ✅ A blank **stream** input line is echoed as a blank output line (no computation); `--skip-blank-lines` drops it instead.
 
 **I/O modes** — how an error is marked crossing the boundary; `--input` and `--output` are independent:
 
 - 🧑 ✅ Four modes: **unix** (plain JSON; value → stdout/exit 0, error → stderr/exit 1, as in 4.1), **bang** (a leading `!` marks an error), **array** (`[0, value]` / `[1, payload]`), **object** (`{"value": _}` / `{"error": _}`).
 - 🧑 ✅ The `-!` flag (unix input only) makes the whole input an error value.
 - 🧑 ✅ pipe supports all four modes; stream all but unix; repl has none.
-- 🤖 ✅ Defaults: pipe = unix/unix, stream = bang/bang. The non-unix modes always print to stdout and exit `0`.
-- 🤖 ✅ Empty input is `null` in every input mode; `-!` on empty input is `!null`.
+- 🤖 ✅ Defaults: pipe = unix/unix, stream = array/array (so each NDJSON record stays valid JSON; `bang` is kept as the cheapest Fusion-to-Fusion encoding). The non-unix modes always print to stdout and exit `0`.
+- 🧑 ✅ `--input`/`--output` may be repeated only with the same mode; two different modes for one direction is a misuse.
 - 🤖 ✅ A malformed `array`/`object` input envelope is a catchable `argument_error` at `location: "input"` (the array tag must be exactly the integer `0`/`1`), flowing into the program like any input error.
+
+**Flags:**
+
+- 🧑 ✅ Every flag has a short and a long form (`-p`/`--pipe`, `-s`/`--stream`, `-r`/`--repl`, `-i`/`--input`, `-o`/`--output`, `-e`/`--execute`, `-b`/`--skip-blank-lines`); `-!` is short-only.
 
 **REPL:**
 
@@ -742,10 +750,14 @@ error value can cross the boundary.
 - 🧑 ✅ A statement binds its identifier to the result **including an error result**; reading it back later propagates the error, exactly like reading an `@`-reference that resolved to one.
 - 🤖 ✅ Results print leniently (a function as `"<function>"`, etc.); entries report errors at `location: "code <inline>"`, like `-e`.
 - 🤖 ✅ Results go to stdout; the prompt and echoed input go to stderr (like a shell prompt), so stdout is a clean stream of results.
-- 🤖 ✅ A command-line misuse (unknown flag, unsupported mode combination, missing program) is plain usage text on stderr with exit `1` — it precedes the I/O contract, so it is not a payloaded error.
+- 🤖 ✅ A command-line misuse (unknown flag, more than one use case, conflicting input/output modes, unsupported mode combination, missing program) is plain usage text on stderr with exit `1` — it precedes the I/O contract, so it is not a payloaded error.
 
 ### Alternatives
 
+- 🧑 ⏪ pipe was the unconditional default — now repl on a bare `fusion`, otherwise pipe.
+- 🤖 ⏪ stream defaulted to `bang`/`bang` — now `array`/`array`, since `bang` lines aren't valid JSON.
+- 🤖 ⏪ Empty input was the value `null`, and input could also come from an inline `[json-input]` argument — now empty means *no input* and input is stdin-only.
+- 🧑 ⏪ Blank `stream` lines were silently skipped — now echoed by default, dropped with `--skip-blank-lines` (the spec leaves empty-line handling to the parser, so it must be configurable).
 - 🧑 ⏪ REPL accepts only statements (the original "introduces a single statement" sketch); widened so a bare expression is also an entry.
 - 🧑 ⏪ Statements terminated by `;` (so several could share a line); dropped — completeness is decided by parsing, so a line that parses is submitted and no terminator is needed.
 - 🤖 ⏪ A statement does **not** bind an error result (mirroring pattern binders, which never capture an error). Flipped: a statement is an assignment, not a pattern match; binding an error is harmless and needs no special case.
@@ -757,36 +769,13 @@ error value can cross the boundary.
 - One small flag surface spans first-class Unix filters (pipe), bulk processing (stream), and interactive exploration (repl).
 - Errors cross the boundary in whatever shape the surrounding tool wants — exit code, `!` sentinel, or envelope — with input and output chosen independently.
 - The REPL reuses the whole language: an entry is just an expression, with assignment the one addition, and a bound error propagates like any other value-or-error (no carve-out).
+- A program with no stdin doubles as enriched JSON (computation, `@ENV`, `@`-references), and `--stream` emits valid NDJSON.
 
 ### Cons
 
 - Four error-marking modes are more surface than the original single unix contract.
 - Completeness-by-parsing submits a complete-but-maybe-unintended line (e.g. `x = 5` when more was meant) as-is.
-
----
-
-## 4.5 CLI contract: NDJSON streaming, stdin-only input, bare programs
-
-TODO — to summarize at end of session. Covers:
-- `--stream` defaults to `array` (not `bang`) and conforms to NDJSON.
-- Inline input argument removed — input is stdin-only.
-- Empty input == absent input: with no (non-whitespace) stdin the program's own
-  value is the result; the value `null` is supplied by piping the literal `null`
-  (relies on NULL always serializing to `null`, here and nested).
-- NDJSON blank lines: echoed as blank output lines by default (line-for-line
-  aligned, no computation), `--skip-blank-lines` drops them (the spec's permitted
-  "ignore empty lines"; flag satisfies the "SHOULD be configurable" clause).
-- Use case selection: explicit `--pipe` flag added; at most one of
-  `--pipe`/`--stream`/`--repl` (two = misuse). With none, a bare `fusion` (no
-  arguments) starts the REPL; any other invocation defaults to pipe.
-- Every flag has a short + long form (`-p`/`--pipe`, `-s`/`--stream`,
-  `-r`/`--repl`, `-i`/`--input`, `-o`/`--output`, `-e`/`--execute`,
-  `-b`/`--skip-blank-lines`); `-!` is short-only.
-- `--input`/`--output` may repeat only with the same mode; two different modes
-  for one direction is a misuse (parallels the use-case safeguard).
-- Supersede with ⏪: 4.1 "empty stdin is null"; 4.4 "stream = bang/bang",
-  "empty input is null in every mode", and "pipe is the default use case".
-  Decide whether 4.5 folds into 4.4.
+- Empty stdin no longer means the value `null`; to feed `null` you pipe the literal `null`.
 
 ---
 
