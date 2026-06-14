@@ -1,9 +1,6 @@
 # frozen_string_literal: true
 
 # === CLI internals ===
-#
-# Input: JSON
-# Output: Interpreter runtime value
 
 require "json"
 
@@ -12,22 +9,22 @@ module Fusion
     module Parser
       extend self
 
-      def parse(json)
-        ruby_value = JSON.parse(json)
-        convert(ruby_value)
+      # WirePair -> runtime value
+      def parse(wire_pair)
+        value = convert(JSON.parse(wire_pair.data))
+        wire_pair.status == 1 ? Interpreter::ErrorVal.new(value) : value
       rescue JSON::ParserError
         Interpreter::ErrorVal.internal(
           kind: "syntax_error",
           location: "input",
           operation: "parsing input as JSON",
-          input: json,
+          input: wire_pair.data,
           message: "input is not valid JSON"
         )
       end
 
       private
 
-      # returns a runtime value
       def convert(ruby_value)
         case ruby_value
         when nil then NULL

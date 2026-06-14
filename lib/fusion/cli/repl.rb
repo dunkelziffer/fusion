@@ -1,0 +1,73 @@
+# frozen_string_literal: true
+
+# === CLI internals ===
+
+require_relative "serializer"
+require_relative "encoder"
+require_relative "../interpreter/env"
+
+module Fusion
+  module CLI
+    class Repl
+      PROMPT = "fsn> "
+      CONTINUATION_PROMPT = "...> "
+
+      # REPL entries report errors with the same location as inline (`-e`) code.
+      LOCATION = "code <inline>"
+
+      def run
+        require "reline"
+        $stdout.sync = true
+        Reline.output = $stderr
+        Reline.prompt_proc = proc do |lines|
+          lines.each_index.map { |i| i.zero? ? PROMPT : CONTINUATION_PROMPT }
+        end
+
+        environment = Interpreter::Env.new.define("__dir__", Dir.pwd)
+
+        loop do
+          buffer = begin
+            Reline.readmultiline(PROMPT, true) { complete?(_1) }
+          rescue Interrupt
+            $stderr.puts("^C") # discard the half-typed entry and re-prompt
+            next
+          end
+
+          break if buffer.nil? # Ctrl-D on an empty line ends the session
+          next if buffer.strip.empty?
+
+          $stdout.puts(handle(buffer, environment))
+        end
+      end
+
+      def complete?(buffer)
+        return true if buffer.strip.empty?
+
+        ast = Fusion::Parser.parse_repl(buffer, location: LOCATION)
+        ast.is_a?(AST::Expression) || ast.is_a?(AST::Statement::Assignment)
+      end
+
+      def handle(buffer, environment)
+        ast = Fusion::Parser.parse_repl(buffer, location: LOCATION)
+        runtime_value = evaluate(ast, environment)
+        wire_pair = Serializer.serialize(runtime_value, lenient: true)
+        Encoder.encode(wire_pair, mode: :bang)
+      end
+
+      private
+
+      def evaluate(ast, environment)
+        case ast
+        when AST::Expression
+          Interpreter.safe_evaluate(ast, environment)
+        when AST::Statement::Assignment
+          value = Interpreter.safe_evaluate(ast.expression, environment)
+          environment.define(ast.name, value)
+          value
+        else
+          raise Unreachable, "Unhandled AST node #{ast.class}"
+        end
+      end
+    end
+  end
+end

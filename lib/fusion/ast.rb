@@ -23,6 +23,7 @@ module Fusion
     # node, `Pattern` any pattern node.
     module Expression; end
     module Pattern; end
+    module Statement; end
 
     # Auxiliary typed parts: the elements a collection node holds. NOT themselves
     # expressions or patterns, so they live outside the marker families and never
@@ -75,6 +76,16 @@ module Fusion
           v.filter_map { |m| m.key if PatternPair === m }.then { |keys| keys.uniq.size == keys.size }
       })
       PGuard    = TypedData.define(inner: Pattern, pred_expr: Expression)                           # inner ? predicate
+
+      constants.each do |name|
+        node = const_get(name)
+        node.include(self) if node.is_a?(Class) && node < Data
+      end
+    end
+
+    module Statement
+      # The only statement. Only allowed in the REPL. `name = expression`.
+      Assignment = TypedData.define(name: Identifier, expression: Expression)
 
       constants.each do |name|
         node = const_get(name)

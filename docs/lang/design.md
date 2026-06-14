@@ -714,6 +714,57 @@ All access goes through `@`:
 
 ---
 
+## 4.4 CLI use cases and I/O modes
+
+Extends the single runtime contract of 4.1 into three use cases and four ways an
+error value can cross the boundary.
+
+### Decisions
+
+**Use cases:**
+
+- 🧑 ✅ The CLI supports three use cases: **pipe** (apply the program to one input — the 4.1 model, the default), **stream** (apply it to each line of an NDJSON stream), **repl** (interactive).
+- 🧑 ✅ **stream** keeps errors in-band and always exits `0`; a failing record (including a stack overflow) becomes that record's output line and the stream continues. Blank input lines are skipped.
+
+**I/O modes** — how an error is marked crossing the boundary; `--input` and `--output` are independent:
+
+- 🧑 ✅ Four modes: **unix** (plain JSON; value → stdout/exit 0, error → stderr/exit 1, as in 4.1), **bang** (a leading `!` marks an error), **array** (`[0, value]` / `[1, payload]`), **object** (`{"value": _}` / `{"error": _}`).
+- 🧑 ✅ The `-!` flag (unix input only) makes the whole input an error value.
+- 🧑 ✅ pipe supports all four modes; stream all but unix; repl has none.
+- 🤖 ✅ Defaults: pipe = unix/unix, stream = bang/bang. The non-unix modes always print to stdout and exit `0`.
+- 🤖 ✅ Empty input is `null` in every input mode; `-!` on empty input is `!null`.
+- 🤖 ✅ A malformed `array`/`object` input envelope is a catchable `argument_error` at `location: "input"` (the array tag must be exactly the integer `0`/`1`), flowing into the program like any input error.
+
+**REPL:**
+
+- 🧑 ✅ An entry is an **expression** (evaluated and printed) or a **statement** `identifier = expression` (evaluated, printed, and bound for later entries). The statement is the only construct that is not an expression.
+- 🧑 ✅ An entry is evaluated only once it parses as a whole statement/expression; an incomplete or invalid buffer keeps the entry open to finish or correct.
+- 🧑 ✅ A statement binds its identifier to the result **including an error result**; reading it back later propagates the error, exactly like reading an `@`-reference that resolved to one.
+- 🤖 ✅ Results print leniently (a function as `"<function>"`, etc.); entries report errors at `location: "code <inline>"`, like `-e`.
+- 🤖 ✅ Results go to stdout; the prompt and echoed input go to stderr (like a shell prompt), so stdout is a clean stream of results.
+- 🤖 ✅ A command-line misuse (unknown flag, unsupported mode combination, missing program) is plain usage text on stderr with exit `1` — it precedes the I/O contract, so it is not a payloaded error.
+
+### Alternatives
+
+- 🧑 ⏪ REPL accepts only statements (the original "introduces a single statement" sketch); widened so a bare expression is also an entry.
+- 🧑 ⏪ Statements terminated by `;` (so several could share a line); dropped — completeness is decided by parsing, so a line that parses is submitted and no terminator is needed.
+- 🤖 ⏪ A statement does **not** bind an error result (mirroring pattern binders, which never capture an error). Flipped: a statement is an assignment, not a pattern match; binding an error is harmless and needs no special case.
+- 🤖 ❌ unix mode for stream — one exit code and one stdout/stderr pair cannot mark errors per record.
+- 🤖 💭 A single `--mode` controlling both directions — input and output modes are deliberately independent.
+
+### Pros
+
+- One small flag surface spans first-class Unix filters (pipe), bulk processing (stream), and interactive exploration (repl).
+- Errors cross the boundary in whatever shape the surrounding tool wants — exit code, `!` sentinel, or envelope — with input and output chosen independently.
+- The REPL reuses the whole language: an entry is just an expression, with assignment the one addition, and a bound error propagates like any other value-or-error (no carve-out).
+
+### Cons
+
+- Four error-marking modes are more surface than the original single unix contract.
+- Completeness-by-parsing submits a complete-but-maybe-unintended line (e.g. `x = 5` when more was meant) as-is.
+
+---
+
 # 5. Misc
 
 ## 5.1 No operator sugar (deferred)
