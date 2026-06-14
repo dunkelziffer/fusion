@@ -767,10 +767,17 @@ error value can cross the boundary.
 
 ## 4.5 CLI contract: NDJSON streaming, stdin-only input, bare programs
 
-TODO — to summarize at end of session. Covers: `--stream` defaults to `array`
-(not `bang`) and conforms to NDJSON; inline input argument removed (input is
-stdin-only); pipe with no input emits the program's own value. Decide whether
-some of these fold into 4.4 as bullets rather than a separate section.
+TODO — to summarize at end of session. Covers:
+- `--stream` defaults to `array` (not `bang`) and conforms to NDJSON.
+- Inline input argument removed — input is stdin-only.
+- Empty input == absent input: with no (non-whitespace) stdin the program's own
+  value is the result; the value `null` is supplied by piping the literal `null`
+  (relies on NULL always serializing to `null`, here and nested).
+- NDJSON blank lines: echoed as blank output lines by default (line-for-line
+  aligned, no computation), `--skip-blank-lines` drops them (the spec's permitted
+  "ignore empty lines"; flag satisfies the "SHOULD be configurable" clause).
+- Supersede with ⏪: 4.1 "empty stdin is null" and 4.4 "stream = bang/bang" /
+  "empty input is null in every mode". Decide whether 4.5 folds into 4.4.
 
 ---
 

@@ -666,8 +666,11 @@ NDJSON conformance:
 - Every output record is a single JSON text in UTF-8, terminated by `\n`, and
   never contains an embedded newline or carriage return.
 - Both `\n` and `\r\n` are accepted as input line delimiters.
-- Blank input lines are silently skipped (the one deviation the spec permits, so
-  it is called out here); every other line produces exactly one output line.
+- A blank input line (empty or whitespace-only) carries no record, so the program
+  never runs on it. By default it is echoed as a blank output line, keeping input
+  and output aligned line-for-line. Pass `--skip-blank-lines` to drop blank lines
+  instead — the "silently ignore empty lines" behavior the spec permits. Every
+  non-blank line produces exactly one output line.
 
 - Errors stay in-band, so a failing record — including a stack overflow — becomes
   that record's output line and the stream continues. The exit code is always `0`.
@@ -729,6 +732,8 @@ options:
   --input MODE    how the input marks an error value (§9.4)
   --output MODE   how the output marks an error value (§9.4)
   -!              treat the input as an error value (unix input mode only)
+  --skip-blank-lines
+                  drop blank input lines instead of echoing them (--stream, §9.5)
 ```
 
 In the pipe use case, input comes from standard input; when standard input is

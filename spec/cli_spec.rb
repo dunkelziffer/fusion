@@ -67,6 +67,15 @@ RSpec.describe "CLI (exe/fusion)" do
       expect(err).to include('"kind":"serialization_error"', '"location":"output"')
       expect(status.exitstatus).to eq(1)
     end
+
+    # With empty input meaning "no input", the value null is supplied by piping
+    # the literal "null"; that round-trips only because NULL always serializes as
+    # "null", here and nested inside arrays/objects.
+    it "round-trips a piped null (NULL always serializes as null)" do
+      out, _err, status = run_cli("-e", '(n => [n, {"k": n}])', stdin: "null")
+      expect(out).to eq(%([null,{"k":null}]\n))
+      expect(status.exitstatus).to eq(0)
+    end
   end
 
   describe "the top-level Ruby-error net" do
@@ -129,6 +138,12 @@ RSpec.describe "CLI (exe/fusion)" do
     it "rejects an input argument in the pipe use case (input is stdin-only)" do
       _out, err, status = run_cli("-e", "(n => n)", "1")
       expect(err).to start_with("fusion: input arrives on stdin, not an argument")
+      expect(status.exitstatus).to eq(1)
+    end
+
+    it "rejects --skip-blank-lines outside --stream" do
+      _out, err, status = run_cli("--skip-blank-lines", "-e", "(n => n)")
+      expect(err).to start_with("fusion: --skip-blank-lines is only for --stream")
       expect(status.exitstatus).to eq(1)
     end
 
@@ -333,8 +348,16 @@ RSpec.describe "CLI (exe/fusion)" do
       expect(status.exitstatus).to eq(0)
     end
 
-    it "skips blank lines" do
+    it "echoes blank lines as blank output lines by default (no computation)" do
       out, _err, status = run_cli("--stream", File.join(FIX, "double.fsn"), stdin: "[0,1]\n\n[0,2]\n")
+      expect(out).to eq("[0,2]\n\n[0,4]\n")
+      expect(status.exitstatus).to eq(0)
+    end
+
+    it "drops blank lines with --skip-blank-lines" do
+      out, _err, status = run_cli(
+        "--stream", "--skip-blank-lines", File.join(FIX, "double.fsn"), stdin: "[0,1]\n\n[0,2]\n"
+      )
       expect(out).to eq("[0,2]\n[0,4]\n")
       expect(status.exitstatus).to eq(0)
     end

@@ -47,8 +47,10 @@ module Fusion
     #
     # NDJSON conformance: UTF-8 throughout; "\n" and "\r\n" are both accepted as
     # input delimiters (chomp); every output record is a single-line JSON text
-    # (JSON.generate never emits newlines) terminated by "\n". Blank input lines
-    # are skipped — the one deviation the spec permits, documented in §9.5.
+    # (JSON.generate never emits newlines) terminated by "\n". A blank input line
+    # carries no record (the program never runs on it): by default it is echoed
+    # as a blank output line, keeping input and output line-for-line aligned;
+    # --skip-blank-lines drops it instead (§9.5).
     def run_stream(options)
       program = load_program(options)
       $stdout.sync = true
@@ -56,7 +58,10 @@ module Fusion
       $stdout.set_encoding(Encoding::UTF_8)
       $stdin.each_line do |line|
         record = line.chomp
-        next if record.strip.empty?
+        if record.strip.empty?
+          $stdout.puts unless options.skip_blank_lines?
+          next
+        end
 
         input  = parse(decode(record, mode: options.input_mode))
         output = apply(input, program)

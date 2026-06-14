@@ -30,6 +30,8 @@ module Fusion
           --input MODE    how the input marks an error value
           --output MODE   how the output marks an error value
           -!              treat the input as an error value (unix input mode only)
+          --skip-blank-lines
+                          drop blank input lines instead of echoing them (--stream only)
 
         modes: unix, bang, array, object
           unix    pipe only (default there): plain JSON; output: stdout/exit 0
@@ -44,17 +46,22 @@ module Fusion
 
       attr_reader :use_case, :input_mode, :output_mode, :inline_source, :program_path
 
-      def initialize(use_case:, input_mode:, output_mode:, inline_source:, program_path:, error_input:)
+      def initialize(use_case:, input_mode:, output_mode:, inline_source:, program_path:, error_input:, skip_blank_lines:)
         @use_case = use_case
         @input_mode = input_mode
         @output_mode = output_mode
         @inline_source = inline_source
         @program_path = program_path
         @error_input = error_input
+        @skip_blank_lines = skip_blank_lines
       end
 
       def error_input?
         @error_input
+      end
+
+      def skip_blank_lines?
+        @skip_blank_lines
       end
 
       def self.parse(argv)
@@ -63,6 +70,7 @@ module Fusion
         input_mode = nil
         output_mode = nil
         error_input = false
+        skip_blank_lines = false
         inline_source = nil
         positional = []
 
@@ -74,6 +82,7 @@ module Fusion
           when "--input" then input_mode = shift_mode(arguments, "--input")
           when "--output" then output_mode = shift_mode(arguments, "--output")
           when "-!" then error_input = true
+          when "--skip-blank-lines" then skip_blank_lines = true
           when "-e"
             inline_source = arguments.shift
             raise UsageError, "-e requires a source argument" if inline_source.nil?
@@ -85,11 +94,13 @@ module Fusion
           end
         end
 
-        validate(use_case, input_mode, output_mode, error_input, inline_source, positional)
+        validate(use_case, input_mode, output_mode, error_input, skip_blank_lines, inline_source, positional)
       end
 
       # Check the flag combination against the use case and fill in defaults.
-      def self.validate(use_case, input_mode, output_mode, error_input, inline_source, positional)
+      def self.validate(use_case, input_mode, output_mode, error_input, skip_blank_lines, inline_source, positional)
+        raise UsageError, "--skip-blank-lines is only for --stream" if skip_blank_lines && use_case != :stream
+
         case use_case
         when :repl
           unless input_mode.nil? && output_mode.nil? && !error_input && inline_source.nil? && positional.empty?
@@ -121,7 +132,8 @@ module Fusion
           output_mode: output_mode,
           inline_source: inline_source,
           program_path: program_path,
-          error_input: error_input
+          error_input: error_input,
+          skip_blank_lines: skip_blank_lines
         )
       end
 
