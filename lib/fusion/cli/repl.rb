@@ -9,8 +9,19 @@ require_relative "../interpreter/env"
 module Fusion
   module CLI
     class Repl
-      PROMPT = "fsn> "
-      CONTINUATION_PROMPT = "...> "
+      # ANSI codes for the interactive decorations (stderr only).
+      RESET      = "\e[0m"
+      LIGHT_BLUE = "\e[94m"
+      GREEN      = "\e[32m"
+      RED        = "\e[31m"
+
+      # Interactive decorations, each baked with its color. They all render on
+      # stderr (Reline draws the prompts; a marker precedes each result); the result
+      # value itself is never styled — it stays clean on stdout.
+      PROMPT              = "#{LIGHT_BLUE}fsn> #{RESET}"
+      CONTINUATION_PROMPT = "#{LIGHT_BLUE}...> #{RESET}"
+      VALUE_MARKER        = "#{GREEN}✔ #{RESET}"
+      ERROR_MARKER        = "#{RED}✗ #{RESET}"
 
       # REPL entries report errors with the same location as inline (`-e`) code.
       LOCATION = "code <inline>"
@@ -36,7 +47,11 @@ module Fusion
           break if buffer.nil? # Ctrl-D on an empty line ends the session
           next if buffer.strip.empty?
 
-          $stdout.puts(handle(buffer, environment))
+          output = handle(buffer, environment)
+          # A bang-encoded error starts with "!"; a JSON value never does.
+          marker = output.start_with?("!") ? ERROR_MARKER : VALUE_MARKER
+          $stderr.print(marker) # stderr decoration, on the result's line
+          $stdout.puts(output)  # the clean value/!payload stays on stdout
         end
       end
 

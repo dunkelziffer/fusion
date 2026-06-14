@@ -713,8 +713,10 @@ the session opens a new line so the entry can be finished or corrected. An entry
 may therefore span multiple lines (continuation lines show `...> `); on an empty
 continuation line, backspace returns to the previous line. The prompt and the
 echoed input render on **stderr** (like a shell prompt), so stdout carries only
-the stream of results. End the session with Ctrl-D; Ctrl-C discards the entry
-being typed.
+the stream of results. The prompt is shown in light blue, and each result is
+preceded **on stderr** by a green `✔` (a value) or a red `✗` (an error); these
+are decorations only — the result itself stays unstyled on stdout. End the
+session with Ctrl-D; Ctrl-C discards the entry being typed.
 
 ### 9.7 Command-line interface
 

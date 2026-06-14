@@ -750,6 +750,7 @@ error value can cross the boundary.
 - 🧑 ✅ A statement binds its identifier to the result **including an error result**; reading it back later propagates the error, exactly like reading an `@`-reference that resolved to one.
 - 🤖 ✅ Results print leniently (a function as `"<function>"`, etc.); entries report errors at `location: "code <inline>"`, like `-e`.
 - 🤖 ✅ Results go to stdout; the prompt and echoed input go to stderr (like a shell prompt), so stdout is a clean stream of results.
+- 🧑 ✅ stderr decorations are styled: a light-blue prompt, and a green `✔` / red `✗` before each value / error result. Styling never touches stdout (the result stays unstyled).
 - 🤖 ✅ A command-line misuse (unknown flag, more than one use case, conflicting input/output modes, unsupported mode combination, missing program) is plain usage text on stderr with exit `1` — it precedes the I/O contract, so it is not a payloaded error.
 
 ### Alternatives
