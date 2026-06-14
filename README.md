@@ -57,14 +57,15 @@ gem "fusion-lang", require: "fusion"
 ```sh
 echo '5' | fusion examples/factorial.fsn        # => 120
 echo '15' | fusion examples/fizzbuzz.fsn        # => "FizzBuzz"
-fusion examples/factorial.fsn 5                 # => 120 (input as an argument)
-fusion -e '(n => [n,2] | @multiply)' 21         # => 42 (inline program)
-printf '[1, 2]\n[3, 4]\n' | fusion --stream examples/double.fsn   # => [2,4] [6,8] (NDJSON, one value per line)
+echo '21' | fusion -e '(n => [n,2] | @multiply)'   # => 42 (inline program)
+fusion -e '[1, [2, 3] | @add]'                  # => [1,5] (no input: the program's value is the result)
+printf '[0,3]\n[0,4]\n' | fusion --stream examples/double.fsn   # => [0,6] [0,8] (NDJSON, array mode)
 fusion --repl                                   # interactive expressions and `name = expression`
 ```
 
-- Input is read from stdin (or the 2nd CLI arg) as JSON and parsed into a Fusion value.
-- The file's function gets applied to this value: `value | function`
+- Input is read from stdin as JSON and parsed into a Fusion value.
+- The file's function gets applied to this value: `value | function`.
+- With no input, the file's own value is the result — so a `.fsn` file doubles as enriched JSON data.
 - The result gets printed as JSON to stdout.
 - Errors get printed to stderr instead and set exit code `1`.
 - How errors cross the boundary is configurable per side (`--input` / `--output`);

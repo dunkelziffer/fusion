@@ -31,25 +31,35 @@ module Fusion
       end
     end
 
-    # pipe: load the program, pipe one input through it, emit one output.
+    # pipe: load the program, then either pipe one input through it or — when no
+    # input is supplied — emit the program's own value. The no-input case lets a
+    # .fsn file double as enriched JSON data (computations, @ENV, @-references).
     def run_pipe(options)
-      function = load_program(options)
-      input    = parse(load_input(options))
-      output   = apply(input, function)
+      program = load_program(options)
+      input   = load_input(options)
+      output  = input.nil? ? program : apply(parse(input), program)
       emit_output(serialize(output), output_mode: options.output_mode)
     end
 
     # stream: load the program once, then treat stdin/stdout as NDJSON streams —
     # one input per line, one output line per input. Errors stay in-band (the
     # unix mode is unavailable here), so the exit code is always 0.
+    #
+    # NDJSON conformance: UTF-8 throughout; "\n" and "\r\n" are both accepted as
+    # input delimiters (chomp); every output record is a single-line JSON text
+    # (JSON.generate never emits newlines) terminated by "\n". Blank input lines
+    # are skipped — the one deviation the spec permits, documented in §9.5.
     def run_stream(options)
-      function = load_program(options)
+      program = load_program(options)
       $stdout.sync = true
+      $stdin.set_encoding(Encoding::UTF_8)
+      $stdout.set_encoding(Encoding::UTF_8)
       $stdin.each_line do |line|
-        next if line.strip.empty?
+        record = line.chomp
+        next if record.strip.empty?
 
-        input  = parse(decode(line, mode: options.input_mode))
-        output = apply(input, function)
+        input  = parse(decode(record, mode: options.input_mode))
+        output = apply(input, program)
         $stdout.puts(encode(serialize(output), mode: options.output_mode))
       end
     end
@@ -89,16 +99,20 @@ module Fusion
 
     private
 
-    # input -> WirePair
+    # Read stdin into the input WirePair, or nil when no input was supplied (so
+    # the program's own value becomes the result — see run_pipe). Empty stdin
+    # counts as "no input", except under -!, which always supplies an error value
+    # (empty stdin becomes !null, mirroring the language's bare !).
     def load_input(options)
-      text = options.explicit_input || ($stdin.tty? ? "" : $stdin.read)
+      text  = $stdin.tty? ? "" : $stdin.read
       empty = text.strip.empty?
 
-      if options.input_mode == :unix || empty
-        WirePair.new(
-          status: options.error_input? ? 1 : 0,
-          data: empty ? "null" : text
-        )
+      if options.error_input?
+        WirePair.new(status: 1, data: empty ? "null" : text)
+      elsif empty
+        nil
+      elsif options.input_mode == :unix
+        WirePair.new(status: 0, data: text)
       else
         decode(text, mode: options.input_mode)
       end

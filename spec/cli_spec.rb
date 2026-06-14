@@ -48,6 +48,27 @@ RSpec.describe "CLI (exe/fusion)" do
     end
   end
 
+  describe "the pipe use case with no input" do
+    it "emits the program's own value when stdin is empty" do
+      out, err, status = run_cli("-e", "[1, [2, 3] | @add]")
+      expect(out).to eq("[1,5]\n")
+      expect(err).to eq("")
+      expect(status.exitstatus).to eq(0)
+    end
+
+    it "still pipes stdin through the program when input is present" do
+      out, _err, status = run_cli("-e", "(n => [n, 1] | @add)", stdin: "5")
+      expect(out).to eq("6\n")
+      expect(status.exitstatus).to eq(0)
+    end
+
+    it "reports a serialization_error when a bare program is itself a function" do
+      _out, err, status = run_cli("-e", "(n => n)")
+      expect(err).to include('"kind":"serialization_error"', '"location":"output"')
+      expect(status.exitstatus).to eq(1)
+    end
+  end
+
   describe "the top-level Ruby-error net" do
     it "converts a stack overflow (SystemStackError) into a stack_error payload" do
       out, err, status = run_cli(File.join(FIX, "loop.fsn"), stdin: "0")
@@ -105,6 +126,12 @@ RSpec.describe "CLI (exe/fusion)" do
       expect(status.exitstatus).to eq(1)
     end
 
+    it "rejects an input argument in the pipe use case (input is stdin-only)" do
+      _out, err, status = run_cli("-e", "(n => n)", "1")
+      expect(err).to start_with("fusion: input arrives on stdin, not an argument")
+      expect(status.exitstatus).to eq(1)
+    end
+
     it "rejects a program, input, or modes for --repl" do
       _out, err, status = run_cli("--repl", "-e", "(n => n)")
       expect(err).to start_with("fusion: --repl takes no program, no input, and no modes")
@@ -112,7 +139,7 @@ RSpec.describe "CLI (exe/fusion)" do
     end
 
     it "rejects -! when the input mode is not unix" do
-      _out, err, status = run_cli("-!", "--input", "bang", "-e", "(n => n)", "1")
+      _out, err, status = run_cli("-!", "--input", "bang", "-e", "(n => n)")
       expect(err).to start_with("fusion: -! requires the unix input mode")
       expect(status.exitstatus).to eq(1)
     end
@@ -127,14 +154,14 @@ RSpec.describe "CLI (exe/fusion)" do
 
   describe "the -! flag (the input is an error value)" do
     it "feeds the input to the program as an error" do
-      out, err, status = run_cli("-!", "-e", "(!payload => payload)", "42")
+      out, err, status = run_cli("-!", "-e", "(!payload => payload)", stdin: "42")
       expect(out).to eq("42\n")
       expect(err).to eq("")
       expect(status.exitstatus).to eq(0)
     end
 
     it "propagates the input error when no clause catches it (binders never capture errors)" do
-      out, err, status = run_cli("-!", "-e", "(n => n)", "42")
+      out, err, status = run_cli("-!", "-e", "(n => n)", stdin: "42")
       expect(out).to eq("")
       expect(err).to eq("42\n")
       expect(status.exitstatus).to eq(1)
@@ -143,12 +170,6 @@ RSpec.describe "CLI (exe/fusion)" do
     it "turns empty input into the error !null" do
       out, _err, status = run_cli("-!", "-e", '(!null => "caught bare error")')
       expect(out).to eq("\"caught bare error\"\n")
-      expect(status.exitstatus).to eq(0)
-    end
-
-    it "still accepts a negative number as the input argument" do
-      out, _err, status = run_cli("-e", "(n => n)", "-5")
-      expect(out).to eq("-5\n")
       expect(status.exitstatus).to eq(0)
     end
   end
@@ -161,13 +182,13 @@ RSpec.describe "CLI (exe/fusion)" do
     end
 
     it "reads a leading ! as an error value" do
-      out, _err, status = run_cli("--input", "bang", "-e", "(!payload => payload)", '!"boom"')
+      out, _err, status = run_cli("--input", "bang", "-e", "(!payload => payload)", stdin: '!"boom"')
       expect(out).to eq("\"boom\"\n")
       expect(status.exitstatus).to eq(0)
     end
 
     it "reads a lone ! as the error !null" do
-      out, _err, status = run_cli("--input", "bang", "-e", '(!null => "caught bare error")', "!")
+      out, _err, status = run_cli("--input", "bang", "-e", '(!null => "caught bare error")', stdin: "!")
       expect(out).to eq("\"caught bare error\"\n")
       expect(status.exitstatus).to eq(0)
     end
@@ -175,19 +196,19 @@ RSpec.describe "CLI (exe/fusion)" do
 
   describe "the array input mode" do
     it "unwraps [0, value] into the value" do
-      out, _err, status = run_cli("--input", "array", "-e", "(n => n)", "[0, 5]")
+      out, _err, status = run_cli("--input", "array", "-e", "(n => n)", stdin: "[0, 5]")
       expect(out).to eq("5\n")
       expect(status.exitstatus).to eq(0)
     end
 
     it "unwraps [1, payload] into an error value" do
-      out, _err, status = run_cli("--input", "array", "-e", "(!payload => payload)", '[1, "boom"]')
+      out, _err, status = run_cli("--input", "array", "-e", "(!payload => payload)", stdin: '[1, "boom"]')
       expect(out).to eq("\"boom\"\n")
       expect(status.exitstatus).to eq(0)
     end
 
     it "turns a malformed envelope into a catchable argument_error" do
-      out, err, status = run_cli("--input", "array", "-e", "(n => n)", "[2, 5]")
+      out, err, status = run_cli("--input", "array", "-e", "(n => n)", stdin: "[2, 5]")
       expect(out).to eq("")
       expect(err).to eq(
         %({"kind":"argument_error","location":"input","operation":"decoding input","input":[2,5],"message":"expected [0, _] or [1, _]"}\n)
@@ -196,7 +217,7 @@ RSpec.describe "CLI (exe/fusion)" do
     end
 
     it "requires the tag to be exactly the integer 0 or 1" do
-      _out, err, status = run_cli("--input", "array", "-e", "(n => n)", "[0.0, 5]")
+      _out, err, status = run_cli("--input", "array", "-e", "(n => n)", stdin: "[0.0, 5]")
       expect(err).to include('"kind":"argument_error"', '"input":[0.0,5]')
       expect(status.exitstatus).to eq(1)
     end
@@ -204,19 +225,19 @@ RSpec.describe "CLI (exe/fusion)" do
 
   describe "the object input mode" do
     it 'unwraps {"value": _} into the value' do
-      out, _err, status = run_cli("--input", "object", "-e", "(n => n)", '{"value": 5}')
+      out, _err, status = run_cli("--input", "object", "-e", "(n => n)", stdin: '{"value": 5}')
       expect(out).to eq("5\n")
       expect(status.exitstatus).to eq(0)
     end
 
     it 'unwraps {"error": _} into an error value' do
-      out, _err, status = run_cli("--input", "object", "-e", "(!payload => payload)", '{"error": "boom"}')
+      out, _err, status = run_cli("--input", "object", "-e", "(!payload => payload)", stdin: '{"error": "boom"}')
       expect(out).to eq("\"boom\"\n")
       expect(status.exitstatus).to eq(0)
     end
 
     it "turns an envelope with extra keys into a catchable argument_error" do
-      _out, err, status = run_cli("--input", "object", "-e", "(n => n)", '{"value": 1, "extra": 2}')
+      _out, err, status = run_cli("--input", "object", "-e", "(n => n)", stdin: '{"value": 1, "extra": 2}')
       expect(err).to eq(
         %({"kind":"argument_error","location":"input","operation":"decoding input","input":{"value":1,"extra":2},"message":"expected {\\"value\\": _} or {\\"error\\": _}"}\n)
       )
@@ -291,7 +312,7 @@ RSpec.describe "CLI (exe/fusion)" do
   describe "mode independence" do
     it "combines --input array with --output object" do
       out, _err, status = run_cli(
-        "--input", "array", "--output", "object", "-e", '(!payload => ["caught", payload])', '[1, "boom"]'
+        "--input", "array", "--output", "object", "-e", '(!payload => ["caught", payload])', stdin: '[1, "boom"]'
       )
       expect(out).to eq(%({"value":["caught","boom"]}\n))
       expect(status.exitstatus).to eq(0)
@@ -299,28 +320,36 @@ RSpec.describe "CLI (exe/fusion)" do
   end
 
   describe "--stream" do
-    it "pipes each NDJSON line through the program and exits 0" do
-      out, err, status = run_cli("--stream", File.join(FIX, "double.fsn"), stdin: "1\n2\n3\n")
-      expect(out).to eq("2\n4\n6\n")
+    it "pipes each NDJSON line through the program and exits 0 (array, the default)" do
+      out, err, status = run_cli("--stream", File.join(FIX, "double.fsn"), stdin: "[0,1]\n[0,2]\n[0,3]\n")
+      expect(out).to eq("[0,2]\n[0,4]\n[0,6]\n")
       expect(err).to eq("")
       expect(status.exitstatus).to eq(0)
     end
 
-    it "skips blank lines" do
-      out, _err, status = run_cli("--stream", File.join(FIX, "double.fsn"), stdin: "1\n\n2\n")
-      expect(out).to eq("2\n4\n")
+    it "accepts both LF and CRLF line delimiters (NDJSON)" do
+      out, _err, status = run_cli("--stream", File.join(FIX, "double.fsn"), stdin: "[0,1]\r\n[0,2]\n")
+      expect(out).to eq("[0,2]\n[0,4]\n")
       expect(status.exitstatus).to eq(0)
     end
 
-    it "defaults both sides to the bang mode" do
-      out, _err, status = run_cli("--stream", "-e", '(!payload => !["was", payload], n => n)', stdin: %(1\n!"boom"\n))
-      expect(out).to eq(%(1\n!["was","boom"]\n))
+    it "skips blank lines" do
+      out, _err, status = run_cli("--stream", File.join(FIX, "double.fsn"), stdin: "[0,1]\n\n[0,2]\n")
+      expect(out).to eq("[0,2]\n[0,4]\n")
+      expect(status.exitstatus).to eq(0)
+    end
+
+    it "defaults both sides to the array mode" do
+      out, _err, status = run_cli(
+        "--stream", "-e", '(!payload => ["was", payload], n => n)', stdin: %([0,1]\n[1,"boom"]\n)
+      )
+      expect(out).to eq(%([0,1]\n[0,["was","boom"]]\n))
       expect(status.exitstatus).to eq(0)
     end
 
     it "keeps a per-record error in-band and continues the stream" do
-      out, err, status = run_cli("--stream", "-e", "(p => p | @divide)", stdin: "[4,2]\n[1,0]\n[9,3]\n")
-      expect(out).to eq("2\n!#{division_by_zero}\n3\n")
+      out, err, status = run_cli("--stream", "-e", "(p => p | @divide)", stdin: "[0,[4,2]]\n[0,[1,0]]\n[0,[9,3]]\n")
+      expect(out).to eq("[0,2]\n[1,#{division_by_zero}]\n[0,3]\n")
       expect(err).to eq("")
       expect(status.exitstatus).to eq(0)
     end
@@ -328,9 +357,18 @@ RSpec.describe "CLI (exe/fusion)" do
     it "keeps a per-record stack overflow in-band and continues the stream" do
       stack_error =
         '{"kind":"stack_error","location":"interpreter","operation":"running the program","input":null,"message":"recursion too deep"}'
-      out, err, status = run_cli("--stream", File.join(FIX, "loop.fsn"), stdin: "0\n1\n")
-      expect(out).to eq("!#{stack_error}\n!#{stack_error}\n")
+      out, err, status = run_cli("--stream", File.join(FIX, "loop.fsn"), stdin: "[0,0]\n[0,1]\n")
+      expect(out).to eq("[1,#{stack_error}]\n[1,#{stack_error}]\n")
       expect(err).to eq("")
+      expect(status.exitstatus).to eq(0)
+    end
+
+    it "still supports the bang mode as the cheapest Fusion-to-Fusion encoding" do
+      out, _err, status = run_cli(
+        "--stream", "--input", "bang", "--output", "bang",
+        "-e", '(!payload => !["was", payload], n => n)', stdin: %(1\n!"boom"\n)
+      )
+      expect(out).to eq(%(1\n!["was","boom"]\n))
       expect(status.exitstatus).to eq(0)
     end
 

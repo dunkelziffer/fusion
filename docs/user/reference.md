@@ -574,9 +574,15 @@ above. Recursion through functions is not a data cycle.
 
 The default use case (**pipe**) reads standard input as JSON, converts it to a
 Fusion value `v`, computes `v | programFunction`, and prints the result on
-standard output as JSON.
+standard output as JSON. When standard input is empty, no pipeline runs and the
+program's own value is the result instead.
 
-- Empty input is treated as `null` (in every input mode).
+- Input always arrives on standard input; there is no input argument.
+- **Empty input means "no input": the program's own value is the result.** A
+  `.fsn` file therefore doubles as enriched JSON data — it can compute, read
+  `@ENV`, and pull in `@`-references, then print the value with no pipeline
+  input. (Under `-!` an error input is always supplied instead; empty input
+  becomes `!null` — see §9.4.)
 - Non-JSON input yields a `syntax_error` at `location: "input"` (§6.5).
 - **If the final result is an error**, the interpreter prints **nothing** to
   standard output, prints the error's **payload** (as JSON) to standard error, and
@@ -619,9 +625,12 @@ flags:
 - **`bang`** — a leading `!` marks an error value; the payload is the JSON after
   the `!`. A lone `!` is `!null`, like the language's bare `!`. Output is always
   on stdout and the exit code is always `0`. A `!`-marked line is not valid JSON;
-  that is the price of the most lightweight marking.
+  that is the price of the most lightweight marking, so `bang` is recommended only
+  between Fusion programs — for anything that must stay valid JSON, use `array` or
+  `object`.
 - **`array`** — everything is wrapped in an envelope: `[0, value]` for a value,
-  `[1, payload]` for an error. Output is always on stdout, exit code always `0`.
+  `[1, payload]` for an error. Every line is valid JSON, which is why it is the
+  `--stream` default (§9.5). Output is always on stdout, exit code always `0`.
 - **`object`** — the envelope is `{"value": value}` for a value, `{"error": payload}`
   for an error. Output is always on stdout, exit code always `0`.
 
@@ -634,20 +643,32 @@ Mode support per use case (defaults in bold):
 | Use case   | `unix`   | `bang`   | `array` | `object` |
 | ---------- | -------- | -------- | ------- | -------- |
 | pipe       | **yes**  | yes      | yes     | yes      |
-| `--stream` | no       | **yes**  | yes     | yes      |
+| `--stream` | no       | yes      | **yes** | yes      |
 | `--repl`   | —        | —        | —       | —        |
 
 The unix mode spends the process's only exit code and both standard streams on a
 single result, so it cannot mark errors per record in a stream; the stream use
-case therefore excludes it. The REPL is interactive and has no modes at all.
+case therefore excludes it. Stream defaults to `array` rather than `bang` so each
+record stays valid JSON (NDJSON, §9.5); `bang` remains available as the cheapest
+encoding for Fusion-to-Fusion pipelines. The REPL is interactive and has no modes
+at all.
 
 ### 9.5 Streaming (`--stream`)
 
 `fusion --stream` loads the program once, then treats standard input and output
-as NDJSON streams: each input line is decoded per the input mode, piped through
-the program, and printed as one output line encoded per the output mode.
+as [NDJSON](http://ndjson.org/) streams: each input line is decoded per the input
+mode, piped through the program, and printed as one output line encoded per the
+output mode. Input and output default to the **array** mode (not `bang`) so every
+line is valid JSON. The media type is `application/x-ndjson` and the file
+extension `.ndjson`.
 
-- Blank lines are skipped; every other input line produces exactly one output line.
+NDJSON conformance:
+- Every output record is a single JSON text in UTF-8, terminated by `\n`, and
+  never contains an embedded newline or carriage return.
+- Both `\n` and `\r\n` are accepted as input line delimiters.
+- Blank input lines are silently skipped (the one deviation the spec permits, so
+  it is called out here); every other line produces exactly one output line.
+
 - Errors stay in-band, so a failing record — including a stack overflow — becomes
   that record's output line and the stream continues. The exit code is always `0`.
 - A program that fails to load answers every record with that same load error.
@@ -693,12 +714,13 @@ being typed.
 ### 9.7 Command-line interface
 
 ```
-usage: fusion [options] <file.fsn> [json-input]
-       fusion [options] -e '<source>' [json-input]
+usage: fusion [options] <file.fsn>
+       fusion [options] -e '<source>'
        fusion --repl
 
 use cases:
-  (default)       pipe: apply the program to one input
+  (default)       pipe: apply the program to stdin; with no input, the
+                  program's own value is the result
   --stream        apply the program to each line of an NDJSON stream
   --repl          interactive expressions and `identifier = expression`
 
@@ -709,9 +731,9 @@ options:
   -!              treat the input as an error value (unix input mode only)
 ```
 
-In the pipe use case, input comes from the `[json-input]` argument if present,
-otherwise from standard input. The stream use case always reads standard input
-and accepts no input argument.
+In the pipe use case, input comes from standard input; when standard input is
+empty, the program's own value is the result (§9.3). The stream use case also
+reads standard input. Neither accepts an input argument.
 
 A command-line misuse (an unknown flag, an unsupported mode combination, a
 missing program) is reported as plain usage text on stderr with exit code `1`.

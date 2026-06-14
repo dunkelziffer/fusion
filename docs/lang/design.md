@@ -765,6 +765,15 @@ error value can cross the boundary.
 
 ---
 
+## 4.5 CLI contract: NDJSON streaming, stdin-only input, bare programs
+
+TODO — to summarize at end of session. Covers: `--stream` defaults to `array`
+(not `bang`) and conforms to NDJSON; inline input argument removed (input is
+stdin-only); pipe with no input emits the program's own value. Decide whether
+some of these fold into 4.4 as bullets rather than a separate section.
+
+---
+
 # 5. Misc
 
 ## 5.1 No operator sugar (deferred)
