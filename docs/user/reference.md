@@ -671,8 +671,7 @@ relative to the working directory.
 
 - Results print leniently (§9.3): a function prints as `"<function>"` instead of
   becoming a `serialization_error`.
-- An error prints as `!payload` but binds nothing — mirroring patterns, where a
-  binder never captures an error. The session continues.
+- An error prints as `!payload`.
 - Rebinding a name is allowed; later entries see the new value.
 - A bound function can call itself through its own name
   (`fact = (0 => 1, n => [n, [n,1] | @subtract | fact] | @multiply)`), because

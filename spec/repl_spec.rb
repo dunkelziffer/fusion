@@ -81,15 +81,9 @@ RSpec.describe Fusion::CLI::Repl do
       expect(serialize(repl.evaluate_entry("5 | fact"))).to eq(Fusion::WirePair.new(status: 0, data: "120"))
     end
 
-    it "renders an error but does not bind it (a binder never captures an error)" do
+    it "allows binding errors to identifiers and renders errors with a `!` prefix" do
       expect(serialize(repl.evaluate_entry("bad = [1, 0] | @divide"))).to eq(Fusion::WirePair.new(status: 1, data: division_by_zero))
-      expect(serialize(repl.evaluate_entry("bad"))).to eq(
-        Fusion::WirePair.new(
-          status: 1,
-          data: '{"kind":"binding_error","location":"code <inline>",' \
-        '"operation":"reading identifier bad","input":"bad","message":"unbound identifier"}'
-        )
-      )
+      expect(serialize(repl.evaluate_entry("bad"))).to eq(Fusion::WirePair.new(status: 1, data: division_by_zero))
     end
   end
 

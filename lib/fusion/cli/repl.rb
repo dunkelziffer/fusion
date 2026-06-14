@@ -81,10 +81,7 @@ module Fusion
           Interpreter.safe_evaluate(entry, @session_env)
         when AST::Statement::Assignment
           value = Interpreter.safe_evaluate(entry.expression, @session_env)
-
-          # TODO: Decide, whether we want this. Why should we prevent errors from being stored in variables?
-          @session_env.define(entry.name, value) unless value.is_a?(Interpreter::ErrorVal)
-
+          @session_env.define(entry.name, value)
           value
         else
           raise Unreachable, "Unhandled AST node #{entry.class}"
