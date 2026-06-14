@@ -48,6 +48,26 @@ RSpec.describe "CLI (exe/fusion)" do
     end
   end
 
+  describe "use case selection" do
+    it "starts the REPL when run with no arguments at all" do
+      out, _err, status = run_cli(stdin: "[1, 2, 3] | @length\n")
+      expect(out).to eq("3\n")
+      expect(status.exitstatus).to eq(0)
+    end
+
+    it "defaults to the pipe use case once any argument is given" do
+      out, _err, status = run_cli("-e", "(n => [n, 1] | @add)", stdin: "5")
+      expect(out).to eq("6\n")
+      expect(status.exitstatus).to eq(0)
+    end
+
+    it "runs the pipe use case under an explicit --pipe" do
+      out, _err, status = run_cli("--pipe", "-e", "(n => [n, 1] | @add)", stdin: "5")
+      expect(out).to eq("6\n")
+      expect(status.exitstatus).to eq(0)
+    end
+  end
+
   describe "the pipe use case with no input" do
     it "emits the program's own value when stdin is empty" do
       out, err, status = run_cli("-e", "[1, [2, 3] | @add]")
@@ -105,9 +125,15 @@ RSpec.describe "CLI (exe/fusion)" do
 
   describe "usage errors (plain text, before the input/output contract)" do
     it "rejects a missing program" do
-      out, err, status = run_cli
+      out, err, status = run_cli("--pipe")
       expect(out).to eq("")
       expect(err).to start_with("fusion: missing program")
+      expect(status.exitstatus).to eq(1)
+    end
+
+    it "rejects passing more than one use case" do
+      _out, err, status = run_cli("--stream", "--repl", "-e", "(n => n)")
+      expect(err).to start_with("fusion: choose one use case")
       expect(status.exitstatus).to eq(1)
     end
 
@@ -401,6 +427,27 @@ RSpec.describe "CLI (exe/fusion)" do
         stdin: %([0,5]\n[1,"boom"]\n)
       )
       expect(out).to eq(%({"value":10}\n{"value":"boom"}\n))
+      expect(status.exitstatus).to eq(0)
+    end
+  end
+
+  describe "UTF-8 input and output" do
+    it "round-trips a non-ASCII string through the pipe, unescaped" do
+      out, _err, status = run_cli("-e", "(s => s)", stdin: '"héllo ✓ 日本"')
+      expect(out).to eq(%("héllo ✓ 日本"\n))
+      expect(status.exitstatus).to eq(0)
+    end
+
+    it "decodes the input as UTF-8 characters, not bytes" do
+      # "héllo ✓ 日本" is 10 characters but 17 bytes; @length must count characters.
+      out, _err, status = run_cli("-e", "(s => s | @length)", stdin: '"héllo ✓ 日本"')
+      expect(out).to eq("10\n")
+      expect(status.exitstatus).to eq(0)
+    end
+
+    it "round-trips non-ASCII through the NDJSON stream" do
+      out, _err, status = run_cli("--stream", "-e", "(s => s)", stdin: %([0,"日本 ✓"]\n))
+      expect(out).to eq(%([0,"日本 ✓"]\n))
       expect(status.exitstatus).to eq(0)
     end
   end

@@ -9,6 +9,8 @@
 # stderr by exe/fusion — it happens before the input/output contract begins,
 # so it is not a payloaded Fusion error.
 
+require "optparse"
+
 module Fusion
   module CLI
     class Options
@@ -19,8 +21,8 @@ module Fusion
                fusion [options] -e '<source>'
                fusion --repl
 
-        use cases:
-          (default)       pipe: apply the program to stdin; with no input, the
+        use cases (default: --repl with no arguments, otherwise --pipe):
+          --pipe          apply the program to stdin; with no input, the
                           program's own value is the result
           --stream        apply the program to each line of an NDJSON stream
           --repl          interactive expressions and `identifier = expression`
@@ -65,36 +67,74 @@ module Fusion
       end
 
       def self.parse(argv)
-        arguments = argv.dup
-        use_case = :pipe
+        pipe = false
+        stream = false
+        repl = false
         input_mode = nil
         output_mode = nil
         error_input = false
         skip_blank_lines = false
         inline_source = nil
-        positional = []
 
-        until arguments.empty?
-          argument = arguments.shift
-          case argument
-          when "--stream" then use_case = :stream
-          when "--repl" then use_case = :repl
-          when "--input" then input_mode = shift_mode(arguments, "--input")
-          when "--output" then output_mode = shift_mode(arguments, "--output")
-          when "-!" then error_input = true
-          when "--skip-blank-lines" then skip_blank_lines = true
-          when "-e"
-            inline_source = arguments.shift
-            raise UsageError, "-e requires a source argument" if inline_source.nil?
-          when /\A--/
-            raise UsageError, "unknown option #{argument}"
-          else
-            # Anything else is positional: the program path (for the non -e form).
-            positional << argument
-          end
+        parser = OptionParser.new do |option|
+          option.on("--pipe") { pipe = true }
+          option.on("--stream") { stream = true }
+          option.on("--repl") { repl = true }
+          option.on("--input MODE") { |mode| input_mode = to_mode(mode, "--input") }
+          option.on("--output MODE") { |mode| output_mode = to_mode(mode, "--output") }
+          option.on("-e SOURCE") { |source| inline_source = source }
+          option.on("-!") { error_input = true }
+          option.on("--skip-blank-lines") { skip_blank_lines = true }
         end
+        parser.require_exact = true # no abbreviations: "--s" is not a stand-in for "--stream"
+
+        # Whatever survives option parsing is positional: the program path.
+        positional = run_parser(parser, argv)
+
+        use_case = resolve_use_case(pipe: pipe, stream: stream, repl: repl, no_arguments: argv.empty?)
 
         validate(use_case, input_mode, output_mode, error_input, skip_blank_lines, inline_source, positional)
+      end
+
+      # Collapse the use-case flags into one use case; more than one is a misuse.
+      # With none: a bare `fusion` (no arguments) starts the REPL, while any other
+      # invocation is a pipe run.
+      def self.resolve_use_case(pipe:, stream:, repl:, no_arguments:)
+        selected = [(:pipe if pipe), (:stream if stream), (:repl if repl)].compact
+
+        case selected.length
+        when 0 then no_arguments ? :repl : :pipe
+        when 1 then selected.first
+        else raise UsageError, "choose one use case: --pipe, --stream, or --repl"
+        end
+      end
+
+      # Run OptionParser, translating its parse errors into our UsageError so
+      # exe/fusion reports them as plain usage text (never a payloaded error).
+      def self.run_parser(parser, argv)
+        parser.parse(argv)
+      rescue OptionParser::InvalidOption => error
+        raise UsageError, "unknown option #{error.args.join(' ')}"
+      rescue OptionParser::MissingArgument => error
+        raise UsageError, missing_argument_message(error.args.first)
+      rescue OptionParser::ParseError => error
+        raise UsageError, error.message
+      end
+
+      # A MODE value -> its symbol, or a UsageError naming the valid modes.
+      def self.to_mode(value, flag)
+        return value.to_sym if MODES.include?(value)
+
+        raise UsageError, "#{flag} expects one of: #{MODES.join(', ')} (got #{value})"
+      end
+
+      # Mirror the old per-flag wording when a value-taking option has no value.
+      def self.missing_argument_message(flag)
+        case flag
+        when "-e" then "-e requires a source argument"
+        when "--input", "--output" then "#{flag} expects one of: #{MODES.join(', ')} (got nothing)"
+        else "#{flag} requires an argument"
+        end
       end
 
       # Check the flag combination against the use case and fill in defaults.
@@ -137,15 +177,7 @@ module Fusion
         )
       end
 
-      def self.shift_mode(arguments, flag)
-        mode = arguments.shift
-        unless MODES.include?(mode)
-          raise UsageError, "#{flag} expects one of: #{MODES.join(', ')} (got #{mode.nil? ? 'nothing' : mode})"
-        end
-        mode.to_sym
-      end
-
-      private_class_method :validate, :shift_mode
+      private_class_method :validate, :resolve_use_case, :run_parser, :to_mode, :missing_argument_message
     end
   end
 end

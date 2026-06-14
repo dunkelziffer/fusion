@@ -572,10 +572,11 @@ above. Recursion through functions is not a data cycle.
 
 ### 9.3 Runtime contract
 
-The default use case (**pipe**) reads standard input as JSON, converts it to a
-Fusion value `v`, computes `v | programFunction`, and prints the result on
-standard output as JSON. When standard input is empty, no pipeline runs and the
-program's own value is the result instead.
+The **pipe** use case (`--pipe`, and the default whenever any argument is given —
+see §9.7) reads standard input as JSON, converts it to a Fusion value `v`,
+computes `v | programFunction`, and prints the result on standard output as JSON.
+When standard input is empty, no pipeline runs and the program's own value is the
+result instead.
 
 - Input always arrives on standard input; there is no input argument.
 - **Empty input means "no input": the program's own value is the result.** A
@@ -678,9 +679,10 @@ NDJSON conformance:
 
 ### 9.6 The REPL (`--repl`)
 
-`fusion --repl` starts an interactive session. It loads no program, takes no
-pipeline input, has no input/output mode, and always exits `0`. Each entry is
-read, evaluated, and its result printed. An entry is one of:
+`fusion --repl` starts an interactive session — as does a bare `fusion` with no
+arguments at all (§9.7). It loads no program, takes no pipeline input, has no
+input/output mode, and always exits `0`. Each entry is read, evaluated, and its
+result printed. An entry is one of:
 
 - an **expression** — evaluated and printed; or
 - a **statement** — an assignment that also binds a name:
@@ -721,8 +723,8 @@ usage: fusion [options] <file.fsn>
        fusion [options] -e '<source>'
        fusion --repl
 
-use cases:
-  (default)       pipe: apply the program to stdin; with no input, the
+use cases (default: --repl with no arguments, otherwise --pipe):
+  --pipe          apply the program to stdin; with no input, the
                   program's own value is the result
   --stream        apply the program to each line of an NDJSON stream
   --repl          interactive expressions and `identifier = expression`
@@ -736,11 +738,16 @@ options:
                   drop blank input lines instead of echoing them (--stream, §9.5)
 ```
 
+**Selecting a use case.** At most one of `--pipe`, `--stream`, `--repl` may be
+given; passing two is a command-line misuse. With none, a bare `fusion` (no
+arguments at all) starts the REPL, while any other invocation is a pipe run. So
+`--pipe` is needed only to be explicit — `fusion file.fsn` already pipes.
+
 In the pipe use case, input comes from standard input; when standard input is
 empty, the program's own value is the result (§9.3). The stream use case also
 reads standard input. Neither accepts an input argument.
 
-A command-line misuse (an unknown flag, an unsupported mode combination, a
-missing program) is reported as plain usage text on stderr with exit code `1`.
-It happens before the input/output contract begins, so it is not a payloaded
-error.
+A command-line misuse (an unknown flag, more than one use case, an unsupported
+mode combination, a missing program) is reported as plain usage text on stderr
+with exit code `1`. It happens before the input/output contract begins, so it is
+not a payloaded error.

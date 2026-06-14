@@ -776,8 +776,12 @@ TODO — to summarize at end of session. Covers:
 - NDJSON blank lines: echoed as blank output lines by default (line-for-line
   aligned, no computation), `--skip-blank-lines` drops them (the spec's permitted
   "ignore empty lines"; flag satisfies the "SHOULD be configurable" clause).
-- Supersede with ⏪: 4.1 "empty stdin is null" and 4.4 "stream = bang/bang" /
-  "empty input is null in every mode". Decide whether 4.5 folds into 4.4.
+- Use case selection: explicit `--pipe` flag added; at most one of
+  `--pipe`/`--stream`/`--repl` (two = misuse). With none, a bare `fusion` (no
+  arguments) starts the REPL; any other invocation defaults to pipe.
+- Supersede with ⏪: 4.1 "empty stdin is null"; 4.4 "stream = bang/bang",
+  "empty input is null in every mode", and "pipe is the default use case".
+  Decide whether 4.5 folds into 4.4.
 
 ---
 
