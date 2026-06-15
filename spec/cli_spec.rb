@@ -115,8 +115,8 @@ RSpec.describe "CLI (exe/fusion)" do
     end
 
     # With empty input meaning "no input", the value null is supplied by piping
-    # the literal "null"; that round-trips only because NULL always serializes as
-    # "null", here and nested inside arrays/objects.
+    # the literal "null". We need to ensure, that we always output this
+    # as "null" again and not as empty string, or our program won't chain properly.
     it "round-trips a piped null (NULL always serializes as null)" do
       out, _err, status = run_cli("-e", '(n => [n, {"k": n}])', stdin: "null")
       expect(out).to eq(%([null,{"k":null}]\n))
@@ -181,13 +181,13 @@ RSpec.describe "CLI (exe/fusion)" do
       expect(status.exitstatus).to eq(1)
     end
 
-    it "rejects an input argument for --stream" do
+    it "rejects an input argument for --stream when -e is already given" do
       _out, err, status = run_cli("--stream", "-e", "(n => n)", "1")
       expect(err).to start_with("fusion: too many positional arguments")
       expect(status.exitstatus).to eq(1)
     end
 
-    it "rejects an input argument in the pipe use case (input is stdin-only)" do
+    it "rejects an input argument for --pipe when -e is already given" do
       _out, err, status = run_cli("-e", "(n => n)", "1")
       expect(err).to start_with("fusion: too many positional arguments")
       expect(status.exitstatus).to eq(1)
