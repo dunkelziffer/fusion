@@ -575,8 +575,8 @@ above. Recursion through functions is not a data cycle.
 The **pipe** use case (`--pipe`, and the default whenever any argument is given —
 see §9.7) reads standard input as JSON, converts it to a Fusion value `v`,
 computes `v | programFunction`, and prints the result on standard output as JSON.
-When standard input is empty, no pipeline runs and the program's own value is the
-result instead.
+When standard input is empty, the program get evaluated and immediately becomes
+the result instead.
 
 - Input always arrives on standard input; there is no input argument.
 - **Empty input means "no input": the program's own value is the result.** A
@@ -659,11 +659,12 @@ at all.
 ### 9.5 Streaming (`--stream`)
 
 `fusion --stream` loads the program once, then treats standard input and output
-as [NDJSON](http://ndjson.org/) streams: each input line is decoded per the input
-mode, piped through the program, and printed as one output line encoded per the
-output mode. Input and output default to the **array** mode (not `bang`) so every
-line is valid JSON. The media type is `application/x-ndjson` and the file
-extension `.ndjson`.
+as [NDJSON](https://github.com/ndjson/ndjson-spec) streams: each input line is
+decoded per the input mode, piped through the program, and printed as one output
+line encoded per the output mode. Input and output default to the **array** mode
+(not `bang`) so every line is valid JSON. The media type is
+`application/x-ndjson` and the file extension for storing such a stream should
+be `.ndjson`.
 
 NDJSON conformance:
 - Every output record is a single JSON text in UTF-8, terminated by `\n`, and
@@ -672,12 +673,11 @@ NDJSON conformance:
 - A blank input line (empty or whitespace-only) carries no record, so the program
   never runs on it. By default it is echoed as a blank output line, keeping input
   and output aligned line-for-line. Pass `--skip-blank-lines` to drop blank lines
-  instead — the "silently ignore empty lines" behavior the spec permits. Every
-  non-blank line produces exactly one output line.
+  instead. Every non-blank line produces exactly one output line.
 
 - Errors stay in-band, so a failing record — including a stack overflow — becomes
   that record's output line and the stream continues. The exit code is always `0`.
-- A program that fails to load answers every record with that same load error.
+- A program that fails to load will return the same load error for every record.
 
 ### 9.6 The REPL (`--repl`)
 
@@ -710,13 +710,13 @@ relative to the working directory.
 - Entries report errors at `location: "code <inline>"`, like `-e` programs.
 
 **Input editing.** An entry is submitted only once it parses as a complete
-statement or expression; until then — whether still unfinished or not yet valid —
-the session opens a new line so the entry can be finished or corrected. An entry
-may therefore span multiple lines (continuation lines show `...> `); on an empty
-continuation line, backspace returns to the previous line. The prompt and the
-echoed input render on **stderr** (like a shell prompt), so stdout carries only
-the stream of results. The prompt is shown in light blue, and each result is
-preceded **on stderr** by a green `✔` (a value) or a red `✗` (an error); these
+statement or expression; until then the session opens a new line so the entry
+can be finished or corrected. An entry may therefore span multiple lines
+(continuation lines show `...> `); on an empty continuation line, backspace
+returns to the previous line. The prompt and the echoed input render on **stderr**
+(like a shell prompt), so stdout carries only the stream of results.
+The prompt is shown in light blue, and each result is preceded **on stderr**
+by a green `✔` (a value) or a red `✗` (an error); these
 are decorations only — the result itself stays unstyled on stdout. End the
 session with Ctrl-D; Ctrl-C discards the entry being typed.
 
@@ -748,15 +748,16 @@ options:
 **Selecting a use case.** At most one of `--pipe`, `--stream`, `--repl` may be
 given; passing two is a command-line misuse. With none, a bare `fusion` (no
 arguments at all) starts the REPL, while any other invocation is a pipe run. So
-`--pipe` is needed only to be explicit — `fusion file.fsn` already pipes.
+`--pipe` is needed only to be explicit, `fusion file.fsn` already implicitly
+use `--pipe`.
 
 In the pipe use case, input comes from standard input; when standard input is
 empty, the program's own value is the result (§9.3). The stream use case also
 reads standard input. Neither accepts an input argument.
 
 Every flag has a short and a long form (`-p`/`--pipe`, `-i`/`--input`, …), except
-`-!`, which has only the short form. Each `--input`/`--output` may be repeated only
-with the *same* mode; two different modes for one direction is a misuse.
+`-!`, which has only the short form. Each of `--input`/`--output` may only be used
+once. Multiple different modes for one direction is a misuse.
 
 A command-line misuse (an unknown flag, more than one use case, two different
 modes for one direction, an unsupported mode combination, a missing program) is
