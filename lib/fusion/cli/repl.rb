@@ -23,8 +23,9 @@ module Fusion
       LOCATION = "code <inline>"
 
       def run
+        CLI.prepare!
+
         require "reline"
-        $stdout.sync = true
         Reline.output = $stderr
         Reline.prompt_proc = proc do |lines|
           lines.each_index.map { |i| i.zero? ? PROMPT : CONTINUATION_PROMPT }
@@ -51,6 +52,7 @@ module Fusion
         end
       end
 
+      # String -> yes/no
       def complete?(buffer)
         return true if buffer.strip.empty?
 
@@ -58,6 +60,7 @@ module Fusion
         ast.is_a?(AST::Expression) || ast.is_a?(AST::Statement::Assignment)
       end
 
+      # String (+ Env) -> String
       def handle(buffer, environment)
         ast = Fusion::Parser.parse_repl(buffer, location: LOCATION)
         runtime_value = evaluate(ast, environment)

@@ -183,13 +183,13 @@ RSpec.describe "CLI (exe/fusion)" do
 
     it "rejects an input argument for --stream" do
       _out, err, status = run_cli("--stream", "-e", "(n => n)", "1")
-      expect(err).to start_with("fusion: --stream reads its input from stdin")
+      expect(err).to start_with("fusion: too many positional arguments")
       expect(status.exitstatus).to eq(1)
     end
 
     it "rejects an input argument in the pipe use case (input is stdin-only)" do
       _out, err, status = run_cli("-e", "(n => n)", "1")
-      expect(err).to start_with("fusion: input arrives on stdin, not an argument")
+      expect(err).to start_with("fusion: too many positional arguments")
       expect(status.exitstatus).to eq(1)
     end
 
@@ -234,10 +234,14 @@ RSpec.describe "CLI (exe/fusion)" do
       expect(status.exitstatus).to eq(1)
     end
 
-    it "turns empty input into the error !null" do
-      out, _err, status = run_cli("-!", "-e", '(!null => "caught bare error")')
-      expect(out).to eq("\"caught bare error\"\n")
-      expect(status.exitstatus).to eq(0)
+    # -! with empty stdin has no payload to mark. Unlike a wrong-mode -!, this is
+    # only catchable while reading input, but it is still a usage error: plain
+    # text on stderr (stdout empty), never a payloaded Fusion error.
+    it "rejects empty input as a usage error (nothing to mark)" do
+      out, err, status = run_cli("-!", "-e", "(n => n)")
+      expect(out).to eq("")
+      expect(err).to start_with("fusion: -! requires input to mark as an error, but stdin was empty")
+      expect(status.exitstatus).to eq(1)
     end
   end
 

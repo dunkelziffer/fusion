@@ -6,8 +6,9 @@
 # Output: Options (use case, input/output modes, program, input)
 #
 # A misuse of the command line is a UsageError, reported as plain text on
-# stderr by exe/fusion — it happens before the input/output contract begins,
-# so it is not a payloaded Fusion error.
+# stderr by exe/fusion, never a payloaded Fusion error. Most surface here while
+# parsing options; `-!` with empty stdin is the one caught later, while reading
+# input.
 
 require "optparse"
 
@@ -83,8 +84,8 @@ module Fusion
           option.on("-p", "--pipe") { pipe = true }
           option.on("-s", "--stream") { stream = true }
           option.on("-r", "--repl") { repl = true }
-          option.on("-i", "--input MODE") { |mode| input_modes << to_mode(mode, "--input") }
-          option.on("-o", "--output MODE") { |mode| output_modes << to_mode(mode, "--output") }
+          option.on("-i", "--input MODE") { |mode| input_modes << check_mode!(mode, "--input") }
+          option.on("-o", "--output MODE") { |mode| output_modes << check_mode!(mode, "--output") }
           option.on("-e", "--execute SOURCE") { |source| inline_source = source }
           option.on("-!") { error_input = true }
           option.on("-b", "--skip-blank-lines") { skip_blank_lines = true }
@@ -139,7 +140,7 @@ module Fusion
       end
 
       # A MODE value -> its symbol, or a UsageError naming the valid modes.
-      def self.to_mode(value, flag)
+      def self.check_mode!(value, flag)
         return value.to_sym if MODES.include?(value)
 
         raise UsageError, "#{flag} expects one of: #{MODES.join(', ')} (got #{value})"
@@ -173,14 +174,14 @@ module Fusion
           raise UsageError, "-! requires the unix input mode" if error_input
           program_path = inline_source ? nil : positional.shift
           raise UsageError, "missing program (a .fsn file or -e)" unless inline_source || program_path
-          raise UsageError, "--stream reads its input from stdin, not an argument" unless positional.empty?
+          raise UsageError, "too many positional arguments" unless positional.empty?
         when :pipe
           input_mode ||= :unix
           output_mode ||= :unix
           raise UsageError, "-! requires the unix input mode" if error_input && input_mode != :unix
           program_path = inline_source ? nil : positional.shift
           raise UsageError, "missing program (a .fsn file or -e)" unless inline_source || program_path
-          raise UsageError, "input arrives on stdin, not an argument: #{positional.join(' ')}" unless positional.empty?
+          raise UsageError, "too many positional arguments" unless positional.empty?
         else
           raise Unreachable, "Unknown use case #{use_case}"
         end
@@ -196,7 +197,7 @@ module Fusion
         )
       end
 
-      private_class_method :validate, :resolve_use_case, :resolve_mode, :run_parser, :to_mode, :missing_argument_message
+      private_class_method :validate, :resolve_use_case, :resolve_mode, :run_parser, :check_mode!, :missing_argument_message
     end
   end
 end

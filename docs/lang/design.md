@@ -725,7 +725,7 @@ error value can cross the boundary.
 
 - 🧑 ✅ The CLI supports three use cases: **pipe** (apply the program to one input — the 4.1 model), **stream** (apply it to each line of an NDJSON stream), **repl** (interactive).
 - 🧑 ✅ At most one of `--pipe`, `--stream`, `--repl` may be given (two is a misuse). With none: a bare `fusion` (no arguments at all) starts the **repl**, any other invocation is **pipe**.
-- 🧑 ✅ **pipe** reads input only from stdin (no input argument). Empty or whitespace-only stdin means *no input*: the program's own value is the result, so a `.fsn` file doubles as enriched JSON (computations, `@ENV`, `@`-references). `-!` still always supplies an error (empty → `!null`).
+- 🧑 ✅ **pipe** reads input only from stdin (no input argument). Empty or whitespace-only stdin means *no input*: the program's own value is the result, so a `.fsn` file doubles as enriched JSON (computations, `@ENV`, `@`-references). Under `-!` the input is the error payload, so empty stdin is a usage error (nothing to mark).
 - 🧑 ✅ **stream** keeps errors in-band and always exits `0`; a failing record (including a stack overflow) becomes that record's output line and the stream continues.
 - 🧑 ✅ **stream** conforms to NDJSON: UTF-8 throughout, `\n` or `\r\n` input delimiters, one single-line JSON text per output record terminated by `\n`.
 - 🤖 ✅ A blank **stream** input line is echoed as a blank output line (no computation); `--skip-blank-lines` drops it instead.
@@ -734,6 +734,7 @@ error value can cross the boundary.
 
 - 🧑 ✅ Four modes: **unix** (plain JSON; value → stdout/exit 0, error → stderr/exit 1, as in 4.1), **bang** (a leading `!` marks an error), **array** (`[0, value]` / `[1, payload]`), **object** (`{"value": _}` / `{"error": _}`).
 - 🧑 ✅ The `-!` flag (unix input only) makes the whole input an error value.
+- 🧑 ✅ Empty stdin under `-!` has no payload to mark: a usage error (plain text on stderr, the program never runs), caught while reading input rather than during option parsing.
 - 🧑 ✅ pipe supports all four modes; stream all but unix; repl has none.
 - 🤖 ✅ Defaults: pipe = unix/unix, stream = array/array (so each NDJSON record stays valid JSON; `bang` is kept as the cheapest Fusion-to-Fusion encoding). The non-unix modes always print to stdout and exit `0`.
 - 🧑 ✅ `--input`/`--output` may be repeated only with the same mode; two different modes for one direction is a misuse.
@@ -751,13 +752,14 @@ error value can cross the boundary.
 - 🤖 ✅ Results print leniently (a function as `"<function>"`, etc.); entries report errors at `location: "code <inline>"`, like `-e`.
 - 🤖 ✅ Results go to stdout; the prompt and echoed input go to stderr (like a shell prompt), so stdout is a clean stream of results.
 - 🧑 ✅ stderr decorations are styled: a light-blue prompt, and a green `✔` / red `✗` before each value / error result. Styling never touches stdout (the result stays unstyled).
-- 🤖 ✅ A command-line misuse (unknown flag, more than one use case, conflicting input/output modes, unsupported mode combination, missing program) is plain usage text on stderr with exit `1` — it precedes the I/O contract, so it is not a payloaded error.
+- 🤖 ✅ A command-line misuse (unknown flag, more than one use case, conflicting input/output modes, unsupported mode combination, missing program, `-!` with empty stdin) is plain usage text on stderr with exit `1`, never a payloaded error — most caught during option parsing, `-!`/empty-stdin while reading input.
 
 ### Alternatives
 
 - 🧑 ⏪ pipe was the unconditional default — now repl on a bare `fusion`, otherwise pipe.
 - 🤖 ⏪ stream defaulted to `bang`/`bang` — now `array`/`array`, since `bang` lines aren't valid JSON.
 - 🤖 ⏪ Empty input was the value `null`, and input could also come from an inline `[json-input]` argument — now empty means *no input* and input is stdin-only.
+- 🧑 ⏪ Empty stdin under `-!` supplied `!null` — now a usage error, since there is no payload to mark.
 - 🧑 ⏪ Blank `stream` lines were silently skipped — now echoed by default, dropped with `--skip-blank-lines` (the spec leaves empty-line handling to the parser, so it must be configurable).
 - 🧑 ⏪ REPL accepts only statements (the original "introduces a single statement" sketch); widened so a bare expression is also an entry.
 - 🧑 ⏪ Statements terminated by `;` (so several could share a line); dropped — completeness is decided by parsing, so a line that parses is submitted and no terminator is needed.

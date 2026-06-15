@@ -582,8 +582,8 @@ result instead.
 - **Empty input means "no input": the program's own value is the result.** A
   `.fsn` file therefore doubles as enriched JSON data — it can compute, read
   `@ENV`, and pull in `@`-references, then print the value with no pipeline
-  input. (Under `-!` an error input is always supplied instead; empty input
-  becomes `!null` — see §9.4.)
+  input. (Under `-!` the input is an error value instead; empty input then has no
+  payload to mark, which is a usage error — see §9.4.)
 - Non-JSON input yields a `syntax_error` at `location: "input"` (§6.5).
 - **If the final result is an error**, the interpreter prints **nothing** to
   standard output, prints the error's **payload** (as JSON) to standard error, and
@@ -620,9 +620,11 @@ They are independent of each other and selected with the `--input` and `--output
 flags:
 
 - **`unix`** — the input is plain JSON and always a value; the `-!` flag marks
-  the whole input as an error value instead (its JSON becomes the payload).
-  Output: a value goes to stdout with exit code `0`; an error's payload goes to
-  stderr with exit code `1` (§9.3).
+  the whole input as an error value instead (its JSON becomes the payload). `-!`
+  therefore requires input: with empty input there is no payload to mark, which
+  is a usage error (the program does not run). Output: a value goes to stdout
+  with exit code `0`; an error's payload goes to stderr with exit code `1`
+  (§9.3).
 - **`bang`** — a leading `!` marks an error value; the payload is the JSON after
   the `!`. A lone `!` is `!null`, like the language's bare `!`. Output is always
   on stdout and the exit code is always `0`. A `!`-marked line is not valid JSON;
