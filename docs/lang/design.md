@@ -649,7 +649,7 @@ All access goes through `@`:
 
 - 🧑 ✅ Read stdin as JSON → value `v`; compute `v | program`; print the result as JSON.
 - 🧑 ✅ A final `!` produces a nonzero exit code.
-- 🤖 ⏪ Empty stdin was treated as `null`. Superseded in 4.4: empty stdin means *no input*, so the program's own value is the result.
+- 🤖 ⏪ Empty stdin was treated as `null`. Superseded in 4.4: empty stdin means *no input*.
 - 🤖 ✅ Non-JSON stdin yields `!`.
 
 ### Alternatives
@@ -723,36 +723,35 @@ error value can cross the boundary.
 
 **Use cases:**
 
-- 🧑 ✅ The CLI supports three use cases: **pipe** (apply the program to one input — the 4.1 model), **stream** (apply it to each line of an NDJSON stream), **repl** (interactive).
-- 🧑 ✅ At most one of `--pipe`, `--stream`, `--repl` may be given (two is a misuse). With none: a bare `fusion` (no arguments at all) starts the **repl**, any other invocation is **pipe**.
-- 🧑 ✅ **pipe** reads input only from stdin (no input argument). Empty or whitespace-only stdin means *no input*: the program's own value is the result, so a `.fsn` file doubles as enriched JSON (computations, `@ENV`, `@`-references). Under `-!` the input is the error payload, so empty stdin is a usage error (nothing to mark).
-- 🧑 ✅ **stream** keeps errors in-band and always exits `0`; a failing record (including a stack overflow) becomes that record's output line and the stream continues.
-- 🧑 ✅ **stream** conforms to NDJSON: UTF-8 throughout, `\n` or `\r\n` input delimiters, one single-line JSON text per output record terminated by `\n`.
-- 🤖 ✅ A blank **stream** input line is echoed as a blank output line (no computation); `--skip-blank-lines` drops it instead.
+- 🧑 ✅ The CLI supports three use cases: **pipe** (apply the program to one input, §4.1), **stream** (apply it to each line of an NDJSON stream), **repl** (interactive).
+- 🧑 ✅ **pipe**: Compute `stdin | program`. Empty or whitespace-only stdin means *no input*: return `program` (evaluated on load). So a `.fsn` file doubles as enriched JSON (computations, `@ENV`, `@`-references).
+- 🧑 ✅ **stream**: Conforms to NDJSON. Keeps errors in-band and continues the stream. Always exits `0`.
+- 🧑 ✅ A blank **stream** input line is echoed as a blank output line (no computation); `--skip-blank-lines` drops it instead.
+- 🧑 ✅ **repl**: Can evaluate expressions. Also allows an assignment statement: `identifier = expression`.
+- 🤖 ✅ A command-line misuse (unknown flag, more than one use case, conflicting input/output modes, unsupported mode combination, missing program, `-!` with empty stdin) is plain usage text on stderr with exit `1`, never a payloaded error. Most are caught during option parsing, `-!` with empty-stdin while reading input.
 
 **I/O modes** — how an error is marked crossing the boundary; `--input` and `--output` are independent:
 
-- 🧑 ✅ Four modes: **unix** (plain JSON; value → stdout/exit 0, error → stderr/exit 1, as in 4.1), **bang** (a leading `!` marks an error), **array** (`[0, value]` / `[1, payload]`), **object** (`{"value": _}` / `{"error": _}`).
-- 🧑 ✅ The `-!` flag (unix input only) makes the whole input an error value.
-- 🧑 ✅ Empty stdin under `-!` has no payload to mark: a usage error (plain text on stderr, the program never runs), caught while reading input rather than during option parsing.
-- 🧑 ✅ pipe supports all four modes; stream all but unix; repl has none.
-- 🤖 ✅ Defaults: pipe = unix/unix, stream = array/array (so each NDJSON record stays valid JSON; `bang` is kept as the cheapest Fusion-to-Fusion encoding). The non-unix modes always print to stdout and exit `0`.
-- 🧑 ✅ `--input`/`--output` may be repeated only with the same mode; two different modes for one direction is a misuse.
+TODO: Under `-!` the input is the error payload, so empty stdin is a usage error (nothing to mark).
+
+- 🧑 ✅ Four modes: **unix** (asymmetric, Unix filter) and **bang** / **array** (`[0, value]` / `[1, payload]`), **object** (`{"value": _}` / `{"error": _}`).
+- 🧑 ✅ **unix**: input is `stdin` + `-!` flag, output is `value → stdout` + `exit 0` OR `error → stderr` + `exit 1`. stdin/stdout/stderr are always pure JSON.
+- 🧑 ✅ **bang**: shortest encoding, errors are simply a `!` prefix and thus not valid JSON.
+- 🧑 ✅ **array**: always valid JSON, error encoded via envelope: `[0, value]` / `[1, payload]`.
+- 🧑 ✅ **object**: always valid JSON, error encoded via envelope: `{"value": _}` / `{"error": _}`.
+- 🧑 ✅ `-!` requires stdin. With absent stdin, it's a usage error.
+- 🧑 ✅ pipe supports all four modes; stream all but unix (so errors stay "in-band"); repl has none.
+- 🧑 ✅ Defaults: pipe = unix/unix, stream = array/array.
 - 🤖 ✅ A malformed `array`/`object` input envelope is a catchable `argument_error` at `location: "input"` (the array tag must be exactly the integer `0`/`1`), flowing into the program like any input error.
-
-**Flags:**
-
-- 🧑 ✅ Every flag has a short and a long form (`-p`/`--pipe`, `-s`/`--stream`, `-r`/`--repl`, `-i`/`--input`, `-o`/`--output`, `-e`/`--execute`, `-b`/`--skip-blank-lines`); `-!` is short-only.
 
 **REPL:**
 
-- 🧑 ✅ An entry is an **expression** (evaluated and printed) or a **statement** `identifier = expression` (evaluated, printed, and bound for later entries). The statement is the only construct that is not an expression.
-- 🧑 ✅ An entry is evaluated only once it parses as a whole statement/expression; an incomplete or invalid buffer keeps the entry open to finish or correct.
-- 🧑 ✅ A statement binds its identifier to the result **including an error result**; reading it back later propagates the error, exactly like reading an `@`-reference that resolved to one.
+- 🧑 ✅ An entry is an **expression** (evaluated and printed) or an **assignment statement** `identifier = expression` (evaluated, printed, and bound for later entries).
+- 🧑 ✅ An entry is evaluated only once it parses as a whole statement/expression. An incomplete or invalid buffer keeps the entry open to finish or correct.
+- 🧑 ✅ Error results can also get bound to an identifier via the **assignment statement**. When accessing them, they'll propagate regularly.
 - 🤖 ✅ Results print leniently (a function as `"<function>"`, etc.); entries report errors at `location: "code <inline>"`, like `-e`.
 - 🤖 ✅ Results go to stdout; the prompt and echoed input go to stderr (like a shell prompt), so stdout is a clean stream of results.
-- 🧑 ✅ stderr decorations are styled: a light-blue prompt, and a green `✔` / red `✗` before each value / error result. Styling never touches stdout (the result stays unstyled).
-- 🤖 ✅ A command-line misuse (unknown flag, more than one use case, conflicting input/output modes, unsupported mode combination, missing program, `-!` with empty stdin) is plain usage text on stderr with exit `1`, never a payloaded error — most caught during option parsing, `-!`/empty-stdin while reading input.
+- 🧑 ✅ `stderr` decorations are styled. Styling never touches `stdout`.
 
 ### Alternatives
 
@@ -760,7 +759,7 @@ error value can cross the boundary.
 - 🤖 ⏪ stream defaulted to `bang`/`bang` — now `array`/`array`, since `bang` lines aren't valid JSON.
 - 🤖 ⏪ Empty input was the value `null`, and input could also come from an inline `[json-input]` argument — now empty means *no input* and input is stdin-only.
 - 🧑 ⏪ Empty stdin under `-!` supplied `!null` — now a usage error, since there is no payload to mark.
-- 🧑 ⏪ Blank `stream` lines were silently skipped — now echoed by default, dropped with `--skip-blank-lines` (the spec leaves empty-line handling to the parser, so it must be configurable).
+- 🤖 ⏪ Blank `stream` lines were silently skipped — now echoed by default, dropped with `--skip-blank-lines`.
 - 🧑 ⏪ REPL accepts only statements (the original "introduces a single statement" sketch); widened so a bare expression is also an entry.
 - 🧑 ⏪ Statements terminated by `;` (so several could share a line); dropped — completeness is decided by parsing, so a line that parses is submitted and no terminator is needed.
 - 🤖 ⏪ A statement does **not** bind an error result (mirroring pattern binders, which never capture an error). Flipped: a statement is an assignment, not a pattern match; binding an error is harmless and needs no special case.
