@@ -55,12 +55,12 @@ gem "fusion-lang", require: "fusion"
 ## How to run your code
 
 ```sh
-echo '5' | fusion examples/factorial.fsn        # => 120
-echo '15' | fusion examples/fizzbuzz.fsn        # => "FizzBuzz"
-echo '21' | fusion -e '(n => [n,2] | @multiply)'   # => 42 (inline program)
-fusion -e '[1, [2, 3] | @add]'                  # => [1,5] (no input: the program's value is the result)
+echo '5' | fusion examples/factorial.fsn          # => 120
+echo '15' | fusion examples/fizzbuzz.fsn          # => "FizzBuzz"
+echo '21' | fusion -e '(n => [n,2] | @multiply)'  # => 42 (inline program)
+fusion -e '[1, [2, 3] | @add]'                    # => [1,5] (no input: the program's value is the result)
 printf '[0,3]\n[0,4]\n' | fusion --stream examples/double.fsn   # => [0,6] [0,8] (NDJSON, array mode)
-fusion --repl                                   # interactive REPL (also started by a bare `fusion`)
+fusion --repl                                     # interactive REPL (also started by a bare `fusion`)
 ```
 
 - Input is read from stdin as JSON and parsed into a Fusion value.
