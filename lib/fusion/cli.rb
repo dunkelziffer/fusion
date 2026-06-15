@@ -21,36 +21,57 @@ module Fusion
   module CLI
     extend self
 
-    # Run the use case selected on the command line.
+    def prepare!
+      $stdout.sync = true
+      $stderr.sync = true
+      $stdin.set_encoding(Encoding::UTF_8)
+      $stdout.set_encoding(Encoding::UTF_8)
+      $stderr.set_encoding(Encoding::UTF_8)
+    end
+
     def run(options)
       case options.use_case
-      when :pipe then run_pipe(options)
-      when :stream then run_stream(options)
-      when :repl then Repl.new.run
-      else raise Unreachable, "Unknown use case #{options.use_case}"
+      when :pipe
+        run_pipe(options)
+      when :stream
+        run_stream(options)
+      when :repl
+        Repl.new.run
+      else
+        raise Unreachable, "Unknown use case #{options.use_case}"
       end
     end
 
-    # pipe: load the program, pipe one input through it, emit one output.
     def run_pipe(options)
-      function = load_program(options)
-      input    = parse(load_input(options))
-      output   = apply(input, function)
+      prepare!
+
+      program = load_program(options)
+
+      input = load_input(options)
+      output = if input.nil?
+        program
+      else
+        apply(parse(input), program)
+      end
+
       emit_output(serialize(output), output_mode: options.output_mode)
     end
 
-    # stream: load the program once, then treat stdin/stdout as NDJSON streams —
-    # one input per line, one output line per input. Errors stay in-band (the
-    # unix mode is unavailable here), so the exit code is always 0.
     def run_stream(options)
-      function = load_program(options)
-      $stdout.sync = true
-      $stdin.each_line do |line|
-        next if line.strip.empty?
+      prepare!
 
-        input  = parse(decode(line, mode: options.input_mode))
-        output = apply(input, function)
-        $stdout.puts(encode(serialize(output), mode: options.output_mode))
+      program = load_program(options)
+
+      $stdin.each_line do |line|
+        record = line.chomp
+
+        if record.strip.empty?
+          $stdout.puts unless options.skip_blank_lines?
+        else
+          input = decode(record, mode: options.input_mode)
+          output = apply(parse(input), program)
+          $stdout.puts(encode(serialize(output), mode: options.output_mode))
+        end
       end
     end
 
@@ -65,18 +86,20 @@ module Fusion
       Parser.parse(wire_pair)
     end
 
+    # runtime value + runtime value -> runtime value
     # input | function -> output
     def apply(input, function)
       Interpreter.safe_apply(function, input)
     end
 
-    # expression -> runtime value
+    # expression (AST) -> runtime value
     # Mutates environment (REPL variable binding)
     def evaluate(expression, environment)
       Interpreter.safe_evaluate(expression, environment)
     end
 
     # runtime value -> WirePair
+    # CAUTION: resolves "internal" error status, only use for final output
     def serialize(runtime_value)
       Serializer.serialize(runtime_value)
     end
@@ -89,22 +112,23 @@ module Fusion
 
     private
 
-    # input -> WirePair
+    # stdin -> WirePair
     def load_input(options)
-      text = options.explicit_input || ($stdin.tty? ? "" : $stdin.read)
-      empty = text.strip.empty?
+      text = $stdin.tty? ? "" : $stdin.read.strip
 
-      if options.input_mode == :unix || empty
-        WirePair.new(
-          status: options.error_input? ? 1 : 0,
-          data: empty ? "null" : text
-        )
+      if text.empty?
+        # "-!" promises that stdin carries an error payload. CLI contract violation.
+        raise Options::UsageError, "-! requires input to mark as an error, but stdin was empty" if options.error_input?
+
+        nil
+      elsif options.input_mode == :unix
+        WirePair.new(status: options.error_input? ? 1 : 0, data: text)
       else
         decode(text, mode: options.input_mode)
       end
     end
 
-    # WirePair -> output
+    # WirePair -> stdout/stderr
     def emit_output(wire_pair, output_mode:)
       if output_mode == :unix
         channel = wire_pair.status.zero? ? $stdout : $stderr
@@ -116,9 +140,7 @@ module Fusion
       end
     end
 
-    # Load the program (a `.fsn` file or an inline `-e` source) into the runtime
-    # value it evaluates to — usually a function. A parse error or a non-function
-    # value flows on as the program value and surfaces when `apply` runs it.
+    # file/inline -> runtime value
     def load_program(options)
       interpreter = Fusion::Interpreter.new
       if options.inline_source

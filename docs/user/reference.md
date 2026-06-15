@@ -572,11 +572,18 @@ above. Recursion through functions is not a data cycle.
 
 ### 9.3 Runtime contract
 
-The default use case (**pipe**) reads standard input as JSON, converts it to a
-Fusion value `v`, computes `v | programFunction`, and prints the result on
-standard output as JSON.
+The **pipe** use case (`--pipe`, and the default whenever any argument is given —
+see §9.7) reads standard input as JSON, converts it to a Fusion value `v`,
+computes `v | programFunction`, and prints the result on standard output as JSON.
+When standard input is empty, the program get evaluated and immediately becomes
+the result instead.
 
-- Empty input is treated as `null` (in every input mode).
+- Input always arrives on standard input; there is no input argument.
+- **Empty input means "no input": the program's own value is the result.** A
+  `.fsn` file therefore doubles as enriched JSON data — it can compute, read
+  `@ENV`, and pull in `@`-references, then print the value with no pipeline
+  input. (Under `-!` the input is an error value instead; empty input then has no
+  payload to mark, which is a usage error — see §9.4.)
 - Non-JSON input yields a `syntax_error` at `location: "input"` (§6.5).
 - **If the final result is an error**, the interpreter prints **nothing** to
   standard output, prints the error's **payload** (as JSON) to standard error, and
@@ -613,15 +620,20 @@ They are independent of each other and selected with the `--input` and `--output
 flags:
 
 - **`unix`** — the input is plain JSON and always a value; the `-!` flag marks
-  the whole input as an error value instead (its JSON becomes the payload).
-  Output: a value goes to stdout with exit code `0`; an error's payload goes to
-  stderr with exit code `1` (§9.3).
+  the whole input as an error value instead (its JSON becomes the payload). `-!`
+  therefore requires input: with empty input there is no payload to mark, which
+  is a usage error (the program does not run). Output: a value goes to stdout
+  with exit code `0`; an error's payload goes to stderr with exit code `1`
+  (§9.3).
 - **`bang`** — a leading `!` marks an error value; the payload is the JSON after
   the `!`. A lone `!` is `!null`, like the language's bare `!`. Output is always
   on stdout and the exit code is always `0`. A `!`-marked line is not valid JSON;
-  that is the price of the most lightweight marking.
+  that is the price of the most lightweight marking, so `bang` is recommended only
+  between Fusion programs — for anything that must stay valid JSON, use `array` or
+  `object`.
 - **`array`** — everything is wrapped in an envelope: `[0, value]` for a value,
-  `[1, payload]` for an error. Output is always on stdout, exit code always `0`.
+  `[1, payload]` for an error. Every line is valid JSON, which is why it is the
+  `--stream` default (§9.5). Output is always on stdout, exit code always `0`.
 - **`object`** — the envelope is `{"value": value}` for a value, `{"error": payload}`
   for an error. Output is always on stdout, exit code always `0`.
 
@@ -634,29 +646,45 @@ Mode support per use case (defaults in bold):
 | Use case   | `unix`   | `bang`   | `array` | `object` |
 | ---------- | -------- | -------- | ------- | -------- |
 | pipe       | **yes**  | yes      | yes     | yes      |
-| `--stream` | no       | **yes**  | yes     | yes      |
+| `--stream` | no       | yes      | **yes** | yes      |
 | `--repl`   | —        | —        | —       | —        |
 
 The unix mode spends the process's only exit code and both standard streams on a
 single result, so it cannot mark errors per record in a stream; the stream use
-case therefore excludes it. The REPL is interactive and has no modes at all.
+case therefore excludes it. Stream defaults to `array` rather than `bang` so each
+record stays valid JSON (NDJSON, §9.5); `bang` remains available as the cheapest
+encoding for Fusion-to-Fusion pipelines. The REPL is interactive and has no modes
+at all.
 
 ### 9.5 Streaming (`--stream`)
 
 `fusion --stream` loads the program once, then treats standard input and output
-as NDJSON streams: each input line is decoded per the input mode, piped through
-the program, and printed as one output line encoded per the output mode.
+as [NDJSON](https://github.com/ndjson/ndjson-spec) streams: each input line is
+decoded per the input mode, piped through the program, and printed as one output
+line encoded per the output mode. Input and output default to the **array** mode
+(not `bang`) so every line is valid JSON. The media type is
+`application/x-ndjson` and the file extension for storing such a stream should
+be `.ndjson`.
 
-- Blank lines are skipped; every other input line produces exactly one output line.
+NDJSON conformance:
+- Every output record is a single JSON text in UTF-8, terminated by `\n`, and
+  never contains an embedded newline or carriage return.
+- Both `\n` and `\r\n` are accepted as input line delimiters.
+- A blank input line (empty or whitespace-only) carries no record, so the program
+  never runs on it. By default it is echoed as a blank output line, keeping input
+  and output aligned line-for-line. Pass `--skip-blank-lines` to drop blank lines
+  instead. Every non-blank line produces exactly one output line.
+
 - Errors stay in-band, so a failing record — including a stack overflow — becomes
   that record's output line and the stream continues. The exit code is always `0`.
-- A program that fails to load answers every record with that same load error.
+- A program that fails to load will return the same load error for every record.
 
 ### 9.6 The REPL (`--repl`)
 
-`fusion --repl` starts an interactive session. It loads no program, takes no
-pipeline input, has no input/output mode, and always exits `0`. Each entry is
-read, evaluated, and its result printed. An entry is one of:
+`fusion --repl` starts an interactive session — as does a bare `fusion` with no
+arguments at all (§9.7). It loads no program, takes no pipeline input, has no
+input/output mode, and always exits `0`. Each entry is read, evaluated, and its
+result printed. An entry is one of:
 
 - an **expression** — evaluated and printed; or
 - a **statement** — an assignment that also binds a name:
@@ -682,38 +710,56 @@ relative to the working directory.
 - Entries report errors at `location: "code <inline>"`, like `-e` programs.
 
 **Input editing.** An entry is submitted only once it parses as a complete
-statement or expression; until then — whether still unfinished or not yet valid —
-the session opens a new line so the entry can be finished or corrected. An entry
-may therefore span multiple lines (continuation lines show `...> `); on an empty
-continuation line, backspace returns to the previous line. The prompt and the
-echoed input render on **stderr** (like a shell prompt), so stdout carries only
-the stream of results. End the session with Ctrl-D; Ctrl-C discards the entry
-being typed.
+statement or expression; until then the session opens a new line so the entry
+can be finished or corrected. An entry may therefore span multiple lines
+(continuation lines show `...> `); on an empty continuation line, backspace
+returns to the previous line. The prompt and the echoed input render on **stderr**
+(like a shell prompt), so stdout carries only the stream of results.
+The prompt is shown in light blue, and each result is preceded **on stderr**
+by a green `✔` (a value) or a red `✗` (an error); these
+are decorations only — the result itself stays unstyled on stdout. End the
+session with Ctrl-D; Ctrl-C discards the entry being typed.
 
 ### 9.7 Command-line interface
 
 ```
-usage: fusion [options] <file.fsn> [json-input]
-       fusion [options] -e '<source>' [json-input]
+usage: fusion [options] <file.fsn>
+       fusion [options] -e '<source>'
        fusion --repl
 
-use cases:
-  (default)       pipe: apply the program to one input
-  --stream        apply the program to each line of an NDJSON stream
-  --repl          interactive expressions and `identifier = expression`
+use cases (default: --repl with no arguments, otherwise --pipe):
+  -p, --pipe      apply the program to stdin; with no input, the
+                  program's own value is the result
+  -s, --stream    apply the program to each line of an NDJSON stream
+  -r, --repl      interactive expressions and `identifier = expression`
 
 options:
-  -e '<source>'   inline program instead of a file
-  --input MODE    how the input marks an error value (§9.4)
-  --output MODE   how the output marks an error value (§9.4)
+  -e, --execute '<source>'
+                  inline program instead of a file
+  -i, --input MODE
+                  how the input marks an error value (§9.4)
+  -o, --output MODE
+                  how the output marks an error value (§9.4)
   -!              treat the input as an error value (unix input mode only)
+  -b, --skip-blank-lines
+                  drop blank input lines instead of echoing them (--stream, §9.5)
 ```
 
-In the pipe use case, input comes from the `[json-input]` argument if present,
-otherwise from standard input. The stream use case always reads standard input
-and accepts no input argument.
+**Selecting a use case.** At most one of `--pipe`, `--stream`, `--repl` may be
+given; passing two is a command-line misuse. With none, a bare `fusion` (no
+arguments at all) starts the REPL, while any other invocation is a pipe run. So
+`--pipe` is needed only to be explicit, `fusion file.fsn` already implicitly
+use `--pipe`.
 
-A command-line misuse (an unknown flag, an unsupported mode combination, a
-missing program) is reported as plain usage text on stderr with exit code `1`.
-It happens before the input/output contract begins, so it is not a payloaded
-error.
+In the pipe use case, input comes from standard input; when standard input is
+empty, the program's own value is the result (§9.3). The stream use case also
+reads standard input. Neither accepts an input argument.
+
+Every flag has a short and a long form (`-p`/`--pipe`, `-i`/`--input`, …), except
+`-!`, which has only the short form. Each of `--input`/`--output` may only be used
+once. Multiple different modes for one direction is a misuse.
+
+A command-line misuse (an unknown flag, more than one use case, two different
+modes for one direction, an unsupported mode combination, a missing program) is
+reported as plain usage text on stderr with exit code `1`. It happens before the
+input/output contract begins, so it is not a payloaded error.

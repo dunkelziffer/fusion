@@ -9,15 +9,23 @@ require_relative "../interpreter/env"
 module Fusion
   module CLI
     class Repl
-      PROMPT = "fsn> "
-      CONTINUATION_PROMPT = "...> "
+      RESET      = "\e[0m"
+      LIGHT_BLUE = "\e[94m"
+      GREEN      = "\e[32m"
+      RED        = "\e[31m"
+
+      PROMPT              = "#{LIGHT_BLUE}fsn> #{RESET}"
+      CONTINUATION_PROMPT = "#{LIGHT_BLUE}...> #{RESET}"
+      VALUE_MARKER        = "#{GREEN}✔ #{RESET}"
+      ERROR_MARKER        = "#{RED}✗ #{RESET}"
 
       # REPL entries report errors with the same location as inline (`-e`) code.
       LOCATION = "code <inline>"
 
       def run
+        CLI.prepare!
+
         require "reline"
-        $stdout.sync = true
         Reline.output = $stderr
         Reline.prompt_proc = proc do |lines|
           lines.each_index.map { |i| i.zero? ? PROMPT : CONTINUATION_PROMPT }
@@ -36,10 +44,15 @@ module Fusion
           break if buffer.nil? # Ctrl-D on an empty line ends the session
           next if buffer.strip.empty?
 
-          $stdout.puts(handle(buffer, environment))
+          output = handle(buffer, environment)
+
+          marker = output.start_with?("!") ? ERROR_MARKER : VALUE_MARKER
+          $stderr.print(marker) # decoration on stderr
+          $stdout.puts(output)  # the clean value on stdout
         end
       end
 
+      # String -> yes/no
       def complete?(buffer)
         return true if buffer.strip.empty?
 
@@ -47,6 +60,7 @@ module Fusion
         ast.is_a?(AST::Expression) || ast.is_a?(AST::Statement::Assignment)
       end
 
+      # String (+ Env) -> String
       def handle(buffer, environment)
         ast = Fusion::Parser.parse_repl(buffer, location: LOCATION)
         runtime_value = evaluate(ast, environment)

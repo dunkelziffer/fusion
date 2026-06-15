@@ -5,10 +5,10 @@
 #
 # Usage:
 #   echo '[1,2,3]' | fusion path/to/main.fsn
-#   fusion path/to/main.fsn '<json-input>'        # input as an argument
-#   fusion -e '(n => [n,2] | @multiply)' '21'     # inline program
-#   fusion --stream path/to/main.fsn              # NDJSON in, NDJSON out
-#   fusion --repl                                 # interactive expressions/statements
+#   fusion path/to/main.fsn                            # no input: the file's value is the result
+#   echo '21' | fusion -e '(n => [n,2] | @multiply)'   # inline program
+#   fusion --stream path/to/main.fsn                   # NDJSON in, NDJSON out
+#   fusion --repl                                      # interactive expressions/statements
 #
 # Run `fusion --help` for the input/output modes (--input / --output / -!).
 
@@ -19,12 +19,12 @@ if ARGV.intersect?(["--help", "-h"])
   exit 0
 end
 
-options = begin
-  Fusion::CLI::Options.parse(ARGV)
+begin
+  options = Fusion::CLI::Options.parse(ARGV)
+  Fusion::CLI.run(options)
 rescue Fusion::CLI::Options::UsageError => err
-  # A command-line misuse happens before the input/output contract begins, so
-  # it is plain text on stderr, not a payloaded error.
+  # A command-line misuse is plain text on stderr, not a payloaded Fusion error,
+  # whether caught while parsing options or early during execution, e.g. by
+  # detecting empty stdin plus "-!".
   abort("fusion: #{err.message}\n\n#{Fusion::CLI::Options::USAGE}")
 end
-
-Fusion::CLI.run(options)
