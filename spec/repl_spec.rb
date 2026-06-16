@@ -12,7 +12,7 @@ RSpec.describe Fusion::CLI::Repl do
 
   # A fresh session environment, built the way #run does, so a binding made by
   # one entry is visible to the next within an example.
-  let(:environment) { Fusion::Interpreter::Env.new.define("__dir__", Dir.pwd) }
+  let(:environment) { Fusion::Interpreter::Env.new.set_context(:dir, Dir.pwd) }
 
   let(:division_by_zero) do
     '{"kind":"math_error","location":"builtin divide","operation":"divide","input":[1,0],"message":"division by zero"}'
@@ -60,7 +60,11 @@ RSpec.describe Fusion::CLI::Repl do
       expect(repl.handle("(n => [n, 2] | @multiply)", environment)).to eq('"<function>"')
     end
 
-    it "resolves a bare @ to the entry's own value (forcing it mid-entry is a self-data-cycle)" do
+    it "renders an @-using function leniently — the @ is deferred until it is applied" do
+      expect(repl.handle("(0 => 1, n => [n, [n, 1] | @subtract | @] | @multiply)", environment)).to eq('"<function>"')
+    end
+
+    it "resolves a bare @ to the entry's own value (forcing it in data position is a self-data-cycle)" do
       expect(repl.handle("[1, @]", environment)).to eq("!#{self_cycle}")
     end
   end

@@ -95,7 +95,7 @@ module FusionHelpers
         ast = Fusion::Parser.parse_file(@code, location: "code <inline>")
         return ast if ast.is_a?(Fusion::Interpreter::ErrorVal) # a parse error
         env = interp.root_env.child
-        env.define("__dir__", FIXTURES)
+        env.set_context(:dir, FIXTURES)
         interp.evaluate_unit(ast, env)
       end
     end

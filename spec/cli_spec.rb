@@ -126,18 +126,29 @@ RSpec.describe "CLI (exe/fusion)" do
 
   # Bare `@` resolves to the current top-level unit's value. For inline (`-e`)
   # source the unit is the program itself, with no file — the path that used to
-  # have no `@`. With stdin the program is a function applied to the input, so a
-  # bare `@` recurses; with no stdin, forcing `@` while the program is still being
-  # evaluated is a non-productive data cycle.
+  # have no `@`. The outcome depends on the program, not on whether stdin is
+  # present: when the unit is a *function*, `@` is deferred until the function is
+  # applied (so it recurses when stdin supplies an input, and is just an
+  # unserializable function value when no stdin applies it); when `@` sits in a
+  # *data* position it is forced as the unit loads, which is a self-data-cycle.
   describe "bare @ in inline (-e) source" do
-    it "recurses through a bare @ when the program is applied to stdin" do
+    it "recurses through a bare @ when the unit is a function applied to stdin" do
       out, err, status = run_cli("-e", "(0 => [0], n ? @Integer => [n, ...([n,1] | @subtract | @)])", stdin: "3")
       expect(out).to eq("[3,2,1,0]\n")
       expect(err).to eq("")
       expect(status.exitstatus).to eq(0)
     end
 
-    it "reports a non-productive data cycle when a bare @ is forced with no stdin" do
+    it "yields the unit's own function value (a serialization_error) when no stdin applies it" do
+      out, err, status = run_cli("-e", "(0 => 1, n => [n, [n,1] | @subtract | @] | @multiply)")
+      expect(out).to eq("")
+      expect(err).to eq(
+        %({"kind":"serialization_error","location":"output","operation":"serializing result","input":"<function>","message":"cannot serialize a function"}\n)
+      )
+      expect(status.exitstatus).to eq(1)
+    end
+
+    it "reports a non-productive data cycle when a bare @ is forced in data position at load" do
       out, err, status = run_cli("-e", "[1, @]")
       expect(out).to eq("")
       expect(err).to eq(

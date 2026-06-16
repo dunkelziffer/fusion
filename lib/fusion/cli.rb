@@ -148,7 +148,7 @@ module Fusion
         return ast if ast.is_a?(Fusion::Interpreter::ErrorVal) # a parse error
 
         env = interpreter.root_env.child
-        env.define("__dir__", Dir.pwd)
+        env.set_context(:dir, Dir.pwd)
         interpreter.evaluate_unit(ast, env)
       else
         interpreter.load_file(File.expand_path(options.program_path)).force

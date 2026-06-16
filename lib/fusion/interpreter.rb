@@ -111,7 +111,7 @@ module Fusion
 
     # The error field `location` for code being evaluated under `env`.
     def code_location(env)
-      f = env.lookup("__file__")
+      f = env.context(:file)
       if f == :__unbound__
         # Inline (`-e`) programs have no file, so they report as "code <inline>".
         "code <inline>"
@@ -131,12 +131,13 @@ module Fusion
         ast
       else
         # A file's value is evaluated in a fresh env whose parent is root (builtins),
-        # plus knowledge of its own directory for resolving @refs. `__self__` is the
-        # file's own thunk, so a bare `@` resolves to this file's value.
+        # plus interpreter context (§Env): its directory for resolving @refs, its
+        # path for error locations, and its own thunk as `:self` so a bare `@`
+        # resolves to this file's value.
         env = @root_env.child
-        env.define("__dir__", File.dirname(abspath))
-        env.define("__file__", abspath)
-        env.define("__self__", load_file(abspath))
+        env.set_context(:dir, File.dirname(abspath))
+        env.set_context(:file, abspath)
+        env.set_context(:self, load_file(abspath))
         eval_expr(ast, env)
       end
     rescue Errno::ENOENT
@@ -146,12 +147,12 @@ module Fusion
     end
 
     # Evaluate a top-level unit that has no file of its own — inline (`-e`) source
-    # or a REPL entry. Binds `__self__` so a bare `@` resolves to this unit's own
-    # (lazy, memoized) value, just like it does inside a file. `env` carries the
-    # unit's bindings (`__dir__`, and for the REPL the session's names).
+    # or a REPL entry. Sets the `:self` context so a bare `@` resolves to this
+    # unit's own (lazy, memoized) value, just like it does inside a file. `env`
+    # already carries the `:dir` context (and, for the REPL, the session's names).
     def evaluate_unit(ast, env)
       thunk = Thunk.new(location: code_location(env), input: NULL) { eval_expr(ast, env) }
-      env.define("__self__", thunk)
+      env.set_context(:self, thunk)
       thunk.force
     end
 
@@ -230,15 +231,15 @@ module Fusion
           value
         end
       when Expression::FileRef
-        dir = env.lookup("__dir__")
+        dir = env.context(:dir)
         dir = Dir.pwd if dir == :__unbound__
         case node.variety
         when :self
           # Bare `@` is the value of the current top-level unit — a file, or an
-          # inline (`-e`)/REPL entry. Every evaluated unit binds its own thunk as
-          # `__self__`; forcing it gives the unit's value (and recursion, since a
-          # closure captures the env where it was defined).
-          self_thunk = env.lookup("__self__")
+          # inline (`-e`)/REPL entry. Every evaluated unit sets its own thunk as the
+          # `:self` context; forcing it gives the unit's value (and recursion, since
+          # a closure captures the env where it was defined).
+          self_thunk = env.context(:self)
           raise Unreachable, "bare @ evaluated outside a top-level unit" if self_thunk == :__unbound__
 
           self_thunk.force

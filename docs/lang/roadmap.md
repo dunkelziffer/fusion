@@ -18,6 +18,12 @@ always intended. Open question: exact precedence table and how it interleaves wi
 path; consider tooling to surface *which* target a given `@name` resolves to in
 a directory, since shadowing is invisible at the call site.
 
+**Exposing the current file/dir** *(only if it earns its place)*. The interpreter
+already tracks the current `:file` and `:dir` as internal context, unreadable from
+a program. We could surface them (e.g. as `__file__`/`__dir__`, or behind `@`), but
+pre-binding names pollutes the identifier namespace and the current separate-context
+design is preferred. Add only if a concrete use case shows real value.
+
 ---
 
 ## 2. Error model

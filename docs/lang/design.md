@@ -643,9 +643,26 @@ All access goes through `@`:
 
 ## 3.7 Bare `@` is the current top-level unit, not the current file
 
-TODO (summarize at end of session). Reframe bare `@` from "the current file" to
-"the value of the current top-level unit", so it also works for inline (`-e`) and
-REPL entries, which are not files.
+### Decisions
+
+- 🧑 ✅ A bare `@` is the value of the current top-level **unit** — a file, an inline (`-e`) program, or a REPL entry — not only a file. Recursion is written this way in all three.
+- 🧑 ✅ In the REPL each entry is its own unit: `@` is that entry's value, and a function carrying a `@` keeps referring to its defining entry when a later entry applies it.
+- 🧑 ✅ Interpreter context (the current directory and file, and the self-value behind `@`) is not part of the identifier namespace: `__dir__`/`__file__`/`__self__` are unbound names, never readable values.
+
+### Alternatives
+
+- 🤖 ❌ Model inline/REPL code as a synthetic "fake file" so the existing file machinery applies — needs temp-file lifecycle or a special-cased reader, and leaves the REPL with no coherent "which file" answer.
+- 🧑 ⏪ "Bare `@` = the current file" (3.2/3.6); the "no current file for self-reference" error is gone, as it can no longer occur.
+- 🤖 🩹 Claude's first cut kept the self-value as an ordinary binding, so reading `__self__` returned an internal thunk and crashed serialization with a raw Ruby error; the designer caught it. Interpreter context now lives in its own channel, off the binding namespace.
+
+### Pros
+
+- One self-reference rule across files, inline source, and the REPL; the file path is incidental.
+- No identifier-namespace pollution — internals stay internal.
+
+### Cons
+
+- A bare-`@` recursive function yields a value only when applied externally (stdin, or a later REPL entry); at its own unit's top level it self-cycles (data position) or, unapplied, fails to serialize — regular outcomes, not special cases.
 
 ---
 

@@ -22,14 +22,35 @@ module Fusion
       attr_reader :parent
 
       def initialize(parent = nil)
-        @vars = {}
+        @vars = {}     # user-visible bindings (pattern binders), keyed by identifier
+        @context = {}  # interpreter context (the current dir/file/self), never a value
         @parent = parent
       end
 
-      # Unchecked insert, for interpreter-internal names (__dir__, built-ins, …).
+      # Unchecked insert of a user-visible binding. Used by the REPL to keep a
+      # bound name across entries (pattern binders go through #bind instead).
       def define(name, value)
         @vars[name] = value
         self
+      end
+
+      # Interpreter execution context — the current directory, file, and self-thunk
+      # — lives in a separate channel from user bindings, so a program can never
+      # read it as an identifier (and a non-value like the self-thunk can never
+      # leak into the value space). Keyed by symbol; walks the parent chain.
+      def set_context(key, value)
+        @context[key] = value
+        self
+      end
+
+      def context(key)
+        if @context.key?(key)
+          @context[key]
+        elsif @parent
+          @parent.context(key)
+        else
+          :__unbound__
+        end
       end
 
       # Insert a pattern binding, rejecting a duplicate binder. Only this env's

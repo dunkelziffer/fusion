@@ -31,7 +31,7 @@ module Fusion
           lines.each_index.map { |i| i.zero? ? PROMPT : CONTINUATION_PROMPT }
         end
 
-        environment = Interpreter::Env.new.define("__dir__", Dir.pwd)
+        environment = Interpreter::Env.new.set_context(:dir, Dir.pwd)
 
         loop do
           buffer = begin
@@ -72,7 +72,7 @@ module Fusion
 
       def evaluate(ast, environment)
         # Each entry runs in its own child env so a bare `@` (the entry's own
-        # `__self__`, bound by the interpreter) means "this entry's value" and
+        # `:self` context, set by the interpreter) means "this entry's value" and
         # never reaches back to an earlier entry. Assignments still define their
         # name on the session env, so bindings persist across entries.
         entry = environment.child

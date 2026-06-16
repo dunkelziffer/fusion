@@ -73,6 +73,16 @@ RSpec.describe "error kinds" do
         .code("([a, a] => a)")
         .out("❌", a_string_including('"kind":"binding_error"', '"message":"identifier already bound"'))
     end
+
+    # Interpreter context (the current dir/file, and the self-thunk that backs a
+    # bare `@`) lives outside the binding namespace, so its names are unbound
+    # identifiers like any other — never readable, and the self-thunk never leaks
+    # into the value space as a non-serializable object.
+    it "the internal self-thunk name is not a readable binding" do
+      expect_pipe
+        .code("__self__")
+        .out("❌", '{"kind":"binding_error","location":"code <inline>","operation":"reading identifier __self__","input":"__self__","message":"unbound identifier"}')
+    end
   end
 
   describe "access_error (only missing key / index out of range)" do
