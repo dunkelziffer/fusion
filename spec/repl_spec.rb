@@ -18,6 +18,10 @@ RSpec.describe Fusion::CLI::Repl do
     '{"kind":"math_error","location":"builtin divide","operation":"divide","input":[1,0],"message":"division by zero"}'
   end
 
+  let(:self_cycle) do
+    '{"kind":"reference_error","location":"code <inline>","operation":"forcing a reference","input":null,"message":"non-productive data cycle"}'
+  end
+
   describe "#complete? — the editing termination check" do
     it "treats a blank buffer as complete (it is submitted, then skipped)" do
       expect(repl.complete?("")).to be(true)
@@ -54,6 +58,10 @@ RSpec.describe Fusion::CLI::Repl do
 
     it "renders a function leniently" do
       expect(repl.handle("(n => [n, 2] | @multiply)", environment)).to eq('"<function>"')
+    end
+
+    it "resolves a bare @ to the entry's own value (forcing it mid-entry is a self-data-cycle)" do
+      expect(repl.handle("[1, @]", environment)).to eq("!#{self_cycle}")
     end
   end
 

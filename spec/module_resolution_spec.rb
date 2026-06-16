@@ -26,13 +26,6 @@ RSpec.describe "@-resolution" do
       .out("✅", "[3,2,1,0]")
   end
 
-  it "supports bare-@ self-recursion in inline (`-e`) source, which has no file" do
-    expect_pipe
-      .in("✅", "3")
-      .code("(0 => [0], n ? @Integer => [n, ...([n,1] | @subtract | @)])")
-      .out("✅", "[3,2,1,0]")
-  end
-
   describe "@ENV" do
     it "reads an environment variable" do
       expect_pipe

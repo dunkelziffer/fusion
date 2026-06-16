@@ -124,6 +124,29 @@ RSpec.describe "CLI (exe/fusion)" do
     end
   end
 
+  # Bare `@` resolves to the current top-level unit's value. For inline (`-e`)
+  # source the unit is the program itself, with no file — the path that used to
+  # have no `@`. With stdin the program is a function applied to the input, so a
+  # bare `@` recurses; with no stdin, forcing `@` while the program is still being
+  # evaluated is a non-productive data cycle.
+  describe "bare @ in inline (-e) source" do
+    it "recurses through a bare @ when the program is applied to stdin" do
+      out, err, status = run_cli("-e", "(0 => [0], n ? @Integer => [n, ...([n,1] | @subtract | @)])", stdin: "3")
+      expect(out).to eq("[3,2,1,0]\n")
+      expect(err).to eq("")
+      expect(status.exitstatus).to eq(0)
+    end
+
+    it "reports a non-productive data cycle when a bare @ is forced with no stdin" do
+      out, err, status = run_cli("-e", "[1, @]")
+      expect(out).to eq("")
+      expect(err).to eq(
+        %({"kind":"reference_error","location":"code <inline>","operation":"forcing a reference","input":null,"message":"non-productive data cycle"}\n)
+      )
+      expect(status.exitstatus).to eq(1)
+    end
+  end
+
   describe "the top-level Ruby-error net" do
     it "converts a stack overflow (SystemStackError) into a stack_error payload" do
       out, err, status = run_cli(File.join(FIX, "loop.fsn"), stdin: "0")
