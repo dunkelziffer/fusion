@@ -125,11 +125,14 @@ RSpec.describe "@-resolution" do
         .out("❌", '{"kind":"reference_error","location":"code usesParent.fsn","operation":"resolving @../helper","input":"../helper","message":"outside the jail"}')
     end
 
-    it "keeps the stdlib reachable from inside the default jail" do
+    # @mapValues is a stdlib file that calls its stdlib sibling @map. Both must
+    # load even under a tight, unrelated jail — the stdlib is exempt, and a
+    # stdlib file's siblings are inside the stdlib, so no user jail can break them.
+    it "keeps the stdlib and its internal sibling references reachable despite a tight jail" do
       expect_pipe
-        .in("✅", "5")
-        .file_path("fact.fsn")
-        .out("✅", "120")
+        .jail("ref/localmath")
+        .code('(_ => {"f": (v => [v, 10] | @add), "object": {"a": 1, "b": 2}} | @mapValues)')
+        .out("✅", '{"a":11,"b":12}')
     end
 
     it "blocks an @load target that escapes the jail, without probing its existence" do
