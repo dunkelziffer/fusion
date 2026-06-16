@@ -83,9 +83,10 @@ RSpec.describe "@-resolution" do
   end
 
   describe "relative paths" do
-    it "resolves @../helper from a subdir" do
+    it "resolves @../helper from a subdir (jail widened to include the parent)" do
       expect_pipe
         .in("✅", "7")
+        .jail("ref")
         .file_path("ref/sub/usesParent.fsn")
         .out("✅", "[7,7]")
     end
@@ -107,43 +108,53 @@ RSpec.describe "@-resolution" do
     it "treats @../subtract as file-only (no builtin fallback)" do
       expect_pipe
         .in("✅", "null")
+        .jail("ref")
         .file_path("ref/sub/usesDotDotBuiltin.fsn")
         .out("❌", a_string_including('"kind":"reference_error"', '"message":"file not found"', "subtract.fsn"))
     end
   end
 
   # The jail confines file-backed @-resolution to a directory subtree. It governs
-  # the program only — stdin is plain JSON and never holds an @-reference.
+  # the program only — stdin is plain JSON and never holds an @-reference. The
+  # default jail (here and in the CLI) is the program's own directory.
   describe "the jail" do
-    it "blocks an @../ reference that escapes the jail" do
+    it "blocks an @../ reference that escapes the default jail (the program's dir)" do
       expect_pipe
         .in("✅", "7")
-        .jail("ref/sub")
         .file_path("ref/sub/usesParent.fsn")
         .out("❌", '{"kind":"reference_error","location":"code usesParent.fsn","operation":"resolving @../helper","input":"../helper","message":"outside the jail"}')
     end
 
-    it "allows the same @../ reference once the jail is widened to its parent" do
-      expect_pipe
-        .in("✅", "7")
-        .jail("ref")
-        .file_path("ref/sub/usesParent.fsn")
-        .out("✅", "[7,7]")
-    end
-
-    it "keeps the stdlib reachable from inside a jail" do
+    it "keeps the stdlib reachable from inside the default jail" do
       expect_pipe
         .in("✅", "5")
-        .jail(".")
         .file_path("fact.fsn")
         .out("✅", "120")
     end
 
     it "blocks an @load target that escapes the jail, without probing its existence" do
       expect_pipe
-        .jail(".")
         .code('"../nope" | @load')
         .out("❌", '{"kind":"reference_error","location":"builtin load","operation":"@load","input":"../nope","message":"outside the jail"}')
+    end
+
+    it "disables confinement with a jail of *" do
+      expect_pipe
+        .in("✅", "7")
+        .jail("*")
+        .file_path("ref/sub/usesParent.fsn")
+        .out("✅", "[7,7]")
+    end
+
+    # A sibling that exists but sits outside the jail is the jail error, never a
+    # silent fall-through to the builtin/stdlib of the same name. Here @add has a
+    # sibling ref/add.fsn, but the jail (ref/localmath) excludes it.
+    it "errors on an out-of-jail sibling instead of falling back to the builtin" do
+      expect_pipe
+        .in("✅", "null")
+        .jail("ref/localmath")
+        .file_path("ref/usesAdd.fsn")
+        .out("❌", '{"kind":"reference_error","location":"code usesAdd.fsn","operation":"resolving @add","input":"add","message":"outside the jail"}')
     end
   end
 end

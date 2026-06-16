@@ -44,7 +44,10 @@ module Fusion
 
     # The jail root for this run: the program's directory by default (cwd for
     # inline `-e` and the REPL), or `--jail DIR` resolved against that base.
+    # `--jail '*'` opts out of confinement entirely (nil = unconfined).
     def jail_root(options)
+      return nil if options.jail == "*"
+
       base = options.program_path ? File.dirname(File.expand_path(options.program_path)) : Dir.pwd
       root = options.jail ? File.expand_path(options.jail, base) : base
       raise Options::UsageError, "jail directory not found: #{options.jail}" unless File.directory?(root)

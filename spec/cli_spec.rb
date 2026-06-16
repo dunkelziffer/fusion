@@ -177,6 +177,12 @@ RSpec.describe "CLI (exe/fusion)" do
       expect(status.exitstatus).to eq(0)
     end
 
+    it "disables confinement with -j '*'" do
+      out, _err, status = run_cli("-j", "*", File.join(FIX, "ref", "sub", "usesParent.fsn"), stdin: "7")
+      expect(out).to eq("[7,7]\n")
+      expect(status.exitstatus).to eq(0)
+    end
+
     it "rejects a --jail directory that does not exist (plain usage error)" do
       _out, err, status = run_cli("-j", "/no/such/dir", File.join(FIX, "ref", "sub", "usesParent.fsn"), stdin: "7")
       expect(err).to start_with("fusion: jail directory not found: /no/such/dir")

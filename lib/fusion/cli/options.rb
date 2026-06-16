@@ -37,7 +37,8 @@ module Fusion
                           how the output marks an error value
           -j, --jail DIR  confine @-references to DIR and its subtree
                           (default: the program's directory; the stdlib is
-                          always reachable, stdin is never affected)
+                          always reachable, stdin is never affected;
+                          use '*' to disable confinement)
           -!              treat the input as an error value (unix input mode only)
           -b, --skip-blank-lines
                           drop blank input lines instead of echoing them (--stream only)

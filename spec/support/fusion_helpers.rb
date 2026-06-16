@@ -33,11 +33,11 @@ module FusionHelpers
   # Chainable builder
   class PipeExpectation
     def initialize(example)
-      @example   = example
-      @input     = [OK, "null"]
-      @env_vars  = {}
-      @jail_root = nil
-      @used      = []
+      @example  = example
+      @input    = [OK, "null"]
+      @env_vars = {}
+      @jail     = :default # :default (the program's dir) | nil (none) | absolute path
+      @used     = []
     end
 
     def in(status, json)
@@ -52,11 +52,12 @@ module FusionHelpers
       self
     end
 
-    # Confine @-resolution to `dir` (a path under spec/fixtures). Mirrors the
-    # CLI's `--jail`; without it the interpreter is unconfined.
+    # Confine @-resolution to `dir` (a path under spec/fixtures), mirroring the
+    # CLI's `--jail`. `.jail("*")` disables confinement. Without a call, the jail
+    # defaults to the program's directory, exactly as the CLI does.
     def jail(dir)
       claim!(:jail)
-      @jail_root = File.join(FIXTURES, dir)
+      @jail = dir == "*" ? nil : File.join(FIXTURES, dir)
       self
     end
 
@@ -83,13 +84,21 @@ module FusionHelpers
     # Evaluate the program against the input, mapping the result to
     # (marker, payload) exactly as exe/fusion does.
     def run
-      interp = Fusion::Interpreter.new(env_vars: @env_vars, jail_root: @jail_root)
+      interp = Fusion::Interpreter.new(env_vars: @env_vars, jail_root: resolved_jail)
       value = interp.apply(program(interp), input_value)
       pair = Fusion::CLI.serialize(value)
       [pair.status.zero? ? OK : ERR, pair.data]
     end
 
     private
+
+    # The default jail is the program's directory — FIXTURES for inline `.code`,
+    # mirroring the CLI's cwd default — so specs run jailed just like real use.
+    def resolved_jail
+      return @jail unless @jail == :default
+
+      @file_path ? File.dirname(File.join(FIXTURES, @file_path)) : FIXTURES
+    end
 
     # Record that a builder slot has been filled, rejecting a second use.
     def claim!(slot, label = slot)

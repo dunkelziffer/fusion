@@ -42,6 +42,7 @@ RSpec.describe "error kinds" do
 
     it "missing file via @../ path" do
       expect_pipe
+        .jail("..") # widen past the default (the program's dir) so @../ stays in the jail
         .code("(_ => @../nonexistent)")
         .out("❌", a_string_including('"kind":"reference_error"', '"operation":"reading file"', '"message":"file not found"'))
     end

@@ -668,9 +668,28 @@ All access goes through `@`:
 
 ## 3.8 The jail: confining `@`-resolution to a directory
 
-TODO (summarize at end of session). A `-j/--jail DIR` flag (all use cases, REPL
-included) confines file-backed `@`-resolution to a directory tree; defaults to the
-program's directory; the stdlib stays reachable; stdin is unaffected.
+### Decisions
+
+- 🧑 ✅ `-j/--jail DIR` confines file-backed `@`-resolution (siblings, downward `@dir/a`, upward `@../a`, and `@load` targets) to `DIR` and its subtree. Default: the program's directory (cwd for `-e` and the REPL). Available in every use case, the REPL included.
+- 🧑 ✅ A relative `--jail` resolves against that same base, so `-j ..` widens to the parent; `--jail '*'` disables confinement entirely.
+- 🧑 ✅ The stdlib is always reachable (it lives outside any project) and stdin is never affected — it is plain JSON, never an `@`-reference.
+- 🧑 ✅ An out-of-jail target is a `reference_error` (`outside the jail`), decided before the filesystem is touched, so a path outside the jail is never even probed for existence.
+- 🧑 ✅ An existing sibling file outside the jail raises that error too, rather than falling through to a built-in or the stdlib — a real but forbidden file fails loudly instead of silently resolving elsewhere.
+- 🧑 ✅ `@`-references still resolve relative to the **referencing file**; the jail only filters the resolved target, it does not move the resolution base.
+
+### Alternatives
+
+- 🧑 ❌ Resolve `@`-references relative to the **jail root** instead of the referencing file (a `--relative-to-jail` mode) — the designer's thought experiment. Rejected: it would make `@name` mean `<jail>/name` everywhere (project-rooted imports), but at the cost of per-subtree relocatability, it makes `@../` meaningless, and it turns per-directory sibling-shadowing (3.6) into jail-global shadowing. Keeping references file-relative is preferred.
+- 🤖 🩹 Containment is lexical (`expand_path` normalises `..`); it does not resolve symlinks, so a symlink inside the jail can still point outside. Hardening with `realpath` is deferred (roadmap).
+
+### Pros
+
+- A `.fsn` program is sandboxed to its own directory by default; reaching out is explicit (`-j ..`) or an opt-out (`-j '*'`).
+- The stdlib and stdin are untouched, so confinement never breaks an ordinary program.
+
+### Cons
+
+- Lexical only — not a hard boundary against an adversarial symlink (see roadmap).
 
 ---
 
