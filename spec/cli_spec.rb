@@ -158,6 +158,38 @@ RSpec.describe "CLI (exe/fusion)" do
     end
   end
 
+  # The jail (-j/--jail) confines file-backed @-resolution. Its default — the
+  # program's directory — and the directory-not-found usage error are only
+  # observable at this boundary.
+  describe "the jail (-j/--jail)" do
+    it "defaults the jail to the program's directory, blocking an @../ escape" do
+      out, err, status = run_cli(File.join(FIX, "ref", "sub", "usesParent.fsn"), stdin: "7")
+      expect(out).to eq("")
+      expect(err).to eq(
+        %({"kind":"reference_error","location":"code usesParent.fsn","operation":"resolving @../helper","input":"../helper","message":"outside the jail"}\n)
+      )
+      expect(status.exitstatus).to eq(1)
+    end
+
+    it "widens the jail with -j .. so the @../ reference resolves" do
+      out, _err, status = run_cli("-j", "..", File.join(FIX, "ref", "sub", "usesParent.fsn"), stdin: "7")
+      expect(out).to eq("[7,7]\n")
+      expect(status.exitstatus).to eq(0)
+    end
+
+    it "rejects a --jail directory that does not exist (plain usage error)" do
+      _out, err, status = run_cli("-j", "/no/such/dir", File.join(FIX, "ref", "sub", "usesParent.fsn"), stdin: "7")
+      expect(err).to start_with("fusion: jail directory not found: /no/such/dir")
+      expect(status.exitstatus).to eq(1)
+    end
+
+    it "accepts --jail with --repl" do
+      out, _err, status = run_cli("--repl", "-j", ".", stdin: "[1, 2, 3] | @length\n")
+      expect(out).to eq("3\n")
+      expect(status.exitstatus).to eq(0)
+    end
+  end
+
   describe "the top-level Ruby-error net" do
     it "converts a stack overflow (SystemStackError) into a stack_error payload" do
       out, err, status = run_cli(File.join(FIX, "loop.fsn"), stdin: "0")

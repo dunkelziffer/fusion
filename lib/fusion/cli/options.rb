@@ -35,6 +35,9 @@ module Fusion
                           how the input marks an error value
           -o, --output MODE
                           how the output marks an error value
+          -j, --jail DIR  confine @-references to DIR and its subtree
+                          (default: the program's directory; the stdlib is
+                          always reachable, stdin is never affected)
           -!              treat the input as an error value (unix input mode only)
           -b, --skip-blank-lines
                           drop blank input lines instead of echoing them (--stream only)
@@ -50,9 +53,9 @@ module Fusion
 
       MODES = %w[unix bang array object].freeze
 
-      attr_reader :use_case, :input_mode, :output_mode, :inline_source, :program_path
+      attr_reader :use_case, :input_mode, :output_mode, :inline_source, :program_path, :jail
 
-      def initialize(use_case:, input_mode:, output_mode:, inline_source:, program_path:, error_input:, skip_blank_lines:)
+      def initialize(use_case:, input_mode:, output_mode:, inline_source:, program_path:, error_input:, skip_blank_lines:, jail:)
         @use_case = use_case
         @input_mode = input_mode
         @output_mode = output_mode
@@ -60,6 +63,7 @@ module Fusion
         @program_path = program_path
         @error_input = error_input
         @skip_blank_lines = skip_blank_lines
+        @jail = jail
       end
 
       def error_input?
@@ -79,6 +83,7 @@ module Fusion
         error_input = false
         skip_blank_lines = false
         inline_source = nil
+        jail = nil
 
         parser = OptionParser.new do |option|
           option.on("-p", "--pipe") { pipe = true }
@@ -87,6 +92,7 @@ module Fusion
           option.on("-i", "--input MODE") { |mode| input_modes << check_mode!(mode, "--input") }
           option.on("-o", "--output MODE") { |mode| output_modes << check_mode!(mode, "--output") }
           option.on("-e", "--execute SOURCE") { |source| inline_source = source }
+          option.on("-j", "--jail DIR") { |dir| jail = dir }
           option.on("-!") { error_input = true }
           option.on("-b", "--skip-blank-lines") { skip_blank_lines = true }
         end
@@ -99,7 +105,7 @@ module Fusion
         input_mode = resolve_mode(input_modes, "--input")
         output_mode = resolve_mode(output_modes, "--output")
 
-        validate(use_case, input_mode, output_mode, error_input, skip_blank_lines, inline_source, positional)
+        validate(use_case, input_mode, output_mode, error_input, skip_blank_lines, inline_source, jail, positional)
       end
 
       # Collapse the use-case flags into one use case; more than one is a misuse.
@@ -153,12 +159,13 @@ module Fusion
         when "-e", "--execute" then "-e/--execute requires a source argument"
         when "-i", "--input" then "--input expects one of: #{MODES.join(', ')} (got nothing)"
         when "-o", "--output" then "--output expects one of: #{MODES.join(', ')} (got nothing)"
+        when "-j", "--jail" then "-j/--jail requires a directory argument"
         else "#{flag} requires an argument"
         end
       end
 
       # Check the flag combination against the use case and fill in defaults.
-      def self.validate(use_case, input_mode, output_mode, error_input, skip_blank_lines, inline_source, positional)
+      def self.validate(use_case, input_mode, output_mode, error_input, skip_blank_lines, inline_source, jail, positional)
         raise UsageError, "--skip-blank-lines is only for --stream" if skip_blank_lines && use_case != :stream
 
         case use_case
@@ -193,7 +200,8 @@ module Fusion
           inline_source: inline_source,
           program_path: program_path,
           error_input: error_input,
-          skip_blank_lines: skip_blank_lines
+          skip_blank_lines: skip_blank_lines,
+          jail: jail
         )
       end
 

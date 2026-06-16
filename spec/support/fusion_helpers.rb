@@ -33,10 +33,11 @@ module FusionHelpers
   # Chainable builder
   class PipeExpectation
     def initialize(example)
-      @example  = example
-      @input    = [OK, "null"]
-      @env_vars = {}
-      @used     = []
+      @example   = example
+      @input     = [OK, "null"]
+      @env_vars  = {}
+      @jail_root = nil
+      @used      = []
     end
 
     def in(status, json)
@@ -48,6 +49,14 @@ module FusionHelpers
     def env(**env_vars)
       claim!(:env)
       @env_vars = env_vars.transform_keys(&:to_s)
+      self
+    end
+
+    # Confine @-resolution to `dir` (a path under spec/fixtures). Mirrors the
+    # CLI's `--jail`; without it the interpreter is unconfined.
+    def jail(dir)
+      claim!(:jail)
+      @jail_root = File.join(FIXTURES, dir)
       self
     end
 
@@ -74,7 +83,7 @@ module FusionHelpers
     # Evaluate the program against the input, mapping the result to
     # (marker, payload) exactly as exe/fusion does.
     def run
-      interp = Fusion::Interpreter.new(env_vars: @env_vars)
+      interp = Fusion::Interpreter.new(env_vars: @env_vars, jail_root: @jail_root)
       value = interp.apply(program(interp), input_value)
       pair = Fusion::CLI.serialize(value)
       [pair.status.zero? ? OK : ERR, pair.data]

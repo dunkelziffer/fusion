@@ -22,6 +22,12 @@ module Fusion
       # REPL entries report errors with the same location as inline (`-e`) code.
       LOCATION = "code <inline>"
 
+      # `jail_root` confines @-resolution for every entry (defaults to cwd; see
+      # CLI#jail_root). `@dir`-relative refs resolve against cwd too.
+      def initialize(jail_root:)
+        @jail_root = jail_root
+      end
+
       def run
         CLI.prepare!
 
@@ -78,9 +84,9 @@ module Fusion
         entry = environment.child
         case ast
         when AST::Expression
-          Interpreter.safe_evaluate(ast, entry)
+          Interpreter.safe_evaluate(ast, entry, jail_root: @jail_root)
         when AST::Statement::Assignment
-          value = Interpreter.safe_evaluate(ast.expression, entry)
+          value = Interpreter.safe_evaluate(ast.expression, entry, jail_root: @jail_root)
           environment.define(ast.name, value)
           value
         else

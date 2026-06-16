@@ -111,4 +111,39 @@ RSpec.describe "@-resolution" do
         .out("❌", a_string_including('"kind":"reference_error"', '"message":"file not found"', "subtract.fsn"))
     end
   end
+
+  # The jail confines file-backed @-resolution to a directory subtree. It governs
+  # the program only — stdin is plain JSON and never holds an @-reference.
+  describe "the jail" do
+    it "blocks an @../ reference that escapes the jail" do
+      expect_pipe
+        .in("✅", "7")
+        .jail("ref/sub")
+        .file_path("ref/sub/usesParent.fsn")
+        .out("❌", '{"kind":"reference_error","location":"code usesParent.fsn","operation":"resolving @../helper","input":"../helper","message":"outside the jail"}')
+    end
+
+    it "allows the same @../ reference once the jail is widened to its parent" do
+      expect_pipe
+        .in("✅", "7")
+        .jail("ref")
+        .file_path("ref/sub/usesParent.fsn")
+        .out("✅", "[7,7]")
+    end
+
+    it "keeps the stdlib reachable from inside a jail" do
+      expect_pipe
+        .in("✅", "5")
+        .jail(".")
+        .file_path("fact.fsn")
+        .out("✅", "120")
+    end
+
+    it "blocks an @load target that escapes the jail, without probing its existence" do
+      expect_pipe
+        .jail(".")
+        .code('"../nope" | @load')
+        .out("❌", '{"kind":"reference_error","location":"builtin load","operation":"@load","input":"../nope","message":"outside the jail"}')
+    end
+  end
 end

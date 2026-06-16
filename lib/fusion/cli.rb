@@ -36,22 +36,33 @@ module Fusion
       when :stream
         run_stream(options)
       when :repl
-        Repl.new.run
+        Repl.new(jail_root: jail_root(options)).run
       else
         raise Unreachable, "Unknown use case #{options.use_case}"
       end
     end
 
+    # The jail root for this run: the program's directory by default (cwd for
+    # inline `-e` and the REPL), or `--jail DIR` resolved against that base.
+    def jail_root(options)
+      base = options.program_path ? File.dirname(File.expand_path(options.program_path)) : Dir.pwd
+      root = options.jail ? File.expand_path(options.jail, base) : base
+      raise Options::UsageError, "jail directory not found: #{options.jail}" unless File.directory?(root)
+
+      root
+    end
+
     def run_pipe(options)
       prepare!
 
-      program = load_program(options)
+      jail = jail_root(options)
+      program = load_program(options, jail)
 
       input = load_input(options)
       output = if input.nil?
         program
       else
-        apply(parse(input), program)
+        apply(parse(input), program, jail)
       end
 
       emit_output(serialize(output), output_mode: options.output_mode)
@@ -60,7 +71,8 @@ module Fusion
     def run_stream(options)
       prepare!
 
-      program = load_program(options)
+      jail = jail_root(options)
+      program = load_program(options, jail)
 
       $stdin.each_line do |line|
         record = line.chomp
@@ -69,7 +81,7 @@ module Fusion
           $stdout.puts unless options.skip_blank_lines?
         else
           input = decode(record, mode: options.input_mode)
-          output = apply(parse(input), program)
+          output = apply(parse(input), program, jail)
           $stdout.puts(encode(serialize(output), mode: options.output_mode))
         end
       end
@@ -88,8 +100,8 @@ module Fusion
 
     # runtime value + runtime value -> runtime value
     # input | function -> output
-    def apply(input, function)
-      Interpreter.safe_apply(function, input)
+    def apply(input, function, jail_root)
+      Interpreter.safe_apply(function, input, jail_root: jail_root)
     end
 
     # expression (AST) -> runtime value
@@ -141,8 +153,8 @@ module Fusion
     end
 
     # file/inline -> runtime value
-    def load_program(options)
-      interpreter = Fusion::Interpreter.new
+    def load_program(options, jail_root)
+      interpreter = Fusion::Interpreter.new(jail_root: jail_root)
       if options.inline_source
         ast = Fusion::Parser.parse_file(options.inline_source, location: "code <inline>")
         return ast if ast.is_a?(Fusion::Interpreter::ErrorVal) # a parse error

@@ -13,10 +13,26 @@ no semantic change. This is the single biggest readability win available and was
 always intended. Open question: exact precedence table and how it interleaves with
 `|` and `=>`.
 
-**`@`-namespace resolution polish.** Decide on project-root confinement
-(sandboxing) for `@../` escapes; consider a configurable standard-library search
+**`@`-namespace resolution polish.** Consider a configurable standard-library search
 path; consider tooling to surface *which* target a given `@name` resolves to in
 a directory, since shadowing is invisible at the call site.
+
+**Jail symlink-hardening** *(if needed)*. The jail (`-j`/`--jail`, design §3.8) is
+lexical: it normalises `..` but does not follow symlinks, so a symlink inside the
+jail can point outside it. If the jail ever needs to be a real security boundary
+(not just project-root confinement), resolve targets with `realpath` and compare
+against the real jail root. Costs a `stat` per reference and an answer on
+non-existent targets.
+
+**Self-describing executables on pre-2018 systems.** A `.fsn` file is made
+executable with `#!/usr/bin/env -S fusion <flags>`, which delivers `<flags>` and the
+file path to the interpreter exactly like a manual `fusion <flags> <file>` call. The
+`-S` (whitespace-splitting) form needs GNU coreutils ≥ 8.30 or a modern BSD/macOS;
+the kernel itself never word-splits a shebang line. For older systems we could split
+inside Fusion: a direct-path shebang `#!/abs/path/to/fusion <flags>` hands the whole
+`<flags>` string to us as a *single* argument, so OptionParser could be preceded by a
+splitter. Defer until needed; the split is a heuristic (one leading argument that
+starts with `-` and contains whitespace).
 
 **Exposing the current file/dir** *(only if it earns its place)*. The interpreter
 already tracks the current `:file` and `:dir` as internal context, unreadable from

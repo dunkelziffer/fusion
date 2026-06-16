@@ -666,6 +666,14 @@ All access goes through `@`:
 
 ---
 
+## 3.8 The jail: confining `@`-resolution to a directory
+
+TODO (summarize at end of session). A `-j/--jail DIR` flag (all use cases, REPL
+included) confines file-backed `@`-resolution to a directory tree; defaults to the
+program's directory; the stdlib stays reachable; stdin is unaffected.
+
+---
+
 # 4. Runtime and CLI
 
 ## 4.1 Runtime I/O contract

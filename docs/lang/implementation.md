@@ -94,3 +94,29 @@ thunk down to the unit's value; the thunk object itself is not a Fusion value, a
 exposing it would put a non-value into the value space (where it would crash
 serialization). Keeping interpreter context out of the binding namespace is what
 prevents that.
+
+## The jail: confining `@`-resolution
+
+A run carries one jail root (`Interpreter#@jail_root`, an absolute path). Every file
+reached through an `@`-reference — a sibling, a downward `@dir/a`, an upward `@../a`,
+or an `@load` target — is checked with `within_jail?` *before* it is loaded: the
+target's expanded absolute path must be inside the jail root, or inside the stdlib
+directory (always reachable, since it lives outside any project). A target outside
+both is a `reference_error` (`outside the jail`), produced before the filesystem is
+touched, so an out-of-jail path cannot even be probed for existence.
+
+The jail does **not** cover two things:
+
+- The top-level program file (given explicitly on the CLI) is loaded directly, not
+  through `@`-resolution, so it is never jail-checked — the jail is about what the
+  program may *reach*, not whether it may run.
+- stdin — it is decoded as JSON, never evaluated as Fusion source, so it holds no
+  `@`-references at all.
+
+The check is lexical: `File.expand_path` normalises `..`, but symlinks are not
+resolved (see roadmap). A nil root means unconfined — library and test callers use
+that; the CLI always supplies one, defaulting to the program's directory.
+
+The same root must reach every interpreter a run builds — the one that loads the
+program, and the fresh one `safe_apply`/`safe_evaluate` create to apply it — so the
+CLI computes it once (`CLI#jail_root`) and threads it through both.

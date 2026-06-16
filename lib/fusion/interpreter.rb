@@ -33,10 +33,14 @@ module Fusion
 
     attr_reader :root_env
 
-    def initialize(env_vars: nil)
+    # `jail_root` confines file-backed @-resolution to that directory's subtree
+    # (the stdlib stays reachable regardless). nil means unconfined — used by
+    # library/test callers; the CLI always supplies one.
+    def initialize(env_vars: nil, jail_root: nil)
       @stdlib_dir = File.expand_path("../../stdlib", __dir__)
       raise Unreachable, "Couldn't find standard library" unless Dir.exist?(@stdlib_dir)
 
+      @jail_root = jail_root && File.expand_path(jail_root)
       @env_vars = env_vars || ENV.to_h
       @file_cache = {} # abspath -> Thunk
       @ast_cache = {}  # abspath -> AST
@@ -49,9 +53,9 @@ module Fusion
     # (notably a stack overflow) becomes a payloaded error rather than a raw
     # backtrace, so the stdout/stderr contract always holds. In the stream the
     # error is one record's output and the next line continues.
-    def self.safe_apply(function, input)
+    def self.safe_apply(function, input, jail_root: nil)
       safe do
-        new.apply(function, input)
+        new(jail_root: jail_root).apply(function, input)
       end
     end
 
@@ -59,9 +63,9 @@ module Fusion
     # exe/fusion, so a Ruby-level failure becomes a printed payload and the
     # session survives it. A statement carries its expression; a bare
     # expression entry is the expression itself.
-    def self.safe_evaluate(expression, environment)
+    def self.safe_evaluate(expression, environment, jail_root: nil)
       safe do
-        new.evaluate_unit(expression, environment)
+        new(jail_root: jail_root).evaluate_unit(expression, environment)
       end
     end
 
@@ -161,6 +165,8 @@ module Fusion
     def resolve_name(name, dir, location)
       sibling_file = File.expand_path(name + ".fsn", dir)
       if File.exist?(sibling_file)
+        return jail_error(location, "resolving @#{name}", name) unless within_jail?(sibling_file)
+
         return load_file(sibling_file).force
       end
 
@@ -178,6 +184,10 @@ module Fusion
           end
 
           target = File.expand_path(v, d)
+
+          # Check the jail before touching the filesystem, so an out-of-jail
+          # path can't be probed for existence.
+          next jail_error("builtin load", "@load", v) unless within_jail?(target)
 
           unless File.exist?(target)
             next ErrorVal.internal(kind: "reference_error", location: "builtin load", operation: "@load", input: v, message: "file not found")
@@ -200,8 +210,31 @@ module Fusion
     end
 
     # Resolve a pure path "@dir/a" or "@../a": file only, never builtin/stdlib.
-    def resolve_path(relpath, dir)
-      load_file(File.expand_path(relpath + ".fsn", dir)).force
+    def resolve_path(relpath, dir, location)
+      target = File.expand_path(relpath + ".fsn", dir)
+      return jail_error(location, "resolving @#{relpath}", relpath) unless within_jail?(target)
+
+      load_file(target).force
+    end
+
+    # The jail confines file-backed @-resolution to `@jail_root` and its subtree.
+    # The stdlib is always reachable (it lives outside any project), and a nil
+    # root means unconfined. Lexical containment via expand_path catches `../`
+    # traversal; it does not follow symlinks (see roadmap).
+    def within_jail?(abspath)
+      return true if @jail_root.nil?
+      return true if inside?(abspath, @stdlib_dir)
+
+      inside?(abspath, @jail_root)
+    end
+
+    def inside?(abspath, root)
+      root = root.chomp(File::SEPARATOR)
+      abspath == root || abspath.start_with?(root + File::SEPARATOR)
+    end
+
+    def jail_error(location, operation, input)
+      ErrorVal.internal(kind: "reference_error", location: location, operation: operation, input: input, message: "outside the jail")
     end
 
     # ---- Expression evaluation -------------------------------------------
@@ -246,7 +279,7 @@ module Fusion
         when :name
           resolve_name(node.path, dir, code_location(env))
         else # :path
-          resolve_path(node.path, dir)
+          resolve_path(node.path, dir, code_location(env))
         end
       when Expression::ArrLit then eval_array(node, env)
       when Expression::ObjLit then eval_object(node, env)

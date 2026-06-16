@@ -8,7 +8,7 @@
 # directly, the way the rest of the language is specced in-process.
 
 RSpec.describe Fusion::CLI::Repl do
-  subject(:repl) { described_class.new }
+  subject(:repl) { described_class.new(jail_root: Dir.pwd) }
 
   # A fresh session environment, built the way #run does, so a binding made by
   # one entry is visible to the next within an example.

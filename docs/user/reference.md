@@ -370,7 +370,7 @@ There are two origins of error values, and they differ in payload:
 | `kind`                | Raised when                                                                                                    |
 | --------------------- | -------------------------------------------------------------------------------------------------------------- |
 | `syntax_error`        | source code, or the JSON input, fails to parse.                                                                |
-| `reference_error`     | an `@`-reference cannot be resolved: unknown name, file not found, a file-system failure, or a non-productive data cycle. |
+| `reference_error`     | an `@`-reference cannot be resolved: unknown name, file not found, a file-system failure, a non-productive data cycle, or a target outside the jail (§9.2). |
 | `type_error`          | a value has the wrong type for an operation (expected X / a type mismatch); also applying a non-function, spreading a non-array/object, member access on a non-object, or a wrong-typed index. |
 | `argument_error`      | a built-in receives the wrong number/shape of arguments (e.g. not a pair), or an `array`/`object`-mode input envelope has the wrong shape (§9.4). Its `message` states the expected shape as a Fusion pattern where possible (the pair-built-ins report `expected [_, _]`). |
 | `binding_error`       | reading an unbound identifier, or binding the same name twice in one clause.                                   |
@@ -543,6 +543,14 @@ The `.fsn` extension is implied and never written in a `@` reference. File resol
 is relative to the **referencing file's** directory; built-ins and the standard
 library are global to the runtime but, per the order above, are shadowed by a sibling
 file of the same name. That shadowing is per-directory, not global.
+
+**Confinement (the jail).** File-backed resolution is confined to a *jail*: a directory
+and its subtree, set by `-j`/`--jail` and defaulting to the program's directory (the
+working directory for `-e` and the REPL). A sibling, downward, `@../`, or `@load` target
+outside the jail is a `reference_error` (`outside the jail`), checked before the
+filesystem is touched. The standard library is always reachable regardless of the jail,
+and stdin is never affected — it is plain JSON, never an `@`-reference. Confinement is
+lexical (it normalises `..`) and does not follow symlinks.
 
 **Built-ins are reached through this same mechanism**: `@add`, `@Integer`, etc. are
 `@name` references that resolve at step 2. A *bare* identifier (without `@`) is only
@@ -742,6 +750,8 @@ options:
                   how the input marks an error value (§9.4)
   -o, --output MODE
                   how the output marks an error value (§9.4)
+  -j, --jail DIR  confine @-references to DIR and its subtree
+                  (default: the program's directory; §9.2)
   -!              treat the input as an error value (unix input mode only)
   -b, --skip-blank-lines
                   drop blank input lines instead of echoing them (--stream, §9.5)
