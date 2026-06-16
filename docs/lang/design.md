@@ -641,6 +641,14 @@ All access goes through `@`:
 
 ---
 
+## 3.7 Bare `@` is the current top-level unit, not the current file
+
+TODO (summarize at end of session). Reframe bare `@` from "the current file" to
+"the value of the current top-level unit", so it also works for inline (`-e`) and
+REPL entries, which are not files.
+
+---
+
 # 4. Runtime and CLI
 
 ## 4.1 Runtime I/O contract

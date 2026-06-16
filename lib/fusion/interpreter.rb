@@ -25,7 +25,7 @@ require_relative "interpreter/func"
 require_relative "interpreter/native_func"
 require_relative "interpreter/builtins"
 require_relative "interpreter/env"
-require_relative "interpreter/file_thunk"
+require_relative "interpreter/thunk"
 
 module Fusion
   class Interpreter
@@ -38,7 +38,7 @@ module Fusion
       raise Unreachable, "Couldn't find standard library" unless Dir.exist?(@stdlib_dir)
 
       @env_vars = env_vars || ENV.to_h
-      @file_cache = {} # abspath -> FileThunk
+      @file_cache = {} # abspath -> Thunk
       @ast_cache = {}  # abspath -> AST
       @builtins = {}   # name -> NativeFunc  (consulted by @name, not via env)
       Builtins.install(@builtins, self)
@@ -61,7 +61,7 @@ module Fusion
     # expression entry is the expression itself.
     def self.safe_evaluate(expression, environment)
       safe do
-        new.eval_expr(expression, environment)
+        new.evaluate_unit(expression, environment)
       end
     end
 
@@ -95,7 +95,9 @@ module Fusion
 
     # ---- File loading -----------------------------------------------------
     def load_file(abspath)
-      @file_cache[abspath] ||= FileThunk.new(self, abspath)
+      @file_cache[abspath] ||= Thunk.new(location: file_location(abspath), input: abspath) do
+        evaluate_file(abspath)
+      end
     end
 
     # The error field `location` for code at `abspath`.
@@ -129,16 +131,28 @@ module Fusion
         ast
       else
         # A file's value is evaluated in a fresh env whose parent is root (builtins),
-        # plus knowledge of its own directory for resolving @refs.
+        # plus knowledge of its own directory for resolving @refs. `__self__` is the
+        # file's own thunk, so a bare `@` resolves to this file's value.
         env = @root_env.child
         env.define("__dir__", File.dirname(abspath))
         env.define("__file__", abspath)
+        env.define("__self__", load_file(abspath))
         eval_expr(ast, env)
       end
     rescue Errno::ENOENT
       ErrorVal.internal(kind: "reference_error", location: loc, operation: "reading file", input: abspath, message: "file not found")
     rescue SystemCallError => err # EISDIR, EACCES, ... — file-system access failures
       ErrorVal.internal(kind: "reference_error", location: loc, operation: "reading file", input: abspath, message: err.message)
+    end
+
+    # Evaluate a top-level unit that has no file of its own — inline (`-e`) source
+    # or a REPL entry. Binds `__self__` so a bare `@` resolves to this unit's own
+    # (lazy, memoized) value, just like it does inside a file. `env` carries the
+    # unit's bindings (`__dir__`, and for the REPL the session's names).
+    def evaluate_unit(ast, env)
+      thunk = Thunk.new(location: code_location(env), input: NULL) { eval_expr(ast, env) }
+      env.define("__self__", thunk)
+      thunk.force
     end
 
     # Resolve a bare "@name": sibling file > builtin (incl. load, ENV) > stdlib > !.
@@ -220,16 +234,14 @@ module Fusion
         dir = Dir.pwd if dir == :__unbound__
         case node.variety
         when :self
-          # Bare `@` is the current file. NOTE: inline (`-e`) programs have no
-          # current file, so `@` is unresolvable there today — but it *should*
-          # refer to the whole inline program (tracked as a gap).
-          file = env.lookup("__file__")
+          # Bare `@` is the value of the current top-level unit — a file, or an
+          # inline (`-e`)/REPL entry. Every evaluated unit binds its own thunk as
+          # `__self__`; forcing it gives the unit's value (and recursion, since a
+          # closure captures the env where it was defined).
+          self_thunk = env.lookup("__self__")
+          raise Unreachable, "bare @ evaluated outside a top-level unit" if self_thunk == :__unbound__
 
-          if file == :__unbound__
-            ErrorVal.internal(kind: "reference_error", location: code_location(env), operation: "resolving @", input: NULL, message: "no current file for self-reference")
-          else
-            load_file(file).force
-          end
+          self_thunk.force
         when :name
           resolve_name(node.path, dir, code_location(env))
         else # :path

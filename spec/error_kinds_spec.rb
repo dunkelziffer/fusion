@@ -34,12 +34,6 @@ RSpec.describe "error kinds" do
         .out("❌", '{"kind":"reference_error","location":"code <inline>","operation":"resolving @no_such_module","input":"no_such_module","message":"unresolved reference"}')
     end
 
-    it "bare @ with no current file (inline has none)" do
-      expect_pipe
-        .code("(_ => @)")
-        .out("❌", '{"kind":"reference_error","location":"code <inline>","operation":"resolving @","input":null,"message":"no current file for self-reference"}')
-    end
-
     it "non-productive data cycle" do
       expect_pipe
         .file_path("cyclicA.fsn")

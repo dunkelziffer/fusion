@@ -2,14 +2,17 @@
 
 # === Interpreter internals ===
 #
-# Lazy, memoized reference to a file's value (a "thunk" / promise).
+# Lazy, memoized value of a top-level unit (a file, or an inline/REPL entry).
+# A bare `@` forces the current unit's thunk; re-entering it before it finishes
+# is a non-productive data cycle.
 
 module Fusion
   class Interpreter
-    class FileThunk
-      def initialize(loader, abspath)
-        @loader = loader
-        @abspath = abspath
+    class Thunk
+      def initialize(location:, input:, &compute)
+        @compute = compute
+        @location = location
+        @input = input
         @state = :unforced # :unforced | :forcing | :done
         @value = nil
       end
@@ -18,18 +21,18 @@ module Fusion
         case @state
         when :done then @value
         when :forcing
-          # We are already evaluating this file and were asked for it again
+          # We are already computing this unit and were asked for it again
           # without any intervening function boundary => non-productive data cycle.
           ErrorVal.internal(
             kind: "reference_error",
-            location: @loader.file_location(@abspath),
-            operation: "forcing a file reference",
-            input: @abspath,
+            location: @location,
+            operation: "forcing a reference",
+            input: @input,
             message: "non-productive data cycle"
           )
         else
           @state = :forcing
-          @value = @loader.evaluate_file(@abspath)
+          @value = @compute.call
           @state = :done
           @value
         end

@@ -74,6 +74,11 @@ RSpec.describe Fusion::CLI::Repl do
       expect(repl.handle("5 | fact", environment)).to eq("120")
     end
 
+    it "supports recursion through a bare @ (the entry's own value)" do
+      repl.handle("fact = (0 => 1, n => [n, [n, 1] | @subtract | @] | @multiply)", environment)
+      expect(repl.handle("5 | fact", environment)).to eq("120")
+    end
+
     it "allows binding errors to identifiers and renders errors with a `!` prefix" do
       expect(repl.handle("bad = [1, 0] | @divide", environment)).to eq("!#{division_by_zero}")
       expect(repl.handle("bad", environment)).to eq("!#{division_by_zero}")

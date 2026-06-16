@@ -149,7 +149,7 @@ module Fusion
 
         env = interpreter.root_env.child
         env.define("__dir__", Dir.pwd)
-        interpreter.eval_expr(ast, env)
+        interpreter.evaluate_unit(ast, env)
       else
         interpreter.load_file(File.expand_path(options.program_path)).force
       end

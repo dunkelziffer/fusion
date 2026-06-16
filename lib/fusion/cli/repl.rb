@@ -71,11 +71,16 @@ module Fusion
       private
 
       def evaluate(ast, environment)
+        # Each entry runs in its own child env so a bare `@` (the entry's own
+        # `__self__`, bound by the interpreter) means "this entry's value" and
+        # never reaches back to an earlier entry. Assignments still define their
+        # name on the session env, so bindings persist across entries.
+        entry = environment.child
         case ast
         when AST::Expression
-          Interpreter.safe_evaluate(ast, environment)
+          Interpreter.safe_evaluate(ast, entry)
         when AST::Statement::Assignment
-          value = Interpreter.safe_evaluate(ast.expression, environment)
+          value = Interpreter.safe_evaluate(ast.expression, entry)
           environment.define(ast.name, value)
           value
         else

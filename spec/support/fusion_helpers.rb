@@ -96,7 +96,7 @@ module FusionHelpers
         return ast if ast.is_a?(Fusion::Interpreter::ErrorVal) # a parse error
         env = interp.root_env.child
         env.define("__dir__", FIXTURES)
-        interp.eval_expr(ast, env)
+        interp.evaluate_unit(ast, env)
       end
     end
 
