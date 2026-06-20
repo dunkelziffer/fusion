@@ -27,33 +27,17 @@ module Fusion
         @parent = parent
       end
 
-      # Unchecked insert of a user-visible binding. Used by the REPL to keep a
-      # bound name across entries (pattern binders go through #bind instead).
-      def define(name, value)
-        @vars[name] = value
-        self
+      def child
+        Env.new(self)
       end
 
-      def set_context(key, value)
-        @context[key] = value
-        self
-      end
-
-      def context(key)
-        if @context.key?(key)
-          @context[key]
-        elsif @parent
-          @parent.context(key)
-        else
-          :__unbound__
+      # Pattern bindings:
+      # - Shadowing a binding from a parent Env is always allowed.
+      # - A duplicate identifier in the same Env is usually an error, but allowed on the REPL.
+      def bind(name, value, checked: true)
+        if checked && @vars.key?(name)
+          raise DuplicateBinding, name
         end
-      end
-
-      # Insert a pattern binding, rejecting a duplicate binder. Only this env's
-      # own scope is checked: a binder may shadow a name from a parent env, but
-      # must be unique within one pattern/clause.
-      def bind(name, value)
-        raise DuplicateBinding, name if @vars.key?(name)
 
         @vars[name] = value
       end
@@ -68,8 +52,24 @@ module Fusion
         end
       end
 
-      def child
-        Env.new(self)
+      # Hidden interpreter context:
+      # - `:dir`:  the directory @-references resolve against (a path String).
+      # - `:file`: the current file's absolute path, used for error locations (a
+      #            String; absent for inline/REPL code, which reports as "code <inline>").
+      # - `:self`: the current top-level unit's own Thunk, used for recursion via a bare `@`.
+      def set_context(key, value)
+        @context[key] = value
+        self
+      end
+
+      def context(key)
+        if @context.key?(key)
+          @context[key]
+        elsif @parent
+          @parent.context(key)
+        else
+          :__unbound__
+        end
       end
     end
   end

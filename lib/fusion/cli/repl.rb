@@ -87,7 +87,7 @@ module Fusion
           Interpreter.safe_evaluate(ast, entry, jail_root: @jail_root)
         when AST::Statement::Assignment
           value = Interpreter.safe_evaluate(ast.expression, entry, jail_root: @jail_root)
-          environment.define(ast.name, value)
+          environment.bind(ast.name, value, checked: false)
           value
         else
           raise Unreachable, "Unhandled AST node #{ast.class}"
