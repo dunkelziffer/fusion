@@ -77,17 +77,20 @@ module Fusion
       private
 
       def evaluate(ast, environment)
-        # Each entry runs in its own child env so a bare `@` (the entry's own
-        # `:self` context, set by the interpreter) means "this entry's value" and
-        # never reaches back to an earlier entry. Assignments still define their
-        # name on the session env, so bindings persist across entries.
-        entry = environment.child
+        # Run each input in its own temporary environment. The interpreter will
+        # set the `:self` context, so a bare `@` works correctly.
+        tmp_environment = environment.child
+
         case ast
         when AST::Expression
-          Interpreter.safe_evaluate(ast, entry, jail_root: @jail_root)
+          Interpreter.safe_evaluate(ast, tmp_environment, jail_root: @jail_root)
         when AST::Statement::Assignment
-          value = Interpreter.safe_evaluate(ast.expression, entry, jail_root: @jail_root)
+          value = Interpreter.safe_evaluate(ast.expression, tmp_environment, jail_root: @jail_root)
+
+          # Assignments define their bindings on the REPLs main environment,
+          # so bindings persist across entries.
           environment.bind(ast.name, value, checked: false)
+
           value
         else
           raise Unreachable, "Unhandled AST node #{ast.class}"
