@@ -22,8 +22,8 @@ module Fusion
       attr_reader :parent
 
       def initialize(parent = nil)
-        @vars = {}     # user-visible bindings (pattern binders), keyed by identifier
-        @context = {}  # interpreter context (the current dir/file/self), never a value
+        @vars = {}     # pattern bindings, keyed by identifier
+        @context = {}  # hidden interpreter context, keyed by symbol (dir / file / self)
         @parent = parent
       end
 
@@ -34,10 +34,6 @@ module Fusion
         self
       end
 
-      # Interpreter execution context — the current directory, file, and self-thunk
-      # — lives in a separate channel from user bindings, so a program can never
-      # read it as an identifier (and a non-value like the self-thunk can never
-      # leak into the value space). Keyed by symbol; walks the parent chain.
       def set_context(key, value)
         @context[key] = value
         self
