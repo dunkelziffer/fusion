@@ -23,7 +23,7 @@ module Fusion
 
       def initialize(parent = nil)
         @vars = {}     # pattern bindings, keyed by identifier
-        @context = {}  # hidden interpreter context, keyed by symbol (dir / file / self)
+        @context = {}  # hidden interpreter context, keyed by symbol
         @parent = parent
       end
 
