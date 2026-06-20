@@ -37,7 +37,7 @@ module Fusion
                           how the output marks an error value
           -j, --jail DIR  confine @-references to DIR and its subtree
                           (default: the program's directory; the stdlib is
-                          always reachable, stdin is never affected;
+                          always reachable, stdin never contains @-references;
                           use '*' to disable confinement)
           -!              treat the input as an error value (unix input mode only)
           -b, --skip-blank-lines
