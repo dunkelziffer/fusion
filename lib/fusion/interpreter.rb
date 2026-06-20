@@ -221,8 +221,10 @@ module Fusion
 
     # The jail confines file-backed @-resolution to `@jail_root` and its subtree.
     # The stdlib is always reachable (it lives outside any project), and a nil
-    # root means unconfined. Lexical containment via expand_path catches `../`
-    # traversal; it does not follow symlinks (see roadmap).
+    # root means unconfined. Containment is lexical (expand_path normalises `..`)
+    # and follows existing symlinks: it confines references, it is not a security
+    # sandbox and needs none — Fusion cannot write files, so no symlink can be
+    # planted to escape.
     def within_jail?(abspath)
       return true if @jail_root.nil?
       return true if inside?(abspath, @stdlib_dir)

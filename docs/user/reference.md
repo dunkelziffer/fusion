@@ -553,8 +553,9 @@ filesystem is touched. An existing sibling outside the jail fails this way too â
 silently resolving elsewhere. References still resolve relative to the referencing file;
 the jail only filters the result. The standard library is always reachable regardless of
 the jail, and stdin is never affected â€” it is plain JSON, never an `@`-reference.
-Confinement is lexical (it normalises `..`) and does not follow symlinks. Pass
-`--jail '*'` to disable confinement entirely.
+Confinement is lexical (it normalises `..`) and follows existing symlinks. It confines
+references to a directory tree; it is not a security sandbox and needs none, since Fusion
+cannot write files. Pass `--jail '*'` to disable confinement entirely.
 
 **Built-ins are reached through this same mechanism**: `@add`, `@Integer`, etc. are
 `@name` references that resolve at step 2. A *bare* identifier (without `@`) is only

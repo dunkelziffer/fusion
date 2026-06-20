@@ -17,13 +17,6 @@ always intended. Open question: exact precedence table and how it interleaves wi
 path; consider tooling to surface *which* target a given `@name` resolves to in
 a directory, since shadowing is invisible at the call site.
 
-**Jail symlink-hardening** *(if needed)*. The jail (`-j`/`--jail`, design §3.8) is
-lexical: it normalises `..` but does not follow symlinks, so a symlink inside the
-jail can point outside it. If the jail ever needs to be a real security boundary
-(not just project-root confinement), resolve targets with `realpath` and compare
-against the real jail root. Costs a `stat` per reference and an answer on
-non-existent targets.
-
 **Self-describing executables on pre-2018 systems.** A `.fsn` file is made
 executable with `#!/usr/bin/env -S fusion <flags>`, which delivers `<flags>` and the
 file path to the interpreter exactly like a manual `fusion <flags> <file>` call. The

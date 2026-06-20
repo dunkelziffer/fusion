@@ -676,11 +676,12 @@ All access goes through `@`:
 - 🧑 ✅ An out-of-jail target is a `reference_error` (`outside the jail`), decided before the filesystem is touched, so a path outside the jail is never even probed for existence.
 - 🧑 ✅ An existing sibling file outside the jail raises that error too, rather than falling through to a built-in or the stdlib — a real but forbidden file fails loudly instead of silently resolving elsewhere.
 - 🧑 ✅ `@`-references still resolve relative to the **referencing file**; the jail only filters the resolved target, it does not move the resolution base.
+- 🔢 ✅ Containment is lexical (`expand_path` normalises `..`) and follows existing symlinks. It confines references to a directory tree; it is **not** a security sandbox and needs none — Fusion cannot write files, so no symlink can be planted to escape, and any symlink encountered is part of the legitimate project layout.
 
 ### Alternatives
 
-- 🧑 ❌ Resolve `@`-references relative to the **jail root** instead of the referencing file (a `--relative-to-jail` mode) — the designer's thought experiment. Rejected: it would make `@name` mean `<jail>/name` everywhere (project-rooted imports), but at the cost of per-subtree relocatability, it makes `@../` meaningless, and it turns per-directory sibling-shadowing (3.6) into jail-global shadowing. Keeping references file-relative is preferred.
-- 🤖 🩹 Containment is lexical (`expand_path` normalises `..`); it does not resolve symlinks, so a symlink inside the jail can still point outside. Hardening with `realpath` is deferred (roadmap).
+- 🧑 💭 Resolve `@`-references relative to the **jail root** instead of the referencing file (a `--relative-to-jail` mode) — the designer's thought experiment. Rejected: it would make `@name` mean `<jail>/name` everywhere (project-rooted imports), but at the cost of per-subtree relocatability, it makes `@../` meaningless, and it turns per-directory sibling-shadowing (3.6) into jail-global shadowing. Keeping references file-relative is preferred.
+- 🤖 ❌ Resolve symlinks (`realpath`) to make the jail a hard boundary. Declined: it buys nothing here (a program that cannot write files cannot plant an escaping symlink) and costs a `stat` per reference.
 
 ### Pros
 
@@ -689,7 +690,7 @@ All access goes through `@`:
 
 ### Cons
 
-- Lexical only — not a hard boundary against an adversarial symlink (see roadmap).
+- Safe symlink-following rests on Fusion being unable to write files; adding a file-writing capability would mean revisiting it.
 
 ---
 

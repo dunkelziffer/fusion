@@ -113,9 +113,12 @@ The jail does **not** cover two things:
 - stdin — it is decoded as JSON, never evaluated as Fusion source, so it holds no
   `@`-references at all.
 
-The check is lexical: `File.expand_path` normalises `..`, but symlinks are not
-resolved (see roadmap). A nil root means unconfined — library and test callers use
-that; the CLI always supplies one, defaulting to the program's directory.
+The check is lexical: `File.expand_path` normalises `..`, and existing symlinks are
+followed. The jail confines references to a directory tree; it is not a security
+sandbox and needs none, since Fusion cannot write files — so no symlink can be planted
+to escape, and any symlink present is part of the legitimate project layout. A nil root
+means unconfined — library and test callers use that; the CLI always supplies one,
+defaulting to the program's directory.
 
 The same root must reach every interpreter a run builds — the one that loads the
 program, and the fresh one `safe_apply`/`safe_evaluate` create to apply it — so the
