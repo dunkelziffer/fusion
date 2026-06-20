@@ -108,9 +108,18 @@ module Fusion
     end
 
     # expression (AST) -> runtime value
-    # Mutates environment (REPL variable binding)
-    def evaluate(expression, environment)
-      Interpreter.safe_evaluate(expression, environment)
+    # Mutates environment if given an assignment statement.
+    def evaluate(ast, environment, jail_root: nil)
+      case ast
+      when AST::Statement::Assignment
+        value = Interpreter.safe_evaluate(ast.expression, environment, jail_root: jail_root)
+        environment.bind(ast.name, value, checked: false)
+        value
+      when AST::Expression
+        Interpreter.safe_evaluate(ast, environment, jail_root: jail_root)
+      else
+        raise Unreachable, "Unhandled AST node #{ast.class}"
+      end
     end
 
     # runtime value -> WirePair

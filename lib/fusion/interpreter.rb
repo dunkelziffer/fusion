@@ -151,12 +151,14 @@ module Fusion
     end
 
     # Evaluate a top-level unit that has no file of its own — inline (`-e`) source
-    # or a REPL entry. Sets the `:self` context so a bare `@` resolves to this
-    # unit's own (lazy, memoized) value, just like it does inside a file. `env`
-    # already carries the `:dir` context (and, for the REPL, the session's names).
+    # or a REPL entry. Evaluates in a fresh child of `env` and sets *that child's*
+    # `:self` context, so a bare `@` resolves to this unit's own (lazy, memoized)
+    # value without mutating the caller's `env`. `env` carries the `:dir` context
+    # (and, for the REPL, the session's bindings).
     def evaluate_unit(ast, env)
-      thunk = Thunk.new(location: code_location(env), input: NULL) { eval_expr(ast, env) }
-      env.set_context(:self, thunk)
+      unit_env = env.child
+      thunk = Thunk.new(location: code_location(unit_env), input: NULL) { eval_expr(ast, unit_env) }
+      unit_env.set_context(:self, thunk)
       thunk.force
     end
 

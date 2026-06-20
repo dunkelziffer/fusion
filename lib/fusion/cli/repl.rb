@@ -69,32 +69,9 @@ module Fusion
       # String (+ Env) -> String
       def handle(buffer, environment)
         ast = Fusion::Parser.parse_repl(buffer, location: LOCATION)
-        runtime_value = evaluate(ast, environment)
+        runtime_value = CLI.evaluate(ast, environment, jail_root: @jail_root)
         wire_pair = Serializer.serialize(runtime_value, lenient: true)
         Encoder.encode(wire_pair, mode: :bang)
-      end
-
-      private
-
-      def evaluate(ast, environment)
-        # Run each input in its own temporary environment. The interpreter will
-        # set the `:self` context, so a bare `@` works correctly.
-        tmp_environment = environment.child
-
-        case ast
-        when AST::Expression
-          Interpreter.safe_evaluate(ast, tmp_environment, jail_root: @jail_root)
-        when AST::Statement::Assignment
-          value = Interpreter.safe_evaluate(ast.expression, tmp_environment, jail_root: @jail_root)
-
-          # Assignments define their bindings on the REPLs main environment,
-          # so bindings persist across entries.
-          environment.bind(ast.name, value, checked: false)
-
-          value
-        else
-          raise Unreachable, "Unhandled AST node #{ast.class}"
-        end
       end
     end
   end
