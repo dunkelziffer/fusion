@@ -36,23 +36,10 @@ module Fusion
       when :stream
         run_stream(options)
       when :repl
-        Repl.new(jail_root: jail_root(options)).run
+        run_repl(options)
       else
         raise Unreachable, "Unknown use case #{options.use_case}"
       end
-    end
-
-    # The jail root for this run: the program's directory by default (cwd for
-    # inline `-e` and the REPL), or `--jail DIR` resolved against that base.
-    # `--jail '*'` opts out of confinement entirely (nil = unconfined).
-    def jail_root(options)
-      return nil if options.jail == "*"
-
-      base = options.program_path ? File.dirname(File.expand_path(options.program_path)) : Dir.pwd
-      root = options.jail ? File.expand_path(options.jail, base) : base
-      raise Options::UsageError, "jail directory not found: #{options.jail}" unless File.directory?(root)
-
-      root
     end
 
     def run_pipe(options)
@@ -65,7 +52,7 @@ module Fusion
       output = if input.nil?
         program
       else
-        apply(parse(input), program, jail)
+        apply(parse(input), program, jail_root: jail)
       end
 
       emit_output(serialize(output), output_mode: options.output_mode)
@@ -84,10 +71,14 @@ module Fusion
           $stdout.puts unless options.skip_blank_lines?
         else
           input = decode(record, mode: options.input_mode)
-          output = apply(parse(input), program, jail)
+          output = apply(parse(input), program, jail_root: jail)
           $stdout.puts(encode(serialize(output), mode: options.output_mode))
         end
       end
+    end
+
+    def run_repl(options)
+      Repl.new(jail_root: jail_root(options)).run
     end
 
     # String -> WirePair
@@ -103,13 +94,13 @@ module Fusion
 
     # runtime value + runtime value -> runtime value
     # input | function -> output
-    def apply(input, function, jail_root)
+    def apply(input, function, jail_root: Dir.pwd)
       Interpreter.safe_apply(function, input, jail_root: jail_root)
     end
 
     # expression (AST) -> runtime value
     # Mutates environment if given an assignment statement.
-    def evaluate(ast, environment, jail_root: nil)
+    def evaluate(ast, environment, jail_root: Dir.pwd)
       case ast
       when AST::Statement::Assignment
         value = Interpreter.safe_evaluate(ast.expression, environment, jail_root: jail_root)
@@ -177,6 +168,19 @@ module Fusion
       else
         interpreter.load_file(File.expand_path(options.program_path)).force
       end
+    end
+
+     # The jail root for this run: the program's directory by default (cwd for
+    # inline `-e` and the REPL), or `--jail DIR` resolved against that base.
+    # `--jail '*'` opts out of confinement entirely (nil = unconfined).
+    def jail_root(options)
+      return nil if options.jail == "*"
+
+      base = options.program_path ? File.dirname(File.expand_path(options.program_path)) : Dir.pwd
+      root = options.jail ? File.expand_path(options.jail, base) : base
+      raise Options::UsageError, "jail directory not found: #{options.jail}" unless File.directory?(root)
+
+      root
     end
   end
 end
