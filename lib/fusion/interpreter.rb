@@ -173,6 +173,24 @@ module Fusion
         return load_file(sibling_file).force
       end
 
+      resolve_builtin_or_stdlib(name, dir, location)
+    end
+
+    # Resolve "@@": the builtin/stdlib that the referencing file shadows. It is its
+    # own name resolved with the sibling step skipped (the sibling is itself), so
+    # the file can extend what it overrides. There is no file to take super of in
+    # an inline (`-e`) or REPL entry.
+    def resolve_super(env, dir, location)
+      file = env.context(:file)
+      if file == :__unbound__
+        return ErrorVal.internal(kind: "reference_error", location: location, operation: "resolving @@", input: NULL, message: "no enclosing file")
+      end
+
+      resolve_builtin_or_stdlib(File.basename(file, ".fsn"), dir, location)
+    end
+
+    # The non-sibling tail of @name resolution: builtin (incl. load, ENV) > stdlib > !.
+    def resolve_builtin_or_stdlib(name, dir, location)
       if name == "ENV"
         return @env_vars.dup
       end
@@ -282,6 +300,8 @@ module Fusion
           end
 
           self_thunk.force
+        when :super
+          resolve_super(env, dir, code_location(env))
         when :name
           resolve_name(node.path, dir, code_location(env))
         else # :path

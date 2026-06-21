@@ -518,6 +518,13 @@ A `@` reference takes one of these forms:
 - **`@`** (nothing after it) — the value of the **current top-level unit**: the
   current file, or the inline (`-e`) / REPL entry being evaluated. Used for
   self-recursion.
+- **`@@`** (super) — the built-in or standard-library value the current file
+  **shadows**: the file's own name resolved by steps 2–3 below, skipping the
+  sibling step (which would be the file itself). Lets an override extend what it
+  replaces, e.g. `OP.fsn` containing `{ ...@@, "add": … }`; access a member with
+  `@@.key`. The two `@` must be adjacent (`@ @x` is two separate references).
+  Outside a file (inline `-e` / REPL) there is no name to take super of, so it is a
+  `reference_error` (`no enclosing file`).
 - **`@ENV`** — an object of all environment variables (string keys, string values;
   no parsing). Resolved in the `@name` chain below, so it is shadowable.
 - **`@name`** — a single bare identifier (no `/`, no `../`).

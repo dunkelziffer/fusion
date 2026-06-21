@@ -48,7 +48,7 @@ module Fusion
       })
       FuncLit   = TypedData.define(clauses: ->(v) { v.is_a?(Array) && v.all? { |c| Clause === c } }) # [] = the empty function
       Ident     = TypedData.define(name: Identifier)                                                 # read a builtin/bound name
-      FileRef   = TypedData.define(variety: ->(v) { %i[self name path].include?(v) }, path: ->(v) { String === v || v.nil? })
+      FileRef   = TypedData.define(variety: ->(v) { %i[self super name path].include?(v) }, path: ->(v) { String === v || v.nil? })
       Pipe      = TypedData.define(left: Expression, right: Expression)                              # left | right
       Member    = TypedData.define(obj: Expression, key: Identifier)                                 # obj.key
       Index     = TypedData.define(obj: Expression, idx: Expression)                                 # obj[expr]

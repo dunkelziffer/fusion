@@ -55,6 +55,12 @@ module Fusion
         @i += 3
         return Token.new(type: :spread, value: "...", pos: start)
       end
+      # Contiguous "@@" is the super-reference (the builtin/stdlib that this file
+      # shadows). Lexed only when adjacent, so "@ @x" stays self-applied-to-@x.
+      if c == "@" && peek(1) == "@"
+        @i += 2
+        return Token.new(type: :atat, value: "@@", pos: start)
+      end
       if c == "!"
         @i += 1
         return Token.new(type: :bang, value: "!", pos: start)
