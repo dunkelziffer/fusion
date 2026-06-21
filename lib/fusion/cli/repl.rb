@@ -22,8 +22,6 @@ module Fusion
       # REPL entries report errors with the same location as inline (`-e`) code.
       LOCATION = "code <inline>"
 
-      # `jail_root` confines @-resolution for every entry (defaults to cwd; see
-      # CLI#jail_root). `@dir`-relative refs resolve against cwd too.
       def initialize(jail_root:)
         @jail_root = jail_root
       end
