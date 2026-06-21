@@ -34,16 +34,11 @@ module FusionHelpers
   class PipeExpectation
     def initialize(example)
       @example  = example
-      @input    = [OK, "null"]
       @env_vars = {}
-      @jail     = :default # :default (the program's dir) | nil (none) | absolute path
+      @jail     = :default # :default (the program's dir) | nil (no jail) | absolute path
+      @input    = [OK, "null"]
+      @code     = nil
       @used     = []
-    end
-
-    def in(status, json)
-      claim!(:in)
-      @input = [status, json]
-      self
     end
 
     def env(**env_vars)
@@ -52,12 +47,17 @@ module FusionHelpers
       self
     end
 
-    # Confine @-resolution to `dir` (a path under spec/fixtures), mirroring the
-    # CLI's `--jail`. `.jail("*")` disables confinement. Without a call, the jail
-    # defaults to the program's directory, exactly as the CLI does.
+    # Mirrors the CLI's `--jail`, but adjusts paths to the spec fixtures.
+    # Without a call, the jail defaults to the program's directory, exactly as the CLI does.
     def jail(dir)
       claim!(:jail)
       @jail = dir == "*" ? nil : File.join(FIXTURES, dir)
+      self
+    end
+
+    def in(status, json)
+      claim!(:in)
+      @input = [status, json]
       self
     end
 
