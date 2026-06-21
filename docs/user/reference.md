@@ -546,9 +546,9 @@ file of the same name. That shadowing is per-directory, not global.
 
 **Confinement (the jail).** File-backed resolution is confined to a *jail*: a directory
 and its subtree, set by `-j`/`--jail` and defaulting to the program's directory (the
-working directory for `-e` and the REPL). A sibling, downward, `@../`, or `@load` target
-outside the jail is a `reference_error` (`outside the jail`), checked before the
-filesystem is touched. An existing sibling outside the jail fails this way too — it does
+working directory for `-e` and the REPL). All `@`-references and the builtin `@load`
+respect the jail. Referencing a file outside the jail is a `reference_error`
+(`outside the jail`). An existing sibling outside the jail fails this way too — it does
 *not* fall back to a built-in or the stdlib, so a forbidden file fails loudly rather than
 silently resolving elsewhere. References still resolve relative to the referencing file;
 the jail only filters the result. The standard library is always reachable regardless of

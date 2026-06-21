@@ -98,12 +98,19 @@ prevents that.
 ## The jail: confining `@`-resolution
 
 A run carries one jail root (`Interpreter#@jail_root`, an absolute path). Every file
-reached through an `@`-reference — a sibling, a downward `@dir/a`, an upward `@../a`,
-or an `@load` target — is checked with `within_jail?` *before* it is loaded: the
-target's expanded absolute path must be inside the jail root, or inside the stdlib
-directory (always reachable, since it lives outside any project). A target outside
-both is a `reference_error` (`outside the jail`), produced before the filesystem is
-touched, so an out-of-jail path cannot even be probed for existence.
+reached through an `@`-reference is checked with `within_jail?`: the target's expanded
+absolute path must be inside the jail root, or inside the stdlib directory (always
+reachable, since it lives outside any project). A target outside both is a
+`reference_error` (`outside the jail`).
+
+The time of check differs by reference form, because `@name`/`@dir/a` carry a
+built-in/stdlib fallback and `@../a`/`@load` do not:
+
+- `@../a` and `@load` check the jail *before* the file is touched, so an out-of-jail
+  target errors whether or not it exists (it is never probed for existence).
+- `@name`/`@dir/a` resolves *sibling-first*, so the sibling is `File.exist?`-ed to
+  choose between it and the built-in/stdlib fallback. An existing sibling outside the
+  jail then errors (`outside the jail`); a missing one falls through to the fallback.
 
 The jail does **not** cover two things:
 
@@ -113,12 +120,12 @@ The jail does **not** cover two things:
 - stdin — it is decoded as JSON, never evaluated as Fusion source, so it holds no
   `@`-references at all.
 
-The check is lexical: `File.expand_path` normalises `..`, and existing symlinks are
+The check is lexical: `File.expand_path` normalises `..` and existing symlinks are
 followed. The jail confines references to a directory tree; it is not a security
-sandbox and needs none, since Fusion cannot write files — so no symlink can be planted
-to escape, and any symlink present is part of the legitimate project layout. A nil root
-means unconfined — library and test callers use that; the CLI always supplies one,
-defaulting to the program's directory.
+sandbox. Fusion cannot write files, so no symlink can be planted to escape, but
+existing ones are part of the legitimate project layout. A nil root means unconfined.
+The `CLI.evaluate` / `CLI.apply` entry points default to `Dir.pwd` and a real CLI
+run supplies the program's directory.
 
 The same root must reach every interpreter a run builds — the one that loads the
 program, and the fresh one `safe_apply`/`safe_evaluate` create to apply it — so the

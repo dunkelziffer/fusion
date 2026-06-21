@@ -673,7 +673,7 @@ All access goes through `@`:
 - 🧑 ✅ `-j/--jail DIR` confines file-backed `@`-resolution (siblings, downward `@dir/a`, upward `@../a`, and `@load` targets) to `DIR` and its subtree. Default: the program's directory (cwd for `-e` and the REPL). Available in every use case, the REPL included.
 - 🧑 ✅ A relative `--jail` resolves against that same base, so `-j ..` widens to the parent; `--jail '*'` disables confinement entirely.
 - 🧑 ✅ The stdlib is always reachable (it lives outside any project) and stdin is never affected — it is plain JSON, never an `@`-reference.
-- 🧑 ✅ An out-of-jail target is a `reference_error` (`outside the jail`), decided before the filesystem is touched, so a path outside the jail is never even probed for existence.
+- 🧑 ✅ An out-of-jail target is a `reference_error` (`outside the jail`).
 - 🧑 ✅ An existing sibling file outside the jail raises that error too, rather than falling through to a built-in or the stdlib — a real but forbidden file fails loudly instead of silently resolving elsewhere.
 - 🧑 ✅ `@`-references still resolve relative to the **referencing file**; the jail only filters the resolved target, it does not move the resolution base.
 - 🔢 ✅ Containment is lexical (`expand_path` normalises `..`) and follows existing symlinks. It confines references to a directory tree; it is **not** a security sandbox and needs none — Fusion cannot write files, so no symlink can be planted to escape, and any symlink encountered is part of the legitimate project layout.

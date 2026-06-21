@@ -33,9 +33,8 @@ module Fusion
 
     attr_reader :root_env
 
-    # `jail_root` confines file-backed @-resolution to that directory's subtree
-    # (the stdlib stays reachable regardless). nil means unconfined — used by
-    # library/test callers; the CLI always supplies one.
+    # `jail_root` confines @-resolution to that directory's subtree.
+    # The stdlib always stays reachable. `nil` means unconfined.
     def initialize(env_vars: nil, jail_root: nil)
       @stdlib_dir = File.expand_path("../../stdlib", __dir__)
       raise Unreachable, "Couldn't find standard library" unless Dir.exist?(@stdlib_dir)
