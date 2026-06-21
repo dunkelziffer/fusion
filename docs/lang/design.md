@@ -641,13 +641,12 @@ All access goes through `@`:
 
 ---
 
-## 3.7 Bare `@` is the current top-level unit, not the current file
+## 3.7 Bare `@` also works for inline code, not only for files
 
 ### Decisions
 
-- 🧑 ✅ A bare `@` is the value of the current top-level **unit** — a file, an inline (`-e`) program, or a REPL entry — not only a file. Recursion is written this way in all three.
-- 🧑 ✅ In the REPL each entry is its own unit: `@` is that entry's value, and a function carrying a `@` keeps referring to its defining entry when a later entry applies it.
-- 🧑 ✅ Interpreter context (the current directory and file, and the self-value behind `@`) is not part of the identifier namespace: `__dir__`/`__file__`/`__self__` are unbound names, never readable values.
+- 🧑 ✅ A bare `@` is the value of the current top-level **unit**: a file (previously the only case), an inline (`-e`) program, or a REPL entry.Self-recursion works in all three cases.
+- 🧑 ✅ Interpreter context is not part of the identifier namespace. `:dir`/`:file`/`:self` are hidden values and not exposed as `__dir__`/`__file__`/`__self__`.
 
 ### Alternatives
 
@@ -657,12 +656,12 @@ All access goes through `@`:
 
 ### Pros
 
-- One self-reference rule across files, inline source, and the REPL; the file path is incidental.
-- No identifier-namespace pollution — internals stay internal.
+- One self-reference rule across files, inline source, and the REPL. The file path is incidental.
+- No identifier-namespace pollution. Internals stay internal.
 
 ### Cons
 
-- A bare-`@` recursive function yields a value only when applied externally (stdin, or a later REPL entry); at its own unit's top level it self-cycles (data position) or, unapplied, fails to serialize — regular outcomes, not special cases.
+- `__dir__` is no longer exposed.
 
 ---
 
@@ -670,18 +669,17 @@ All access goes through `@`:
 
 ### Decisions
 
-- 🧑 ✅ `-j/--jail DIR` confines file-backed `@`-resolution (siblings, downward `@dir/a`, upward `@../a`, and `@load` targets) to `DIR` and its subtree. Default: the program's directory (cwd for `-e` and the REPL). Available in every use case, the REPL included.
-- 🧑 ✅ A relative `--jail` resolves against that same base, so `-j ..` widens to the parent; `--jail '*'` disables confinement entirely.
-- 🧑 ✅ The stdlib is always reachable (it lives outside any project) and stdin is never affected — it is plain JSON, never an `@`-reference.
+- 🧑 ✅ `-j/--jail DIR` confines `@`-resolution to `DIR` and its subtree. It defaults to the program's directory (or cwd for `-e` and the REPL). Available in every use case, the REPL included.
+- 🧑 ✅ A relative `--jail` resolves against the default jail, so `-j ..` widens to the parent; `--jail '*'` disables confinement entirely.
 - 🧑 ✅ An out-of-jail target is a `reference_error` (`outside the jail`).
-- 🧑 ✅ An existing sibling file outside the jail raises that error too, rather than falling through to a built-in or the stdlib — a real but forbidden file fails loudly instead of silently resolving elsewhere.
+- 🧑 ✅ The stdlib is unaffected by the jail. However, an existing file outside the jail raises an error and prevents falling through to a built-in or the stdlib.
 - 🧑 ✅ `@`-references still resolve relative to the **referencing file**; the jail only filters the resolved target, it does not move the resolution base.
-- 🔢 ✅ Containment is lexical (`expand_path` normalises `..`) and follows existing symlinks. It confines references to a directory tree; it is **not** a security sandbox and needs none — Fusion cannot write files, so no symlink can be planted to escape, and any symlink encountered is part of the legitimate project layout.
+- 🔢 ✅ Containment is lexical (`expand_path` normalises `..`) and confines references to a directory tree. It is **not** a security sandbox and follows existing symlinks. Fusion cannot write files, so no symlink can be planted to escape. Any encountered symlink is part of the legitimate project layout.
 
 ### Alternatives
 
-- 🧑 💭 Resolve `@`-references relative to the **jail root** instead of the referencing file (a `--relative-to-jail` mode) — the designer's thought experiment. Rejected: it would make `@name` mean `<jail>/name` everywhere (project-rooted imports), but at the cost of per-subtree relocatability, it makes `@../` meaningless, and it turns per-directory sibling-shadowing (3.6) into jail-global shadowing. Keeping references file-relative is preferred.
-- 🤖 ❌ Resolve symlinks (`realpath`) to make the jail a hard boundary. Declined: it buys nothing here (a program that cannot write files cannot plant an escaping symlink) and costs a `stat` per reference.
+- 🧑 💭 Resolve `@`-references relative to the **jail root** instead of the referencing file (a `--relative-to-jail` mode). Rejected: it would make `@name` mean `<jail>/name` everywhere and turn per-directory sibling-shadowing (3.6) into jail-global shadowing (project-rooted imports).
+- 🤖 ❌ Resolve symlinks (`realpath`) to make the jail a hard boundary. Declined: it buys nothing here (a program that cannot write files cannot plant an escaping symlink) and a real security sandbox is tricky to build.
 
 ### Pros
 
