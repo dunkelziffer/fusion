@@ -34,20 +34,30 @@ module FusionHelpers
   class PipeExpectation
     def initialize(example)
       @example  = example
-      @input    = [OK, "null"]
       @env_vars = {}
+      @jail     = :default # :default (the program's dir) | nil (no jail) | absolute path
+      @input    = [OK, "null"]
+      @code     = nil
       @used     = []
-    end
-
-    def in(status, json)
-      claim!(:in)
-      @input = [status, json]
-      self
     end
 
     def env(**env_vars)
       claim!(:env)
       @env_vars = env_vars.transform_keys(&:to_s)
+      self
+    end
+
+    # Mirrors the CLI's `--jail`, but adjusts paths to the spec fixtures.
+    # Without a call, the jail defaults to the program's directory, exactly as the CLI does.
+    def jail(dir)
+      claim!(:jail)
+      @jail = dir == "*" ? nil : File.join(FIXTURES, dir)
+      self
+    end
+
+    def in(status, json)
+      claim!(:in)
+      @input = [status, json]
       self
     end
 
@@ -74,13 +84,23 @@ module FusionHelpers
     # Evaluate the program against the input, mapping the result to
     # (marker, payload) exactly as exe/fusion does.
     def run
-      interp = Fusion::Interpreter.new(env_vars: @env_vars)
+      root = Fusion::Interpreter::Env.new.set_context(:jail, resolved_jail)
+      env = root.child
+      env.set_context(:dir, FIXTURES) # inline @-refs resolve here; files set their own
+      interp = Fusion::Interpreter.new(env, env_vars: @env_vars)
       value = interp.apply(program(interp), input_value)
       pair = Fusion::CLI.serialize(value)
       [pair.status.zero? ? OK : ERR, pair.data]
     end
 
     private
+
+    # The default jail is the program's directory — FIXTURES for inline `.code`,
+    # mirroring the CLI's cwd default — so specs run jailed just like real use.
+    def resolved_jail
+      raw = @jail == :default ? (@file_path ? File.dirname(File.join(FIXTURES, @file_path)) : FIXTURES) : @jail
+      raw && File.expand_path(raw)
+    end
 
     # Record that a builder slot has been filled, rejecting a second use.
     def claim!(slot, label = slot)
@@ -94,9 +114,7 @@ module FusionHelpers
       else
         ast = Fusion::Parser.parse_file(@code, location: "code <inline>")
         return ast if ast.is_a?(Fusion::Interpreter::ErrorVal) # a parse error
-        env = interp.root_env.child
-        env.define("__dir__", FIXTURES)
-        interp.eval_expr(ast, env)
+        interp.evaluate_unit(ast)
       end
     end
 

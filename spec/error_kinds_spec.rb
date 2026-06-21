@@ -34,12 +34,6 @@ RSpec.describe "error kinds" do
         .out("❌", '{"kind":"reference_error","location":"code <inline>","operation":"resolving @no_such_module","input":"no_such_module","message":"unresolved reference"}')
     end
 
-    it "bare @ with no current file (inline has none)" do
-      expect_pipe
-        .code("(_ => @)")
-        .out("❌", '{"kind":"reference_error","location":"code <inline>","operation":"resolving @","input":null,"message":"no current file for self-reference"}')
-    end
-
     it "non-productive data cycle" do
       expect_pipe
         .file_path("cyclicA.fsn")
@@ -48,6 +42,7 @@ RSpec.describe "error kinds" do
 
     it "missing file via @../ path" do
       expect_pipe
+        .jail("..") # widen past the default (the program's dir) so @../ stays in the jail
         .code("(_ => @../nonexistent)")
         .out("❌", a_string_including('"kind":"reference_error"', '"operation":"reading file"', '"message":"file not found"'))
     end
@@ -260,7 +255,7 @@ RSpec.describe "error kinds" do
   # the `else raise` branches fire only on an interpreter bug (a malformed AST
   # built in Ruby). We prove the guards exist by feeding a bogus node directly.
   describe "internal invariant guards (not reachable from source)" do
-    let(:interp) { Fusion::Interpreter.new }
+    let(:interp) { Fusion::Interpreter.new(Fusion::Interpreter::Env.new) }
 
     it "eval_expr raises on an unknown expression node" do
       expect { interp.eval_expr(Object.new, interp.root_env) }

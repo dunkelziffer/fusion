@@ -25,33 +25,41 @@ require_relative "interpreter/func"
 require_relative "interpreter/native_func"
 require_relative "interpreter/builtins"
 require_relative "interpreter/env"
-require_relative "interpreter/file_thunk"
+require_relative "interpreter/thunk"
 
 module Fusion
   class Interpreter
     include AST
 
-    attr_reader :root_env
+    # The binding-free root the run is built on — computed on demand. Loaded
+    # files are isolated against it (see evaluate_file).
+    def root_env
+      @env.root
+    end
 
-    def initialize(env_vars: nil)
+    # `env` is the run's environment, passed in externally and stored as `@env`.
+    # Its `:jail` context confines @-resolution, and its topmost ancestor
+    # (`@env.root`) is the binding-free root that loaded files are isolated against.
+    # The stdlib always stays reachable.
+    def initialize(env, env_vars: nil)
       @stdlib_dir = File.expand_path("../../stdlib", __dir__)
       raise Unreachable, "Couldn't find standard library" unless Dir.exist?(@stdlib_dir)
 
+      @env = env
       @env_vars = env_vars || ENV.to_h
-      @file_cache = {} # abspath -> FileThunk
+      @file_cache = {} # abspath -> Thunk
       @ast_cache = {}  # abspath -> AST
       @builtins = {}   # name -> NativeFunc  (consulted by @name, not via env)
       Builtins.install(@builtins, self)
-      @root_env = Env.new # holds no builtins now; bare identifiers are holes only
     end
 
     # Apply the program to one input behind a safety net: a Ruby-level failure
     # (notably a stack overflow) becomes a payloaded error rather than a raw
     # backtrace, so the stdout/stderr contract always holds. In the stream the
     # error is one record's output and the next line continues.
-    def self.safe_apply(function, input)
+    def self.safe_apply(function, input, environment)
       safe do
-        new.apply(function, input)
+        new(environment).apply(function, input)
       end
     end
 
@@ -61,7 +69,7 @@ module Fusion
     # expression entry is the expression itself.
     def self.safe_evaluate(expression, environment)
       safe do
-        new.eval_expr(expression, environment)
+        new(environment).evaluate_unit(expression)
       end
     end
 
@@ -95,7 +103,9 @@ module Fusion
 
     # ---- File loading -----------------------------------------------------
     def load_file(abspath)
-      @file_cache[abspath] ||= FileThunk.new(self, abspath)
+      @file_cache[abspath] ||= Thunk.new(location: file_location(abspath), input: abspath) do
+        evaluate_file(abspath)
+      end
     end
 
     # The error field `location` for code at `abspath`.
@@ -109,7 +119,7 @@ module Fusion
 
     # The error field `location` for code being evaluated under `env`.
     def code_location(env)
-      f = env.lookup("__file__")
+      f = env.context(:file)
       if f == :__unbound__
         # Inline (`-e`) programs have no file, so they report as "code <inline>".
         "code <inline>"
@@ -128,11 +138,10 @@ module Fusion
       if ast.is_a?(ErrorVal) # a parse error (already a payloaded value)
         ast
       else
-        # A file's value is evaluated in a fresh env whose parent is root (builtins),
-        # plus knowledge of its own directory for resolving @refs.
-        env = @root_env.child
-        env.define("__dir__", File.dirname(abspath))
-        env.define("__file__", abspath)
+        env = root_env.child
+        env.set_context(:dir, File.dirname(abspath)) # for resolving @-refs
+        env.set_context(:file, abspath) # for error locations
+        env.set_context(:self, load_file(abspath)) # for `@` self-recursion
         eval_expr(ast, env)
       end
     rescue Errno::ENOENT
@@ -141,11 +150,26 @@ module Fusion
       ErrorVal.internal(kind: "reference_error", location: loc, operation: "reading file", input: abspath, message: err.message)
     end
 
+    # Evaluate a top-level unit that has no file of its own:
+    # - inline source (`-e`)
+    # - REPL entries
+    def evaluate_unit(ast)
+      # Evaluate in a child of `@env`, so we don't mutate it. The child inherits
+      # `@env`'s bindings (only non-empty in the REPL), `:dir`, and jail.
+      unit_env = @env.child
+
+      thunk = Thunk.new(location: code_location(unit_env), input: NULL) { eval_expr(ast, unit_env) }
+      unit_env.set_context(:self, thunk) # for `@` self-recursion
+      thunk.force
+    end
+
     # Resolve a bare "@name": sibling file > builtin (incl. load, ENV) > stdlib > !.
     # `location` is the "code X" of the referencing file (for the unresolved case).
     def resolve_name(name, dir, location)
       sibling_file = File.expand_path(name + ".fsn", dir)
       if File.exist?(sibling_file)
+        return jail_error(location, "resolving @#{name}", name) unless within_jail?(sibling_file)
+
         return load_file(sibling_file).force
       end
 
@@ -163,6 +187,10 @@ module Fusion
           end
 
           target = File.expand_path(v, d)
+
+          # Check the jail before touching the filesystem, so an out-of-jail
+          # path can't be probed for existence.
+          next jail_error("builtin load", "@load", v) unless within_jail?(target)
 
           unless File.exist?(target)
             next ErrorVal.internal(kind: "reference_error", location: "builtin load", operation: "@load", input: v, message: "file not found")
@@ -185,8 +213,34 @@ module Fusion
     end
 
     # Resolve a pure path "@dir/a" or "@../a": file only, never builtin/stdlib.
-    def resolve_path(relpath, dir)
-      load_file(File.expand_path(relpath + ".fsn", dir)).force
+    def resolve_path(relpath, dir, location)
+      target = File.expand_path(relpath + ".fsn", dir)
+      return jail_error(location, "resolving @#{relpath}", relpath) unless within_jail?(target)
+
+      load_file(target).force
+    end
+
+    # The run's jail (the `:jail` context, an absolute path or nil) confines
+    # file-backed @-resolution to its subtree. The stdlib is always reachable (it
+    # lives outside any project), and a nil/unset jail means unconfined. Containment
+    # is lexical (expand_path normalises `..`) and follows existing symlinks: it
+    # confines references, it is not a security sandbox and needs none — Fusion
+    # cannot write files, so no symlink can be planted to escape.
+    def within_jail?(abspath)
+      jail = @env.context(:jail)
+      return true if jail.nil? || jail == :__unbound__
+      return true if inside?(abspath, @stdlib_dir)
+
+      inside?(abspath, jail)
+    end
+
+    def inside?(abspath, root)
+      root = root.chomp(File::SEPARATOR)
+      abspath == root || abspath.start_with?(root + File::SEPARATOR)
+    end
+
+    def jail_error(location, operation, input)
+      ErrorVal.internal(kind: "reference_error", location: location, operation: operation, input: input, message: "outside the jail")
     end
 
     # ---- Expression evaluation -------------------------------------------
@@ -216,24 +270,22 @@ module Fusion
           value
         end
       when Expression::FileRef
-        dir = env.lookup("__dir__")
+        dir = env.context(:dir)
         dir = Dir.pwd if dir == :__unbound__
         case node.variety
         when :self
-          # Bare `@` is the current file. NOTE: inline (`-e`) programs have no
-          # current file, so `@` is unresolvable there today — but it *should*
-          # refer to the whole inline program (tracked as a gap).
-          file = env.lookup("__file__")
+          # Bare `@` is the value of the current top-level unit: a file, or an inline (`-e`)/REPL entry.
+          self_thunk = env.context(:self)
 
-          if file == :__unbound__
-            ErrorVal.internal(kind: "reference_error", location: code_location(env), operation: "resolving @", input: NULL, message: "no current file for self-reference")
-          else
-            load_file(file).force
+          if self_thunk == :__unbound__
+            raise Unreachable, "bare @ evaluated outside a top-level unit"
           end
+
+          self_thunk.force
         when :name
           resolve_name(node.path, dir, code_location(env))
         else # :path
-          resolve_path(node.path, dir)
+          resolve_path(node.path, dir, code_location(env))
         end
       when Expression::ArrLit then eval_array(node, env)
       when Expression::ObjLit then eval_object(node, env)

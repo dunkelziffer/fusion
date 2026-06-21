@@ -119,7 +119,7 @@ spread         = "..." expr ;
 function       = "(" [ clause { "," clause } [ "," ] ] ")" ;   (* "()" is the empty function *)
 clause         = pattern "=>" expr ;
 
-fileref        = "@" [ refpath ] ;                     (* bare "@" = current file *)
+fileref        = "@" [ refpath ] ;                     (* bare "@" = current unit *)
 refpath        = { "../" } segment { "/" segment } ;   (* ".fsn" implied *)
 segment        = identifier ;
 
@@ -370,7 +370,7 @@ There are two origins of error values, and they differ in payload:
 | `kind`                | Raised when                                                                                                    |
 | --------------------- | -------------------------------------------------------------------------------------------------------------- |
 | `syntax_error`        | source code, or the JSON input, fails to parse.                                                                |
-| `reference_error`     | an `@`-reference cannot be resolved: unknown name, file not found, a file-system failure, a non-productive data cycle, or a `@`-self-reference with no current file. |
+| `reference_error`     | an `@`-reference cannot be resolved: unknown name, file not found, a file-system failure, a non-productive data cycle, or a target outside the jail (§9.2). |
 | `type_error`          | a value has the wrong type for an operation (expected X / a type mismatch); also applying a non-function, spreading a non-array/object, member access on a non-object, or a wrong-typed index. |
 | `argument_error`      | a built-in receives the wrong number/shape of arguments (e.g. not a pair), or an `array`/`object`-mode input envelope has the wrong shape (§9.4). Its `message` states the expected shape as a Fusion pattern where possible (the pair-built-ins report `expected [_, _]`). |
 | `binding_error`       | reading an unbound identifier, or binding the same name twice in one clause.                                   |
@@ -515,7 +515,9 @@ A `.fsn` file contains **exactly one expression**, which is its value. A file is
 
 A `@` reference takes one of these forms:
 
-- **`@`** (nothing after it) — the **current file**'s value. Used for self-recursion.
+- **`@`** (nothing after it) — the value of the **current top-level unit**: the
+  current file, or the inline (`-e`) / REPL entry being evaluated. Used for
+  self-recursion.
 - **`@ENV`** — an object of all environment variables (string keys, string values;
   no parsing). Resolved in the `@name` chain below, so it is shadowable.
 - **`@name`** — a single bare identifier (no `/`, no `../`).
@@ -541,6 +543,19 @@ The `.fsn` extension is implied and never written in a `@` reference. File resol
 is relative to the **referencing file's** directory; built-ins and the standard
 library are global to the runtime but, per the order above, are shadowed by a sibling
 file of the same name. That shadowing is per-directory, not global.
+
+**Confinement (the jail).** File-backed resolution is confined to a *jail*: a directory
+and its subtree, set by `-j`/`--jail` and defaulting to the program's directory (the
+working directory for `-e` and the REPL). All `@`-references and the builtin `@load`
+respect the jail. Referencing a file outside the jail is a `reference_error`
+(`outside the jail`). An existing sibling outside the jail fails this way too — it does
+*not* fall back to a built-in or the stdlib, so a forbidden file fails loudly rather than
+silently resolving elsewhere. References still resolve relative to the referencing file;
+the jail only filters the result. The standard library is always reachable regardless of
+the jail, and stdin is never affected — it is plain JSON, never an `@`-reference.
+Confinement is lexical (it normalises `..`) and follows existing symlinks. It confines
+references to a directory tree; it is not a security sandbox and needs none, since Fusion
+cannot write files. Pass `--jail '*'` to disable confinement entirely.
 
 **Built-ins are reached through this same mechanism**: `@add`, `@Integer`, etc. are
 `@name` references that resolve at step 2. A *bare* identifier (without `@`) is only
@@ -740,6 +755,8 @@ options:
                   how the input marks an error value (§9.4)
   -o, --output MODE
                   how the output marks an error value (§9.4)
+  -j, --jail DIR  confine @-references to DIR and its subtree
+                  (default: the program's directory; '*' disables it; §9.2)
   -!              treat the input as an error value (unix input mode only)
   -b, --skip-blank-lines
                   drop blank input lines instead of echoing them (--stream, §9.5)

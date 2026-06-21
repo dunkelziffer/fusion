@@ -641,6 +641,57 @@ All access goes through `@`:
 
 ---
 
+## 3.7 Bare `@` also works for inline code, not only for files
+
+### Decisions
+
+- 🧑 ✅ A bare `@` is the value of the current top-level **unit**: a file (previously the only case), an inline (`-e`) program, or a REPL entry.Self-recursion works in all three cases.
+- 🧑 ✅ Interpreter context is not part of the identifier namespace. `:dir`/`:file`/`:self` are hidden values and not exposed as `__dir__`/`__file__`/`__self__`.
+
+### Alternatives
+
+- 🤖 ❌ Model inline/REPL code as a synthetic "fake file" so the existing file machinery applies — needs temp-file lifecycle or a special-cased reader, and leaves the REPL with no coherent "which file" answer.
+- 🧑 ⏪ "Bare `@` = the current file" (3.2/3.6); the "no current file for self-reference" error is gone, as it can no longer occur.
+- 🤖 🩹 Claude's first cut kept the self-value as an ordinary binding, so reading `__self__` returned an internal thunk and crashed serialization with a raw Ruby error; the designer caught it. Interpreter context now lives in its own channel, off the binding namespace.
+
+### Pros
+
+- One self-reference rule across files, inline source, and the REPL. The file path is incidental.
+- No identifier-namespace pollution. Internals stay internal.
+
+### Cons
+
+- `__dir__` is no longer exposed.
+
+---
+
+## 3.8 The jail: confining `@`-resolution to a directory
+
+### Decisions
+
+- 🧑 ✅ `-j/--jail DIR` confines `@`-resolution to `DIR` and its subtree. It defaults to the program's directory (or cwd for `-e` and the REPL). Available in every use case, the REPL included.
+- 🧑 ✅ A relative `--jail` resolves against the default jail, so `-j ..` widens to the parent; `--jail '*'` disables confinement entirely.
+- 🧑 ✅ An out-of-jail target is a `reference_error` (`outside the jail`).
+- 🧑 ✅ The stdlib is unaffected by the jail. However, an existing file outside the jail raises an error and prevents falling through to a built-in or the stdlib.
+- 🧑 ✅ `@`-references still resolve relative to the **referencing file**; the jail only filters the resolved target, it does not move the resolution base.
+- 🔢 ✅ Containment is lexical (`expand_path` normalises `..`) and confines references to a directory tree. It is **not** a security sandbox and follows existing symlinks. Fusion cannot write files, so no symlink can be planted to escape. Any encountered symlink is part of the legitimate project layout.
+
+### Alternatives
+
+- 🧑 💭 Resolve `@`-references relative to the **jail root** instead of the referencing file (a `--relative-to-jail` mode). Rejected: it would make `@name` mean `<jail>/name` everywhere and turn per-directory sibling-shadowing (3.6) into jail-global shadowing (project-rooted imports).
+- 🤖 ❌ Resolve symlinks (`realpath`) to make the jail a hard boundary. Declined: it buys nothing here (a program that cannot write files cannot plant an escaping symlink) and a real security sandbox is tricky to build.
+
+### Pros
+
+- A `.fsn` program is sandboxed to its own directory by default; reaching out is explicit (`-j ..`) or an opt-out (`-j '*'`).
+- The stdlib and stdin are untouched, so confinement never breaks an ordinary program.
+
+### Cons
+
+- Safe symlink-following rests on Fusion being unable to write files; adding a file-writing capability would mean revisiting it.
+
+---
+
 # 4. Runtime and CLI
 
 ## 4.1 Runtime I/O contract

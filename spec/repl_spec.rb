@@ -8,14 +8,20 @@
 # directly, the way the rest of the language is specced in-process.
 
 RSpec.describe Fusion::CLI::Repl do
-  subject(:repl) { described_class.new }
+  # `#run` builds the session env itself; `#handle` (what these tests drive) takes
+  # the environment as an argument, so the constructor's root_env is unused here.
+  subject(:repl) { described_class.new(root_env: Fusion::Interpreter::Env.new) }
 
   # A fresh session environment, built the way #run does, so a binding made by
   # one entry is visible to the next within an example.
-  let(:environment) { Fusion::Interpreter::Env.new.define("__dir__", Dir.pwd) }
+  let(:environment) { Fusion::Interpreter::Env.new.set_context(:dir, Dir.pwd) }
 
   let(:division_by_zero) do
     '{"kind":"math_error","location":"builtin divide","operation":"divide","input":[1,0],"message":"division by zero"}'
+  end
+
+  let(:self_cycle) do
+    '{"kind":"reference_error","location":"code <inline>","operation":"forcing a reference","input":null,"message":"non-productive data cycle"}'
   end
 
   describe "#complete? — the editing termination check" do
@@ -55,6 +61,14 @@ RSpec.describe Fusion::CLI::Repl do
     it "renders a function leniently" do
       expect(repl.handle("(n => [n, 2] | @multiply)", environment)).to eq('"<function>"')
     end
+
+    it "renders an @-using function leniently — the @ is deferred until it is applied" do
+      expect(repl.handle("(0 => 1, n => [n, [n, 1] | @subtract | @] | @multiply)", environment)).to eq('"<function>"')
+    end
+
+    it "resolves a bare @ to the entry's own value (forcing it in data position is a self-data-cycle)" do
+      expect(repl.handle("[1, @]", environment)).to eq("!#{self_cycle}")
+    end
   end
 
   describe "#handle (statements)" do
@@ -71,6 +85,11 @@ RSpec.describe Fusion::CLI::Repl do
 
     it "supports recursion through the bound name" do
       repl.handle("fact = (0 => 1, n => [n, [n, 1] | @subtract | fact] | @multiply)", environment)
+      expect(repl.handle("5 | fact", environment)).to eq("120")
+    end
+
+    it "supports recursion through a bare @ (the entry's own value)" do
+      repl.handle("fact = (0 => 1, n => [n, [n, 1] | @subtract | @] | @multiply)", environment)
       expect(repl.handle("5 | fact", environment)).to eq("120")
     end
 
