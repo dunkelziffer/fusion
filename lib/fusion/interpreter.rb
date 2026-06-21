@@ -133,14 +133,10 @@ module Fusion
       if ast.is_a?(ErrorVal) # a parse error (already a payloaded value)
         ast
       else
-        # A file's value is evaluated in a fresh env whose parent is root (builtins),
-        # plus interpreter context (§Env): its directory for resolving @refs, its
-        # path for error locations, and its own thunk as `:self` so a bare `@`
-        # resolves to this file's value.
         env = @root_env.child
-        env.set_context(:dir, File.dirname(abspath))
-        env.set_context(:file, abspath)
-        env.set_context(:self, load_file(abspath))
+        env.set_context(:dir, File.dirname(abspath)) # for resolving @-refs
+        env.set_context(:file, abspath) # for error locations
+        env.set_context(:self, load_file(abspath)) # for `@` self-recursion
         eval_expr(ast, env)
       end
     rescue Errno::ENOENT
@@ -149,15 +145,16 @@ module Fusion
       ErrorVal.internal(kind: "reference_error", location: loc, operation: "reading file", input: abspath, message: err.message)
     end
 
-    # Evaluate a top-level unit that has no file of its own — inline (`-e`) source
-    # or a REPL entry. Evaluates in a fresh child of `env` and sets *that child's*
-    # `:self` context, so a bare `@` resolves to this unit's own (lazy, memoized)
-    # value without mutating the caller's `env`. `env` carries the `:dir` context
-    # (and, for the REPL, the session's bindings).
+    # Evaluate a top-level unit that has no file of its own:
+    # - inline source (`-e`)
+    # - REPL entries
     def evaluate_unit(ast, env)
+      # Use a child env, so we don't mutate `env`.
+      # We get bindings (only in the REPL) and `:dir` from this:
       unit_env = env.child
+
       thunk = Thunk.new(location: code_location(unit_env), input: NULL) { eval_expr(ast, unit_env) }
-      unit_env.set_context(:self, thunk)
+      unit_env.set_context(:self, thunk) # for `@` self-recursion
       thunk.force
     end
 
@@ -271,12 +268,12 @@ module Fusion
         dir = Dir.pwd if dir == :__unbound__
         case node.variety
         when :self
-          # Bare `@` is the value of the current top-level unit — a file, or an
-          # inline (`-e`)/REPL entry. Every evaluated unit sets its own thunk as the
-          # `:self` context; forcing it gives the unit's value (and recursion, since
-          # a closure captures the env where it was defined).
+          # Bare `@` is the value of the current top-level unit: a file, or an inline (`-e`)/REPL entry.
           self_thunk = env.context(:self)
-          raise Unreachable, "bare @ evaluated outside a top-level unit" if self_thunk == :__unbound__
+
+          if self_thunk == :__unbound__
+            raise Unreachable, "bare @ evaluated outside a top-level unit"
+          end
 
           self_thunk.force
         when :name
