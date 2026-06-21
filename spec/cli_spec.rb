@@ -2,6 +2,7 @@
 
 require "open3"
 require "rbconfig"
+require "tmpdir"
 
 # Integration tests that drive the real `exe/fusion` binary as a subprocess.
 #
@@ -22,8 +23,10 @@ RSpec.describe "CLI (exe/fusion)" do
   end
 
   # Run the binary with the given args and stdin; returns [stdout, stderr, status].
-  def run_cli(*args, stdin: "")
-    Open3.capture3(RbConfig.ruby, EXE, *args, stdin_data: stdin)
+  def run_cli(*args, stdin: "", chdir: nil)
+    opts = { stdin_data: stdin }
+    opts[:chdir] = chdir if chdir
+    Open3.capture3(RbConfig.ruby, EXE, *args, **opts)
   end
 
   # Drop terminal control codes (and bare CRs) so the REPL's stderr — where the
@@ -124,13 +127,6 @@ RSpec.describe "CLI (exe/fusion)" do
     end
   end
 
-  # Bare `@` resolves to the current top-level unit's value. For inline (`-e`)
-  # source the unit is the program itself, with no file — the path that used to
-  # have no `@`. The outcome depends on the program, not on whether stdin is
-  # present: when the unit is a *function*, `@` is deferred until the function is
-  # applied (so it recurses when stdin supplies an input, and is just an
-  # unserializable function value when no stdin applies it); when `@` sits in a
-  # *data* position it is forced as the unit loads, which is a self-data-cycle.
   describe "bare @ in inline (-e) source" do
     it "recurses through a bare @ when the unit is a function applied to stdin" do
       out, err, status = run_cli("-e", "(0 => [0], n ? @Integer => [n, ...([n,1] | @subtract | @)])", stdin: "3")
@@ -158,9 +154,6 @@ RSpec.describe "CLI (exe/fusion)" do
     end
   end
 
-  # The jail (-j/--jail) confines file-backed @-resolution. Its default — the
-  # program's directory — and the directory-not-found usage error are only
-  # observable at this boundary.
   describe "the jail (-j/--jail)" do
     it "defaults the jail to the program's directory, blocking an @../ escape" do
       out, err, status = run_cli(File.join(FIX, "ref", "sub", "usesParent.fsn"), stdin: "7")
@@ -193,6 +186,21 @@ RSpec.describe "CLI (exe/fusion)" do
       out, _err, status = run_cli("--repl", "-j", ".", stdin: "[1, 2, 3] | @length\n")
       expect(out).to eq("3\n")
       expect(status.exitstatus).to eq(0)
+    end
+
+    it "enforces a non-default jail in the REPL (a sibling of the jail dir is blocked)" do
+      Dir.mktmpdir do |tmp|
+        Dir.mkdir(File.join(tmp, "sub"))
+        File.write(File.join(tmp, "secret.fsn"), %("leaked"\n))
+        # cwd = `tmp` (so @-refs resolve there)
+        # jail = `tmp/sub`.
+        # `@secret` resolves to `tmp/secret.fsn` (exists, but lies outside the jail)
+        out, _err, status = run_cli("--repl", "-j", "sub", stdin: "@secret\n", chdir: tmp)
+        expect(out).to eq(
+          %(!{"kind":"reference_error","location":"code <inline>","operation":"resolving @secret","input":"secret","message":"outside the jail"}\n)
+        )
+        expect(status.exitstatus).to eq(0)
+      end
     end
   end
 
