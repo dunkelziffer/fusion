@@ -170,6 +170,17 @@ RSpec.describe "CLI (exe/fusion)" do
       expect(status.exitstatus).to eq(0)
     end
 
+    it "confines inline (-e) source too, defaulting the jail to the working directory" do
+      # @-refs in inline source resolve against the cwd, which is also the default
+      # jail, so @../ escapes it.
+      out, err, status = run_cli("-e", "(x => x | @../helper)", stdin: "7")
+      expect(out).to eq("")
+      expect(err).to eq(
+        %({"kind":"reference_error","location":"code <inline>","operation":"resolving @../helper","input":"../helper","message":"outside the jail"}\n)
+      )
+      expect(status.exitstatus).to eq(1)
+    end
+
     it "disables confinement with -j '*'" do
       out, _err, status = run_cli("-j", "*", File.join(FIX, "ref", "sub", "usesParent.fsn"), stdin: "7")
       expect(out).to eq("[7,7]\n")
