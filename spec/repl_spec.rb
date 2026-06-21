@@ -8,7 +8,9 @@
 # directly, the way the rest of the language is specced in-process.
 
 RSpec.describe Fusion::CLI::Repl do
-  subject(:repl) { described_class.new(jail_root: Dir.pwd) }
+  # `#run` builds the session env itself; `#handle` (what these tests drive) takes
+  # the environment as an argument, so the constructor's root_env is unused here.
+  subject(:repl) { described_class.new(root_env: Fusion::Interpreter::Env.new) }
 
   # A fresh session environment, built the way #run does, so a binding made by
   # one entry is visible to the next within an example.

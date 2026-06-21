@@ -22,8 +22,8 @@ module Fusion
       # REPL entries report errors with the same location as inline (`-e`) code.
       LOCATION = "code <inline>"
 
-      def initialize(jail_root:)
-        @jail_root = jail_root
+      def initialize(root_env:)
+        @root_env = root_env
       end
 
       def run
@@ -35,7 +35,9 @@ module Fusion
           lines.each_index.map { |i| i.zero? ? PROMPT : CONTINUATION_PROMPT }
         end
 
-        environment = Interpreter::Env.new.set_context(:dir, Dir.pwd)
+        # The session env is a child of the run's root, so it carries the jail;
+        # bindings accumulate here while loaded files stay isolated at the root.
+        environment = @root_env.child.set_context(:dir, Dir.pwd)
 
         loop do
           buffer = begin
@@ -67,7 +69,7 @@ module Fusion
       # String (+ Env) -> String
       def handle(buffer, environment)
         ast = Fusion::Parser.parse_repl(buffer, location: LOCATION)
-        runtime_value = CLI.evaluate(ast, environment, jail_root: @jail_root)
+        runtime_value = CLI.evaluate(ast, environment)
         wire_pair = Serializer.serialize(runtime_value, lenient: true)
         Encoder.encode(wire_pair, mode: :bang)
       end

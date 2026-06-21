@@ -255,7 +255,7 @@ RSpec.describe "error kinds" do
   # the `else raise` branches fire only on an interpreter bug (a malformed AST
   # built in Ruby). We prove the guards exist by feeding a bogus node directly.
   describe "internal invariant guards (not reachable from source)" do
-    let(:interp) { Fusion::Interpreter.new }
+    let(:interp) { Fusion::Interpreter.new(Fusion::Interpreter::Env.new) }
 
     it "eval_expr raises on an unknown expression node" do
       expect { interp.eval_expr(Object.new, interp.root_env) }

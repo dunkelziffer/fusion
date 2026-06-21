@@ -45,14 +45,14 @@ module Fusion
     def run_pipe(options)
       prepare!
 
-      jail = jail_root(options)
-      program = load_program(options, jail)
+      root = root_environment(jail: jail_root(options))
+      program = load_program(options, root)
 
       input = load_input(options)
       output = if input.nil?
         program
       else
-        apply(parse(input), program, jail_root: jail)
+        apply(parse(input), program, environment: root)
       end
 
       emit_output(serialize(output), output_mode: options.output_mode)
@@ -61,8 +61,8 @@ module Fusion
     def run_stream(options)
       prepare!
 
-      jail = jail_root(options)
-      program = load_program(options, jail)
+      root = root_environment(jail: jail_root(options))
+      program = load_program(options, root)
 
       $stdin.each_line do |line|
         record = line.chomp
@@ -71,17 +71,17 @@ module Fusion
           $stdout.puts unless options.skip_blank_lines?
         else
           input = decode(record, mode: options.input_mode)
-          output = apply(parse(input), program, jail_root: jail)
+          output = apply(parse(input), program, environment: root)
           $stdout.puts(encode(serialize(output), mode: options.output_mode))
         end
       end
     end
 
     def run_repl(options)
-      Repl.new(jail_root: jail_root(options)).run
+      Repl.new(root_env: root_environment(jail: jail_root(options))).run
     end
 
-    # String -> WirePair
+    # String (treated as stdin) -> WirePair
     # Doesn't support mode `:unix`
     def decode(string, mode:)
       Decoder.decode(string, mode:)
@@ -92,22 +92,45 @@ module Fusion
       Parser.parse(wire_pair)
     end
 
+    # A binding-free root environment
+    def root_environment(jail: Dir.pwd)
+      Interpreter::Env.new.set_context(:jail, jail)
+    end
+
+    # String (treated as inline source) -> runtime value
+    def load_source(inline_source, root_env)
+      ast = Fusion::Parser.parse_file(inline_source, location: "code <inline>")
+      return ast if ast.is_a?(Fusion::Interpreter::ErrorVal) # a parse error
+
+      inline_env = root_env.child.set_context(:dir, Dir.pwd)
+      Fusion::Interpreter.new(inline_env).evaluate_unit(ast)
+    end
+
+    # relative path -> runtime_value
+    def load_file(rel_path, root_env)
+      Fusion::Interpreter.new(root_env).load_file(File.expand_path(rel_path)).force
+    end
+
     # runtime value + runtime value -> runtime value
     # input | function -> output
-    def apply(input, function, jail_root: Dir.pwd)
-      Interpreter.safe_apply(function, input, jail_root: jail_root)
+    # Confines @-resolution to the environment's jail.
+    # Ignores the environment's bindings. The function carries its own closure.
+    def apply(input, function, environment:)
+      Interpreter.safe_apply(function, input, environment)
     end
 
     # expression (AST) -> runtime value
     # Mutates environment if given an assignment statement.
-    def evaluate(ast, environment, jail_root: Dir.pwd)
+    # Confines @-resolution to the environment's jail.
+    # Has access to the environment's bindings.
+    def evaluate(ast, environment)
       case ast
       when AST::Statement::Assignment
-        value = Interpreter.safe_evaluate(ast.expression, environment, jail_root: jail_root)
+        value = Interpreter.safe_evaluate(ast.expression, environment)
         environment.bind(ast.name, value, checked: false)
         value
       when AST::Expression
-        Interpreter.safe_evaluate(ast, environment, jail_root: jail_root)
+        Interpreter.safe_evaluate(ast, environment)
       else
         raise Unreachable, "Unhandled AST node #{ast.class}"
       end
@@ -156,21 +179,15 @@ module Fusion
     end
 
     # file/inline -> runtime value
-    def load_program(options, jail_root)
-      interpreter = Fusion::Interpreter.new(jail_root: jail_root)
+    def load_program(options, root_env)
       if options.inline_source
-        ast = Fusion::Parser.parse_file(options.inline_source, location: "code <inline>")
-        return ast if ast.is_a?(Fusion::Interpreter::ErrorVal) # a parse error
-
-        env = interpreter.root_env.child
-        env.set_context(:dir, Dir.pwd)
-        interpreter.evaluate_unit(ast, env)
+        load_source(options.inline_source, root_env)
       else
-        interpreter.load_file(File.expand_path(options.program_path)).force
+        load_file(options.program_path, root_env)
       end
     end
 
-     # The jail root for this run: the program's directory by default (cwd for
+    # The jail root for this run: the program's directory by default (cwd for
     # inline `-e` and the REPL), or `--jail DIR` resolved against that base.
     # `--jail '*'` opts out of confinement entirely (nil = unconfined).
     def jail_root(options)

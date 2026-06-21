@@ -31,30 +31,35 @@ module Fusion
   class Interpreter
     include AST
 
-    attr_reader :root_env
+    # The binding-free root the run is built on — computed on demand. Loaded
+    # files are isolated against it (see evaluate_file).
+    def root_env
+      @env.root
+    end
 
-    # `jail_root` confines @-resolution to that directory's subtree.
-    # The stdlib always stays reachable. `nil` means unconfined.
-    def initialize(env_vars: nil, jail_root: nil)
+    # `env` is the run's environment, passed in externally and stored as `@env`.
+    # Its `:jail` context confines @-resolution, and its topmost ancestor
+    # (`@env.root`) is the binding-free root that loaded files are isolated against.
+    # The stdlib always stays reachable.
+    def initialize(env, env_vars: nil)
       @stdlib_dir = File.expand_path("../../stdlib", __dir__)
       raise Unreachable, "Couldn't find standard library" unless Dir.exist?(@stdlib_dir)
 
-      @jail_root = jail_root && File.expand_path(jail_root)
+      @env = env
       @env_vars = env_vars || ENV.to_h
       @file_cache = {} # abspath -> Thunk
       @ast_cache = {}  # abspath -> AST
       @builtins = {}   # name -> NativeFunc  (consulted by @name, not via env)
       Builtins.install(@builtins, self)
-      @root_env = Env.new # holds no builtins now; bare identifiers are holes only
     end
 
     # Apply the program to one input behind a safety net: a Ruby-level failure
     # (notably a stack overflow) becomes a payloaded error rather than a raw
     # backtrace, so the stdout/stderr contract always holds. In the stream the
     # error is one record's output and the next line continues.
-    def self.safe_apply(function, input, jail_root: nil)
+    def self.safe_apply(function, input, environment)
       safe do
-        new(jail_root: jail_root).apply(function, input)
+        new(environment).apply(function, input)
       end
     end
 
@@ -62,9 +67,9 @@ module Fusion
     # exe/fusion, so a Ruby-level failure becomes a printed payload and the
     # session survives it. A statement carries its expression; a bare
     # expression entry is the expression itself.
-    def self.safe_evaluate(expression, environment, jail_root: nil)
+    def self.safe_evaluate(expression, environment)
       safe do
-        new(jail_root: jail_root).evaluate_unit(expression, environment)
+        new(environment).evaluate_unit(expression)
       end
     end
 
@@ -133,7 +138,7 @@ module Fusion
       if ast.is_a?(ErrorVal) # a parse error (already a payloaded value)
         ast
       else
-        env = @root_env.child
+        env = root_env.child
         env.set_context(:dir, File.dirname(abspath)) # for resolving @-refs
         env.set_context(:file, abspath) # for error locations
         env.set_context(:self, load_file(abspath)) # for `@` self-recursion
@@ -148,10 +153,10 @@ module Fusion
     # Evaluate a top-level unit that has no file of its own:
     # - inline source (`-e`)
     # - REPL entries
-    def evaluate_unit(ast, env)
-      # Use a child env, so we don't mutate `env`.
-      # We get bindings (only in the REPL) and `:dir` from this:
-      unit_env = env.child
+    def evaluate_unit(ast)
+      # Evaluate in a child of `@env`, so we don't mutate it. The child inherits
+      # `@env`'s bindings (only non-empty in the REPL), `:dir`, and jail.
+      unit_env = @env.child
 
       thunk = Thunk.new(location: code_location(unit_env), input: NULL) { eval_expr(ast, unit_env) }
       unit_env.set_context(:self, thunk) # for `@` self-recursion
@@ -215,17 +220,18 @@ module Fusion
       load_file(target).force
     end
 
-    # The jail confines file-backed @-resolution to `@jail_root` and its subtree.
-    # The stdlib is always reachable (it lives outside any project), and a nil
-    # root means unconfined. Containment is lexical (expand_path normalises `..`)
-    # and follows existing symlinks: it confines references, it is not a security
-    # sandbox and needs none — Fusion cannot write files, so no symlink can be
-    # planted to escape.
+    # The run's jail (the `:jail` context, an absolute path or nil) confines
+    # file-backed @-resolution to its subtree. The stdlib is always reachable (it
+    # lives outside any project), and a nil/unset jail means unconfined. Containment
+    # is lexical (expand_path normalises `..`) and follows existing symlinks: it
+    # confines references, it is not a security sandbox and needs none — Fusion
+    # cannot write files, so no symlink can be planted to escape.
     def within_jail?(abspath)
-      return true if @jail_root.nil?
+      jail = @env.context(:jail)
+      return true if jail.nil? || jail == :__unbound__
       return true if inside?(abspath, @stdlib_dir)
 
-      inside?(abspath, @jail_root)
+      inside?(abspath, jail)
     end
 
     def inside?(abspath, root)

@@ -31,6 +31,12 @@ module Fusion
         Env.new(self)
       end
 
+      # The topmost ancestor — the binding-free root a run is built on. The
+      # interpreter loads files relative to it, so they stay isolated.
+      def root
+        @parent ? @parent.root : self
+      end
+
       # Pattern bindings:
       # - Shadowing a binding from a parent Env is always allowed.
       # - A duplicate identifier in the same Env is usually an error, but allowed on the REPL.
@@ -57,6 +63,9 @@ module Fusion
       # - `:file`: the current file's absolute path, used for error locations (a
       #            String; absent for inline/REPL code, which reports as "code <inline>").
       # - `:self`: the current top-level unit's own Thunk, used for recursion via a bare `@`.
+      # - `:jail`: the run's jail root confining @-resolution (an absolute path
+      #            String, or nil for unconfined). Set once on the root and, unlike
+      #            the others, never overridden by a descendant.
       def set_context(key, value)
         @context[key] = value
         self

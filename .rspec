@@ -1,4 +1,4 @@
 --format documentation
 --color
 --require spec_helper
---exclude-pattern **/{cli_spec,repl_pty_spec}.rb
+--exclude-pattern **/{cli_subprocess_spec,repl_pty_spec}.rb

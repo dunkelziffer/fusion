@@ -74,16 +74,17 @@ not on whether stdin is present:
 parent chain:
 
 - **Bindings** (`@vars`) — user-visible identifiers. Pattern binders insert here via
-  `bind`; the REPL keeps a name across entries via `define`. A bare identifier in an
-  expression is resolved here (`lookup`); unbound ⇒ `binding_error`.
+  `bind`; the REPL keeps a name across entries via `bind(…, checked: false)`. A bare
+  identifier in an expression is resolved here (`lookup`); unbound ⇒ `binding_error`.
 - **Interpreter context** (`@context`) — ambient state the evaluator needs, written
   with `set_context` and read with `context`, keyed by symbol:
 
-  | key     | contents                                                    | set for                               |
-  | ------- | ----------------------------------------------------------- | ------------------------------------- |
+  | key     | contents                                                     | set for                                 |
+  | ------- | ------------------------------------------------------------ | --------------------------------------- |
   | `:dir`  | the directory `@name` / `@../a` resolve against (a `String`) | every unit (file's dir, else `Dir.pwd`) |
-  | `:file` | the absolute path, for error `location`s (a `String`)        | files only (absent ⇒ `code <inline>`) |
-  | `:self` | the unit's own `Thunk`, forced by a bare `@`                 | every unit                            |
+  | `:file` | the absolute path, for error `location`s (a `String`)        | files only (absent ⇒ `code <inline>`)   |
+  | `:self` | the unit's own `Thunk`, forced by a bare `@`                 | every unit                              |
+  | `:jail` | the run's jail root (a `String`, or nil for unconfined)      | once, on the run's root env             |
 
 The two channels are deliberately separate, and a program reads only the first one.
 So the context names are **not** identifiers: `__dir__`, `__file__`, and `__self__`
@@ -97,10 +98,11 @@ prevents that.
 
 ## The jail: confining `@`-resolution
 
-A run carries one jail root (`Interpreter#@jail_root`, an absolute path). Every file
-reached through an `@`-reference is checked with `within_jail?`: the target's expanded
-absolute path must be inside the jail root, or inside the stdlib directory (always
-reachable, since it lives outside any project). A target outside both is a
+The jail root lives in the environment's `:jail` context (set once on the run's root
+env). Every file reached through an `@`-reference is checked with `within_jail?`, which
+reads the jail from the interpreter's `@env` (`@env.context(:jail)`): the target's
+expanded absolute path must be inside the jail root, or inside the stdlib directory
+(always reachable, since it lives outside any project). A target outside both is a
 `reference_error` (`outside the jail`).
 
 The time of check differs by reference form, because `@name`/`@dir/a` carry a
@@ -123,10 +125,10 @@ The jail does **not** cover two things:
 The check is lexical: `File.expand_path` normalises `..` and existing symlinks are
 followed. The jail confines references to a directory tree; it is not a security
 sandbox. Fusion cannot write files, so no symlink can be planted to escape, but
-existing ones are part of the legitimate project layout. A nil root means unconfined.
-The `CLI.evaluate` / `CLI.apply` entry points default to `Dir.pwd` and a real CLI
-run supplies the program's directory.
+existing ones are part of the legitimate project layout. A nil/unset jail means
+unconfined. `CLI.root_environment` defaults it to `Dir.pwd`, and a real CLI run
+instead supplies the program's directory.
 
-The same root must reach every interpreter a run builds — the one that loads the
-program, and the fresh one `safe_apply`/`safe_evaluate` create to apply it — so the
-CLI computes it once (`CLI#jail_root`) and threads it through both.
+The jail rides the environment: the CLI builds the root env once (`root_environment`)
+and passes it to both program loading and `apply`, so every interpreter the run builds
+reads the same `:jail` from its `@env`.
