@@ -3,8 +3,6 @@
 # === Interpreter internals ===
 #
 # Lazy, memoized value of a top-level unit (a file, or an inline/REPL entry).
-# A bare `@` forces the current unit's thunk; re-entering it before it finishes
-# is a non-productive data cycle.
 
 module Fusion
   class Interpreter
@@ -21,7 +19,7 @@ module Fusion
         case @state
         when :done then @value
         when :forcing
-          # We are already computing this unit and were asked for it again
+          # We are already evaluating this unit and were asked for it again
           # without any intervening function boundary => non-productive data cycle.
           ErrorVal.internal(
             kind: "reference_error",
