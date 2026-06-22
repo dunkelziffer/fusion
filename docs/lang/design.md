@@ -692,7 +692,7 @@ All access goes through `@`:
 
 ---
 
-## 3.9 Super-reference `@@` for overriding what you shadow
+## 3.9 Super-reference `@@`
 
 ### Decisions
 
