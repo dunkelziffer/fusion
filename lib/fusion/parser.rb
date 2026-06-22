@@ -130,6 +130,7 @@ module Fusion
       when :lparen then parse_function_or_group
       when :ident then advance; Expression::Ident.new(name: t.value)
       when :at then parse_fileref
+      when :atat then advance; Expression::FileRef.new(variety: :super, path: nil)
       else raise ParseError, "Unexpected token #{t.type} (#{t.value.inspect}) at #{t.pos}"
       end
     end

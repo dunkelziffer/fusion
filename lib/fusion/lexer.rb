@@ -55,6 +55,10 @@ module Fusion
         @i += 3
         return Token.new(type: :spread, value: "...", pos: start)
       end
+      if c == "@" && peek(1) == "@"
+        @i += 2
+        return Token.new(type: :atat, value: "@@", pos: start)
+      end
       if c == "!"
         @i += 1
         return Token.new(type: :bang, value: "!", pos: start)

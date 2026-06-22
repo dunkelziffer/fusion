@@ -370,7 +370,7 @@ There are two origins of error values, and they differ in payload:
 | `kind`                | Raised when                                                                                                    |
 | --------------------- | -------------------------------------------------------------------------------------------------------------- |
 | `syntax_error`        | source code, or the JSON input, fails to parse.                                                                |
-| `reference_error`     | an `@`-reference cannot be resolved: unknown name, file not found, a file-system failure, a non-productive data cycle, or a target outside the jail (§9.2). |
+| `reference_error`     | an `@`-reference cannot be resolved: unknown name, file not found, a file-system failure, a non-productive data cycle, a target outside the jail (§9.2), no enclosing file (§9.2). |
 | `type_error`          | a value has the wrong type for an operation (expected X / a type mismatch); also applying a non-function, spreading a non-array/object, member access on a non-object, or a wrong-typed index. |
 | `argument_error`      | a built-in receives the wrong number/shape of arguments (e.g. not a pair), or an `array`/`object`-mode input envelope has the wrong shape (§9.4). Its `message` states the expected shape as a Fusion pattern where possible (the pair-built-ins report `expected [_, _]`). |
 | `binding_error`       | reading an unbound identifier, or binding the same name twice in one clause.                                   |
@@ -518,6 +518,12 @@ A `@` reference takes one of these forms:
 - **`@`** (nothing after it) — the value of the **current top-level unit**: the
   current file, or the inline (`-e`) / REPL entry being evaluated. Used for
   self-recursion.
+- **`@@`** (super) — the built-in or standard-library value the current file
+  **shadows**: the file's own name resolved by steps 2–3 below, skipping the
+  sibling step (which would be the file itself). Lets an override refer to the
+  original method, e.g. `add.fsn` containing `@@` refers to the builtin `add`.
+  Outside a file (inline `-e` / REPL) there is no name to take super of, so it is a
+  `reference_error` (`no enclosing file`).
 - **`@ENV`** — an object of all environment variables (string keys, string values;
   no parsing). Resolved in the `@name` chain below, so it is shadowable.
 - **`@name`** — a single bare identifier (no `/`, no `../`).

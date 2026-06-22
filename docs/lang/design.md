@@ -692,6 +692,28 @@ All access goes through `@`:
 
 ---
 
+## 3.9 Super-reference `@@`
+
+### Decisions
+
+- 🧑 ✅ `@@` is the "super" method. It allows access to the built-in/stdlib shadowed by the current file.
+- 🧑 ✅ Inline/REPL `@@` is a `reference_error` (`no enclosing file`). There is no filename to take "super" of.
+
+### Alternatives
+
+- 🤖 ❌ Make `@name` never refer to its own file (so `@add` inside `add.fsn` means the built-in). Rejected: the override would name itself (breaking relocatability) and it adds a per-file carve-out to the resolution chain.
+
+### Pros
+
+- An override delegates to the original without a separate handle, and `@name` semantics are untouched.
+- Relocatable: no file names itself.
+
+### Cons
+
+- Reaches only what you shadow under your *own* name, not an arbitrary shadowed built-in.
+
+---
+
 # 4. Runtime and CLI
 
 ## 4.1 Runtime I/O contract

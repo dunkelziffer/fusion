@@ -26,6 +26,32 @@ RSpec.describe "@-resolution" do
       .out("✅", "[3,2,1,0]")
   end
 
+  # `@@` is the builtin/stdlib the file shadows — its own name resolved with the
+  # sibling step skipped — so an override can extend what it replaces. The fixtures
+  # tag their result with "viaSuper" to prove the sibling ran, and the real
+  # builtin/stdlib value proves `@@` reached past the file itself (no self-cycle).
+  describe "@@ super-reference" do
+    it "reaches the builtin a sibling add.fsn shadows" do
+      expect_pipe
+        .in("✅", "null")
+        .file_path("ref/super/usesSuperAdd.fsn")
+        .out("✅", '[5,"viaSuper"]')
+    end
+
+    it "reaches the stdlib function a sibling range.fsn shadows" do
+      expect_pipe
+        .in("✅", "3")
+        .file_path("ref/super/usesSuperRange.fsn")
+        .out("✅", '[[0,1,2],"viaSuper"]')
+    end
+
+    it "errors when there is no enclosing file (an inline program)" do
+      expect_pipe
+        .code("@@")
+        .out("❌", '{"kind":"reference_error","location":"code <inline>","operation":"resolving @@","input":null,"message":"no enclosing file"}')
+    end
+  end
+
   describe "@ENV" do
     it "reads an environment variable" do
       expect_pipe
