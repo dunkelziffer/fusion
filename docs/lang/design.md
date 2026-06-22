@@ -696,15 +696,12 @@ All access goes through `@`:
 
 ### Decisions
 
-- 🧑 ✅ **`@@` is the built-in/stdlib the current file shadows** — the file's own name resolved with the sibling step skipped (builtin → stdlib). An override can extend what it replaces: `OP.fsn` = `{ ...@@, "add": ... }`.
-- 🧑 ✅ **`@@` never names the file**, so the override stays relocatable on rename; `@@.key` reaches a member, mirroring `@.key`.
-- 🧑 ✅ **Lexed only when the two `@` are contiguous**, so `@ @x` stays "self applied to `@x`".
-- 🧑 ✅ **Inline/REPL `@@` is a `reference_error`** (`no enclosing file`): there is no filename to take super of.
+- 🧑 ✅ `@@` is the "super" method. It allows access to the built-in/stdlib shadowed by the current file.
+- 🧑 ✅ Inline/REPL `@@` is a `reference_error` (`no enclosing file`). There is no filename to take "super" of.
 
 ### Alternatives
 
-- 🤖 ❌ Make `@name` never refer to its own file (so `@OP` inside `OP.fsn` means the built-in). Rejected: the override would name itself (breaking relocatability) and it adds a per-file carve-out to the resolution chain.
-- 🤖 ❌ Spell super `@^`, `@~`, or `@..`. Chose `@@` — needs no new lexer character; `@..` also overloads the parent-directory sense of `..`.
+- 🤖 ❌ Make `@name` never refer to its own file (so `@add` inside `add.fsn` means the built-in). Rejected: the override would name itself (breaking relocatability) and it adds a per-file carve-out to the resolution chain.
 
 ### Pros
 

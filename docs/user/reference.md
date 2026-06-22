@@ -520,9 +520,8 @@ A `@` reference takes one of these forms:
   self-recursion.
 - **`@@`** (super) — the built-in or standard-library value the current file
   **shadows**: the file's own name resolved by steps 2–3 below, skipping the
-  sibling step (which would be the file itself). Lets an override extend what it
-  replaces, e.g. `OP.fsn` containing `{ ...@@, "add": … }`; access a member with
-  `@@.key`. The two `@` must be adjacent (`@ @x` is two separate references).
+  sibling step (which would be the file itself). Lets an override refer to the
+  original method, e.g. `add.fsn` containing `@@` refers to the builtin `add`.
   Outside a file (inline `-e` / REPL) there is no name to take super of, so it is a
   `reference_error` (`no enclosing file`).
 - **`@ENV`** — an object of all environment variables (string keys, string values;
