@@ -1,4 +1,4 @@
 (
   n ? @Integer => [n, n] | @multiply,
-  x => !{"kind": "type_error", "location": "stdlib square.fsn", "operation": "square", "input": x | @sanitize, "message": "expected an integer"}
+  x => !{"kind": "argument_error", "location": "stdlib", "file": "square.fsn", "operation": "square", "status": "value", "input": x | @sanitize, "expected": ["_ ? @Integer"]}
 )

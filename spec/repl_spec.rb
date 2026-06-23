@@ -17,11 +17,11 @@ RSpec.describe Fusion::CLI::Repl do
   let(:environment) { Fusion::Interpreter::Env.new.set_context(:dir, Dir.pwd) }
 
   let(:division_by_zero) do
-    '{"kind":"math_error","location":"builtin divide","operation":"divide","input":[1,0],"message":"division by zero"}'
+    '{"kind":"math_error","location":"builtin","operation":"divide","status":"value","input":[1,0],"message":"division by zero"}'
   end
 
   let(:self_cycle) do
-    '{"kind":"reference_error","location":"code <inline>","operation":"forcing a reference","input":null,"message":"non-productive data cycle"}'
+    '{"kind":"reference_error","location":"code","operation":"forcing a reference","status":"value","input":null,"message":"non-productive data cycle"}'
   end
 
   describe "#complete? — the editing termination check" do
@@ -100,11 +100,11 @@ RSpec.describe Fusion::CLI::Repl do
   end
 
   describe "#handle (per-entry safety net)" do
-    it "turns a stack overflow into a stack_error and keeps the session alive" do
+    it "turns a stack overflow into a runtime_error and keeps the session alive" do
       repl.handle("loop = (n => n | loop)", environment)
       expect(repl.handle("1 | loop", environment)).to eq(
-        '!{"kind":"stack_error","location":"interpreter",' \
-        '"operation":"running the program","input":null,"message":"recursion too deep"}'
+        '!{"kind":"runtime_error","location":"interpreter",' \
+        '"operation":"running the program","status":"value","input":null,"message":"stack level too deep"}'
       )
       expect(repl.handle('"still alive"', environment)).to eq('"still alive"')
     end

@@ -380,8 +380,9 @@ Future work and open questions are tracked separately in our [Roadmap](./roadmap
   - `argument_error`: bad *input shape* (e.g. the wrong number of inputs). Constraints that could be expressed as a pattern without `?`.
   - `type_error`: unsupported *input type* (e.g. string instead of number) or constraints between multiple inputs. Usually would require a `?` to express as a pattern.
 - 🧑 ✅ Member/index access reserves `access_error` for exactly `missing key` and `index out of range`:
-  - Accessing a member of a non-object or indexing with a wrong-typed key is a `type_error` instead.
+  - Accessing a member of a non-object or indexing with a wrong-typed key is an `argument_error` instead.
   - File-system access failures ("missing file", "directory instead of file", "permission denied") are a `reference_error` instead.
+- TODO: refine the payload — split `file` out of `location` (six fixed locations), split `status` out of `input`, add `expected` (patterns), merge `type_error` into `argument_error`, add `runtime_error` (absorbing `stack_error`).
 
 ### Alternatives
 
@@ -747,7 +748,7 @@ All access goes through `@`:
 ### Decisions
 
 - 🧑 ✅ The CLI contract already spends stdout (the result) and stderr (the error payload). There is **no third channel**, so a raw Ruby backtrace on stderr would corrupt the contract. Fusion therefore **catches every Ruby error a program can trigger and converts it to a standardized payload**.
-- 🔢 ✅ Conversion happens *both* **deep** (so an error becomes catchable by other code as soon as possible) *and* at a **top-level net** (so nothing escapes). Notably `SystemStackError` becomes a regular error value `stack_error` on stderr.
+- 🔢 ✅ Conversion happens *both* **deep** (so an error becomes catchable by other code as soon as possible) *and* at a **top-level net** (so nothing escapes). Notably `SystemStackError` becomes a regular error value `runtime_error` on stderr.
 - 🧑 ✅ The internal "assertions" (`raise Unreachable`) are a deliberate exception. Reaching them is an interpreter bug. Interpreter bugs should surface and are allowed to violate our CLI contract.
 - 🧑 ✅ The old `FUSION_DEBUG` env var (which wrote to stderr via `warn`) is removed entirely.
 
@@ -822,7 +823,7 @@ TODO: Under `-!` the input is the error payload, so empty stdin is a usage error
 - 🧑 ✅ An entry is an **expression** (evaluated and printed) or an **assignment statement** `identifier = expression` (evaluated, printed, and bound for later entries).
 - 🧑 ✅ An entry is evaluated only once it parses as a whole statement/expression. An incomplete or invalid buffer keeps the entry open to finish or correct.
 - 🧑 ✅ Error results can also get bound to an identifier via the **assignment statement**. When accessing them, they'll propagate regularly.
-- 🤖 ✅ Results print leniently (a function as `"<function>"`, etc.); entries report errors at `location: "code <inline>"`, like `-e`.
+- 🤖 ✅ Results print leniently (a function as `"<function>"`, etc.); entries report errors at `location: "code"` (no `file`), like `-e`.
 - 🤖 ✅ Results go to stdout; the prompt and echoed input go to stderr (like a shell prompt), so stdout is a clean stream of results.
 - 🧑 ✅ `stderr` decorations are styled. Styling never touches `stdout`.
 

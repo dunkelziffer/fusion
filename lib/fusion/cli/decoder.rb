@@ -10,9 +10,10 @@ module Fusion
     module Decoder
       extend self
 
+      # The acceptable envelope shapes, as Fusion patterns, per input mode.
       ENVELOPE_SHAPES = {
-        array: "[0, _] or [1, _]",
-        object: '{"value": _} or {"error": _}',
+        array: ["[0, _]", "[1, _]"],
+        object: ['{"value": _}', '{"error": _}'],
       }.freeze
 
       # String -> WirePair
@@ -67,8 +68,9 @@ module Fusion
           "kind" => "argument_error",
           "location" => "input",
           "operation" => "decoding input",
+          "status" => "value",
           "input" => raw,
-          "message" => "expected #{ENVELOPE_SHAPES.fetch(mode)}"
+          "expected" => ENVELOPE_SHAPES.fetch(mode)
         ))
       rescue JSON::ParserError
         # TODO: BUG ???

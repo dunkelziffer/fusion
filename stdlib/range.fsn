@@ -1,5 +1,5 @@
 (
   0 => [],
   n ? (m ? @Integer => [-1, m] | @lessThan, _ => false) => [...([n, 1] | @subtract | @range), [n, 1] | @subtract],
-  x => !{"kind": "type_error", "location": "stdlib range.fsn", "operation": "range", "input": x | @sanitize, "message": "expected a non-negative integer"}
+  x => !{"kind": "argument_error", "location": "stdlib", "file": "range.fsn", "operation": "range", "status": "value", "input": x | @sanitize, "expected": ["_ ? (m ? @Integer => [-1, m] | @lessThan, _ => false)"]}
 )

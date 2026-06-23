@@ -22,16 +22,16 @@ module Fusion
 
     # Parse a complete program. The lexer and parser report failures by raising
     # ParseError; this single entry point rescues them and returns a standardized
-    # syntax_error value, so no caller ever sees a raw Ruby error. `location` is the
-    # syntax_error's "code X" / "code <inline>" context.
-    def self.parse_file(src, location:)
+    # syntax_error value, so no caller ever sees a raw Ruby error. `origin` is the
+    # syntax_error's `{location:, file:}` context.
+    def self.parse_file(src, origin:)
       toks = Lexer.new(src).tokens
       p = new(toks)
       expr = p.parse_expr
       p.expect(:eof)
       expr
     rescue ParseError => err
-      Interpreter::ErrorVal.internal(kind: "syntax_error", location: location, operation: "parsing", input: src, message: err.message)
+      Interpreter::ErrorVal.internal(kind: "syntax_error", **origin, operation: "parsing", input: src, message: err.message)
     end
 
     # Parse one REPL entry — a statement (`identifier "=" expr`) or a bare
@@ -39,14 +39,14 @@ module Fusion
     # parse_file, a standardized syntax_error value instead of ever raising. The
     # REPL uses the error/non-error distinction to tell "keep editing" (didn't
     # parse yet) from "evaluate now" (a complete statement or expression).
-    def self.parse_repl(src, location:)
+    def self.parse_repl(src, origin:)
       toks = Lexer.new(src).tokens
       p = new(toks)
       entry = p.parse_repl_entry
       p.expect(:eof)
       entry
     rescue ParseError => err
-      Interpreter::ErrorVal.internal(kind: "syntax_error", location: location, operation: "parsing", input: src, message: err.message)
+      Interpreter::ErrorVal.internal(kind: "syntax_error", **origin, operation: "parsing", input: src, message: err.message)
     end
 
     # A leading `identifier =` marks a statement; anything else is an expression.

@@ -7,7 +7,7 @@ require "stringio"
 # parsing, the stdout/stderr/exit contract) lives in cli_subprocess_spec.rb; here
 # each public method is exercised directly against its own input/output types.
 RSpec.describe Fusion::CLI do
-  def parse_entry(source) = Fusion::Parser.parse_repl(source, location: "code <inline>")
+  def parse_entry(source) = Fusion::Parser.parse_repl(source, origin: { location: "code", file: nil })
 
   # Run a block with `$stdin`/`$stdout` swapped for in-memory streams; returns
   # whatever was written to `$stdout`.
@@ -190,7 +190,7 @@ RSpec.describe Fusion::CLI do
       result = described_class.apply(Fusion::NULL, fn, environment: environment)
 
       expect(described_class.serialize(result).data).to eq(
-        '{"kind":"binding_error","location":"code <inline>","operation":"reading identifier y","input":"y","message":"unbound identifier"}'
+        '{"kind":"binding_error","location":"code","operation":"reading identifier y","status":"value","input":"y","message":"unbound identifier"}'
       )
     end
 
@@ -207,7 +207,7 @@ RSpec.describe Fusion::CLI do
       result = described_class.apply(Fusion::NULL, fn, environment: jailed)
 
       expect(described_class.serialize(result).data).to eq(
-        '{"kind":"reference_error","location":"builtin load","operation":"@load","input":"/nope/x.fsn","message":"outside the jail"}'
+        '{"kind":"reference_error","location":"builtin","operation":"@load","status":"value","input":"/nope/x.fsn","message":"outside the jail"}'
       )
     end
   end

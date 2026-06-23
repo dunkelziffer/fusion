@@ -60,8 +60,9 @@ module Fusion
 
       # Hidden interpreter context:
       # - `:dir`:  the directory @-references resolve against (a path String).
-      # - `:file`: the current file's absolute path, used for error locations (a
-      #            String; absent for inline/REPL code, which reports as "code <inline>").
+      # - `:file`: the current file's absolute path, used for error origins (a
+      #            String; absent for inline/REPL code, which reports as location
+      #            "code" with no "file").
       # - `:self`: the current top-level unit's own Thunk, used for recursion via a bare `@`.
       # - `:jail`: the run's jail root confining @-resolution (an absolute path
       #            String, or nil for unconfined). Set once on the root and, unlike

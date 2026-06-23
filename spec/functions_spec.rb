@@ -6,7 +6,7 @@ RSpec.describe "functions" do
     expect_pipe
       .in("✅", "10")
       .code("(n => (m => [n, m] | @add))")
-      .out("❌", '{"kind":"serialization_error","location":"output","operation":"serializing result","input":"<function>","message":"cannot serialize a function"}')
+      .out("❌", '{"kind":"serialization_error","location":"output","operation":"serializing result","status":"value","input":"<function>","message":"cannot serialize a function"}')
   end
 
   it "curries: 10 | (n => (m => n+m)) then applied to 5" do

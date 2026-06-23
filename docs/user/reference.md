@@ -354,16 +354,19 @@ There are two origins of error values, and they differ in payload:
 #### Payload shape
 
 ```json
-{"kind": "type_error", "location": "builtin add", "operation": "add", "input": [1, "x"], "message": "expected numbers"}
+{"kind": "argument_error", "location": "builtin", "operation": "add", "status": "value", "input": [1, "x"], "expected": ["[_ ? @Number, _ ? @Number]"]}
 ```
 
 | Field       | Required | Meaning                                                                                                                    |
 | ----------- | -------- | -------------------------------------------------------------------------------------------------------------------------- |
 | `kind`      | yes      | The error category, from the closed set below.                                                                             |
-| `location`  | yes      | Where the failing operation lives, from the closed set below.                                                              |
+| `location`  | yes      | Where the failing operation lives, from the closed set of six below.                                                       |
+| `file`      | no       | The source basename, when `location` is `code` or `stdlib` and there is a file (absent for inline `-e`/REPL code).         |
 | `operation` | yes      | A short description of the operation that failed, e.g. `"\|"`, `".name"`, `"[2]"`, `"add"`, `"reading file"`, `"parsing"`. |
+| `status`    | yes      | `"value"` or `"error"` — whether the operation received an ordinary value or an error value. When `"error"`, `input` holds that error's bare payload (so `input` is always plain JSON). |
 | `input`     | yes      | The operand(s) the operation received — often the offending value; for member/index access it is `[object, key]`.          |
-| `message`   | no       | Extra human-readable detail, e.g. `"expected an object"`.                                                                  |
+| `expected`  | no       | The acceptable inputs as a list of Fusion **patterns**; the input matched none of them (e.g. `["[_ ? @Number, _ ? @Number]"]`). Mutually exclusive with `message`. |
+| `message`   | no       | Extra human-readable detail, e.g. `"division by zero"`. Absent whenever `expected` is present.                            |
 
 #### `kind` — the closed set
 
@@ -371,29 +374,27 @@ There are two origins of error values, and they differ in payload:
 | --------------------- | -------------------------------------------------------------------------------------------------------------- |
 | `syntax_error`        | source code, or the JSON input, fails to parse.                                                                |
 | `reference_error`     | an `@`-reference cannot be resolved: unknown name, file not found, a file-system failure, a non-productive data cycle, a target outside the jail (§9.2), no enclosing file (§9.2). |
-| `type_error`          | a value has the wrong type for an operation (expected X / a type mismatch); also applying a non-function, spreading a non-array/object, member access on a non-object, or a wrong-typed index. |
-| `argument_error`      | a built-in receives the wrong number/shape of arguments (e.g. not a pair), or an `array`/`object`-mode input envelope has the wrong shape (§9.4). Its `message` states the expected shape as a Fusion pattern where possible (the pair-built-ins report `expected [_, _]`). |
+| `argument_error`      | a value has the wrong shape or type for an operation: a built-in given the wrong number/shape of arguments (e.g. not a pair) or a wrong-typed value, applying a non-function, spreading a non-array/object, member access on a non-object, a wrong-typed index, or an `array`/`object`-mode input envelope of the wrong shape (§9.4). Its `expected` lists the acceptable inputs as patterns. |
 | `binding_error`       | reading an unbound identifier, or binding the same name twice in one clause.                                   |
-| `access_error`        | a missing object key or an out-of-range array index — and nothing else (a non-object member access or a wrong-typed index is a `type_error`). |
+| `access_error`        | a missing object key or an out-of-range array index — and nothing else (a non-object member access or a wrong-typed index is an `argument_error`). |
 | `math_error`          | division or modulo by zero, or a non-finite number.                                                            |
 | `conversion_error`    | a value cannot be converted (`@toString` of an unconvertible type, `@parseNumber` of a non-numeric string).    |
-| `stack_error`         | recursion too deep (a stack overflow).                                                                         |
+| `runtime_error`       | an unexpected host/interpreter failure, including a stack overflow (`"stack level too deep"`).                  |
 | `serialization_error` | a result, or a user error's payload, has no JSON form — see §9.3.                                              |
 
-#### `location` — the closed set
+#### `location` — the closed set of six
 
-| `location`      | Meaning                                                           |
-| --------------- | ----------------------------------------------------------------- |
-| `builtin X`     | the built-in named X, e.g. `builtin divide`.                      |
-| `stdlib X`      | the standard-library file X.                                      |
-| `code X`        | the user source file X (basename).                                |
-| `code <inline>` | an inline `-e` program or a REPL statement.                       |
-| `input`         | the input channel (stdin or the CLI-argument).                    |
-| `output`        | the output channel (the serialized result).                       |
-| `interpreter`   | the interpreter itself, e.g. a stack overflow.                    |
+| `location`    | Meaning                                                                  |
+| ------------- | ------------------------------------------------------------------------ |
+| `builtin`     | a built-in operation (the built-in's name is in `operation`).            |
+| `stdlib`      | a standard-library file (its basename is in `file`).                     |
+| `code`        | user source — a file (basename in `file`) or inline `-e`/REPL (no `file`). |
+| `input`       | the input channel (stdin or the CLI-argument).                           |
+| `output`      | the output channel (the serialized result).                              |
+| `interpreter` | the interpreter itself, e.g. a stack overflow.                           |
 
 `input` and `output` name the data channels; they **never** refer to the program
-source, which always reports as `code X`.
+source, which always reports as `code`.
 
 User errors don't have to adhere to this standard.
 
@@ -728,7 +729,7 @@ relative to the working directory.
 - A bound function can call itself through its own name
   (`fact = (0 => 1, n => [n, [n,1] | @subtract | fact] | @multiply)`), because
   the name is looked up at application time.
-- Entries report errors at `location: "code <inline>"`, like `-e` programs.
+- Entries report errors at `location: "code"` (no `file`), like `-e` programs.
 
 **Input editing.** An entry is submitted only once it parses as a complete
 statement or expression; until then the session opens a new line so the entry

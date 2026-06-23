@@ -7,9 +7,9 @@
 module Fusion
   class Interpreter
     class Thunk
-      def initialize(location:, input:, &compute)
+      def initialize(origin:, input:, &compute)
         @compute = compute
-        @location = location
+        @origin = origin
         @input = input
         @state = :unforced # :unforced | :forcing | :done
         @value = nil
@@ -23,7 +23,7 @@ module Fusion
           # without any intervening function boundary => non-productive data cycle.
           ErrorVal.internal(
             kind: "reference_error",
-            location: @location,
+            **@origin,
             operation: "forcing a reference",
             input: @input,
             message: "non-productive data cycle"

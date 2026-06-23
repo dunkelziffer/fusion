@@ -112,7 +112,7 @@ module FusionHelpers
       if @file_path
         interp.load_file(File.join(FIXTURES, @file_path)).force
       else
-        ast = Fusion::Parser.parse_file(@code, location: "code <inline>")
+        ast = Fusion::Parser.parse_file(@code, origin: { location: "code", file: nil })
         return ast if ast.is_a?(Fusion::Interpreter::ErrorVal) # a parse error
         interp.evaluate_unit(ast)
       end

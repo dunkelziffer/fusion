@@ -14,7 +14,7 @@ RSpec.describe "value access" do
       expect_pipe
         .in("✅", '{"name":"bob"}')
         .code("(o => o.nope)")
-        .out("❌", '{"kind":"access_error","location":"code <inline>","operation":".nope","input":[{"name":"bob"},"nope"],"message":"missing key"}')
+        .out("❌", '{"kind":"access_error","location":"code","operation":".nope","status":"value","input":[{"name":"bob"},"nope"],"message":"missing key"}')
     end
   end
 
@@ -37,7 +37,7 @@ RSpec.describe "value access" do
       expect_pipe
         .in("✅", "[10,20,30]")
         .code("(a => a[9])")
-        .out("❌", '{"kind":"access_error","location":"code <inline>","operation":"[9]","input":[[10,20,30],9],"message":"index out of range"}')
+        .out("❌", '{"kind":"access_error","location":"code","operation":"[9]","status":"value","input":[[10,20,30],9],"message":"index out of range"}')
     end
   end
 end

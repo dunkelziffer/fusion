@@ -1,0 +1,7 @@
+# Return true if every item of "xs" satisfies the predicate "f" (a truthy
+# result). Input: {"f": predicate, "xs": array}.
+(
+  {"f": _, "xs": []} => true,
+  {"f": f, "xs": [x, ...rest]} => [x | f, {"f": f, "xs": rest} | @all] | @and,
+  x => !{"kind": "argument_error", "location": "stdlib", "file": "all.fsn", "operation": "all", "status": "value", "input": x | @sanitize, "expected": ["{\"f\": _, \"xs\": _ ? @Array}"]}
+)
