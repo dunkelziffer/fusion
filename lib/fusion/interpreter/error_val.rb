@@ -25,10 +25,10 @@ module Fusion
       # fixed values; `file` carries the source basename when there is one.
       #
       # `status`/`input` are derived here: if the operation received an error
-      # value, `status` is "error" and `input` is its bare payload (so `input`
-      # stays valid JSON); otherwise `status` is "value" and `input` is the value
-      # itself. `expected` lists acceptable inputs as Fusion patterns and is
-      # mutually exclusive with `message`.
+      # value, `status` is 1 and `input` is its bare payload (so `input` stays
+      # valid JSON); otherwise `status` is 0 and `input` is the value itself
+      # (0/1 mirror the wire status codes). `expected` lists acceptable inputs as
+      # Fusion patterns and is mutually exclusive with `message`.
       def self.internal(kind:, location:, operation:, input:, file: nil, expected: nil, message: nil)
         raise Unreachable, "an error with `expected` must not also carry a `message`" if expected && message
 
@@ -37,7 +37,7 @@ module Fusion
         payload = { "kind" => kind, "location" => location }
         payload["file"] = file if file
         payload["operation"] = operation
-        payload["status"] = received_error ? "error" : "value"
+        payload["status"] = received_error ? 1 : 0
         payload["input"] = received_error ? input.payload : input
         payload["expected"] = expected if expected
         payload["message"] = message if message

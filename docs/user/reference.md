@@ -354,7 +354,7 @@ There are two origins of error values, and they differ in payload:
 #### Payload shape
 
 ```json
-{"kind": "argument_error", "location": "builtin", "operation": "add", "status": "value", "input": [1, "x"], "expected": ["[_ ? @Number, _ ? @Number]"]}
+{"kind": "argument_error", "location": "builtin", "operation": "add", "status": 0, "input": [1, "x"], "expected": ["[_ ? @Number, _ ? @Number]"]}
 ```
 
 | Field       | Required | Meaning                                                                                                                    |
@@ -363,7 +363,7 @@ There are two origins of error values, and they differ in payload:
 | `location`  | yes      | Where the failing operation lives, from the closed set of six below.                                                       |
 | `file`      | no       | The source basename, when `location` is `code` or `stdlib` and there is a file (absent for inline `-e`/REPL code).         |
 | `operation` | yes      | A short description of the operation that failed, e.g. `"\|"`, `".name"`, `"[2]"`, `"add"`, `"reading file"`, `"parsing"`. |
-| `status`    | yes      | `"value"` or `"error"` — whether the operation received an ordinary value or an error value. When `"error"`, `input` holds that error's bare payload (so `input` is always plain JSON). |
+| `status`    | yes      | `0` or `1` — whether the operation received an ordinary value (`0`) or an error value (`1`), mirroring the wire status codes. When `1`, `input` holds that error's bare payload (so `input` is always plain JSON). |
 | `input`     | yes      | The operand(s) the operation received — often the offending value; for member/index access it is `[object, key]`.          |
 | `expected`  | no       | The acceptable inputs as a list of Fusion **patterns**; the input matched none of them (e.g. `["[_ ? @Number, _ ? @Number]"]`). Mutually exclusive with `message`. |
 | `message`   | no       | Extra human-readable detail, e.g. `"division by zero"`. Absent whenever `expected` is present.                            |

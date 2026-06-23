@@ -69,21 +69,21 @@ RSpec.describe "pattern matching" do
       expect_pipe
         .in("✅", "[1,2]")
         .code("([a, a] => a)")
-        .out("❌", '{"kind":"binding_error","location":"code","operation":"binding identifier a","status":"value","input":"a","message":"identifier already bound"}')
+        .out("❌", '{"kind":"binding_error","location":"code","operation":"binding identifier a","status":0,"input":"a","message":"identifier already bound"}')
     end
 
     it "rejects a repeated binder across object members" do
       expect_pipe
         .in("✅", '{"x":1,"y":2}')
         .code('({"x": v, "y": v} => v)')
-        .out("❌", '{"kind":"binding_error","location":"code","operation":"binding identifier v","status":"value","input":"v","message":"identifier already bound"}')
+        .out("❌", '{"kind":"binding_error","location":"code","operation":"binding identifier v","status":0,"input":"v","message":"identifier already bound"}')
     end
 
     it "rejects a binder that collides with a rest binder" do
       expect_pipe
         .in("✅", "[1,2,3]")
         .code("([a, ...a] => a)")
-        .out("❌", '{"kind":"binding_error","location":"code","operation":"binding identifier a","status":"value","input":"a","message":"identifier already bound"}')
+        .out("❌", '{"kind":"binding_error","location":"code","operation":"binding identifier a","status":0,"input":"a","message":"identifier already bound"}')
     end
 
     it "does not reject the duplicate when the clause's shape does not match (clause simply does not apply)" do
@@ -136,7 +136,7 @@ RSpec.describe "pattern matching" do
       expect_pipe
         .in("✅", "[1,2]")
         .code("([a, b ? a] => \"matched\")")
-        .out("❌", '{"kind":"binding_error","location":"code","operation":"reading identifier a","status":"value","input":"a","message":"unbound identifier"}')
+        .out("❌", '{"kind":"binding_error","location":"code","operation":"reading identifier a","status":0,"input":"a","message":"unbound identifier"}')
     end
 
     it "matches on any truthy predicate result, not only true" do

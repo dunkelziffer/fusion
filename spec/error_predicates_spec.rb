@@ -8,14 +8,14 @@ RSpec.describe "errors and ?-predicates" do
       expect_pipe
         .in("✅", "5")
         .code('(x ? (n => [n,0] | @divide) => "matched", _ => "fallback")')
-        .out("❌", '{"kind":"math_error","location":"builtin","operation":"divide","status":"value","input":[5,0],"message":"division by zero"}')
+        .out("❌", '{"kind":"math_error","location":"builtin","operation":"divide","status":0,"input":[5,0],"message":"division by zero"}')
     end
 
     it "does not advance to the next clause on a predicate error" do
       expect_pipe
         .in("✅", "5")
         .code('(x ? (n => [n,0] | @divide) => "matched", x => "next clause")')
-        .out("❌", '{"kind":"math_error","location":"builtin","operation":"divide","status":"value","input":[5,0],"message":"division by zero"}')
+        .out("❌", '{"kind":"math_error","location":"builtin","operation":"divide","status":0,"input":[5,0],"message":"division by zero"}')
     end
 
     it "advances when a predicate returns false without erroring" do

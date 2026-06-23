@@ -376,27 +376,34 @@ Future work and open questions are tracked separately in our [Roadmap](./roadmap
 - 🧑 ✅ Every error payload produced by "the runtime" (the interpreter or a built-in function) has the **same shape**. This shape is enforced by constructing "internal errors" via `ErrorVal.internal`. The full schema is documented in [reference §6.5](../user/reference.md#65-the-standardized-error-payload).
 - 🤖 ✅ The stdlib is "ordinary unpriviledged Fusion code" and doesn't produce internal errors.
 - 🧑 ✅ However, all stdlib functions mirror the built-in error shape.
-- 🔢 ✅ During function application we differentiate between:
-  - `argument_error`: bad *input shape* (e.g. the wrong number of inputs). Constraints that could be expressed as a pattern without `?`.
-  - `type_error`: unsupported *input type* (e.g. string instead of number) or constraints between multiple inputs. Usually would require a `?` to express as a pattern.
+- 🧑 ✅ Payload fields, in order: `kind`, `location`, `file?`, `operation`, `status`, `input`, `expected?`, `message?`.
+- 🧑 ✅ `location` is one of six fixed values (`builtin`, `stdlib`, `code`, `input`, `output`, `interpreter`); the source basename moves to the optional `file` (absent for inline `-e`/REPL).
+- 🧑 ✅ `status` is `0` (received a value) or `1` (received an error), split out of `input`; on `1`, `input` carries the error's bare payload, so `input` is always valid JSON (0/1 match the wire status codes).
+- 🧑 ✅ `expected` lists the acceptable inputs as Fusion patterns (the input matched none); an error with `expected` never also carries a `message`.
+- 🧑 ✅ A wrong input shape *or* type is a single `argument_error`; its `expected` subsumes the former shape-vs-type split.
+- 🧑 ✅ A constraint no bare pattern can express (e.g. "every element is a string") uses the `@all` stdlib predicate inside the pattern, e.g. `[_ ? (xs => {"xs": xs, "f": @String} | @all), _ ? @String]`.
 - 🧑 ✅ Member/index access reserves `access_error` for exactly `missing key` and `index out of range`:
   - Accessing a member of a non-object or indexing with a wrong-typed key is an `argument_error` instead.
   - File-system access failures ("missing file", "directory instead of file", "permission denied") are a `reference_error` instead.
-- TODO: refine the payload — split `file` out of `location` (six fixed locations), split `status` out of `input`, add `expected` (patterns), merge `type_error` into `argument_error`, add `runtime_error` (absorbing `stack_error`).
+- 🧑 ✅ `runtime_error` is an unexpected host/interpreter failure; it also absorbs a stack overflow (message `"stack level too deep"`).
 
 ### Alternatives
 
 - 🔢 ⏪ Keep the previous split between builtin errors (string payload) and stdlib errors (object payloads). Only document the rule.
+- 🔢 ⏪ Separate `type_error`/`argument_error` kinds and a dedicated `stack_error` — merged into `argument_error` (subsumed by `expected`) and `runtime_error`.
+- 🤖 ⏪ A variable `location` string embedding the file/builtin name, with the error marker living inside `input` — split into the fixed `location` + `file` and the `status` field.
 - 🧑 💭 Don't standardize the error payloads at all.
 
 ### Pros
 
 - Every catch site (`!` pattern) can rely on this default shape.
 - The structured fields make errors self-describing (what failed, where, on what input).
+- `input` is always valid JSON, and `expected` documents the acceptable inputs as patterns a caller can reuse.
 
 ### Cons
 
 - The new structured payloads are more verbose than the old bare strings.
+- A few `expected` patterns must reference the `@all` stdlib helper, so they aren't purely structural.
 - Some converted Ruby messages still leak host detail (e.g. an `Errno` message). Pending per-case cleanup.
 
 ---

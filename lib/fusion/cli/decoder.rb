@@ -68,7 +68,7 @@ module Fusion
           "kind" => "argument_error",
           "location" => "input",
           "operation" => "decoding input",
-          "status" => "value",
+          "status" => 0,
           "input" => raw,
           "expected" => ENVELOPE_SHAPES.fetch(mode)
         ))

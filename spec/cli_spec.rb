@@ -190,7 +190,7 @@ RSpec.describe Fusion::CLI do
       result = described_class.apply(Fusion::NULL, fn, environment: environment)
 
       expect(described_class.serialize(result).data).to eq(
-        '{"kind":"binding_error","location":"code","operation":"reading identifier y","status":"value","input":"y","message":"unbound identifier"}'
+        '{"kind":"binding_error","location":"code","operation":"reading identifier y","status":0,"input":"y","message":"unbound identifier"}'
       )
     end
 
@@ -207,7 +207,7 @@ RSpec.describe Fusion::CLI do
       result = described_class.apply(Fusion::NULL, fn, environment: jailed)
 
       expect(described_class.serialize(result).data).to eq(
-        '{"kind":"reference_error","location":"builtin","operation":"@load","status":"value","input":"/nope/x.fsn","message":"outside the jail"}'
+        '{"kind":"reference_error","location":"builtin","operation":"@load","status":0,"input":"/nope/x.fsn","message":"outside the jail"}'
       )
     end
   end
