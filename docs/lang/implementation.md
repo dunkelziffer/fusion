@@ -82,7 +82,7 @@ parent chain:
   | key     | contents                                                     | set for                                 |
   | ------- | ------------------------------------------------------------ | --------------------------------------- |
   | `:dir`  | the directory `@name` / `@../a` resolve against (a `String`) | every unit (file's dir, else `Dir.pwd`) |
-  | `:file` | the absolute path, for error origins (a `String`)            | files only (absent ⇒ location `code`, file `"<inline>"`) |
+  | `:file` | the absolute path, for error origins (a `String`)            | files only (absent ⇒ origin `code`, file `"<inline>"`) |
   | `:self` | the unit's own `Thunk`, forced by a bare `@`                 | every unit                              |
   | `:jail` | the run's jail root (a `String`, or nil for unconfined)      | once, on the run's root env             |
 

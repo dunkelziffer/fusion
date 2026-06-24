@@ -23,7 +23,7 @@ module Fusion
 
         internal_error = Interpreter::ErrorVal.internal(
           kind: "serialization_error",
-          location: "output",
+          origin: "output",
           operation: "serializing result",
           input: runtime_value,
           message: message

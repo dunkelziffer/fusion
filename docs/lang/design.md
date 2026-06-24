@@ -471,8 +471,8 @@ Refines §2.9: same shape, but with orthogonal fields and a single input-error k
 
 ### Decisions
 
-- 🧑 ✅ Payload fields, in order: `kind`, `location`, `file?`, `operation`, `status`, `input`, `expected?`, `message?`.
-- 🧑 ✅ `location` is one of six fixed values (`builtin`, `stdlib`, `code`, `input`, `output`, `interpreter`); the source basename moves to the optional `file`, which is `"<inline>"` for inline `-e`/REPL code.
+- 🧑 ✅ Payload fields, in order: `kind`, `origin`, `file?`, `operation`, `status`, `input`, `expected?`, `message?`.
+- 🧑 ✅ `origin` is one of six fixed values (`builtin`, `stdlib`, `code`, `input`, `output`, `interpreter`); the source basename moves to the optional `file`, which is `"<inline>"` for inline `-e`/REPL code.
 - 🧑 ✅ `status` is `0` (received a value) or `1` (received an error), split out of `input`; on `1`, `input` carries the error's bare payload, so `input` is always valid JSON.
 - 🧑 ✅ `expected` lists the acceptable inputs as Fusion patterns (the input matched none); an error with `expected` never also carries a `message`.
 - 🧑 ✅ `type_error` is merged into `argument_error`: any wrong input shape *or* type is one `argument_error`, with `expected` subsuming the old split (so a non-object member access or a wrong-typed index is now an `argument_error`).
@@ -481,14 +481,15 @@ Refines §2.9: same shape, but with orthogonal fields and a single input-error k
 
 ### Alternatives
 
-- 🔢 ⏪ A variable `location` string embedding the file/builtin name, with the error marker living inside `input` — split into the fixed `location` + `file`, and the `status` field.
+- 🔢 ⏪ A variable `location` string embedding the file/builtin name, with the error marker living inside `input` — split into the fixed `origin` + `file`, and the `status` field.
+- 🔢 ⏪ Named this field `location` — renamed to `origin`, a better fit for a coarse "which subsystem" tag now that the filename lives in `file`.
 - 🔢 ❌ `status` as the strings `"value"`/`"error"` — chose the integers `0`/`1` to mirror the wire status codes.
 - 🔢 ❌ Over-approximating `expected` patterns for `@join`/`@toObject` (e.g. `[_ ? @Array, _ ? @String]`) — they would match inputs that still fail, breaking "matches ⇒ acceptable"; `@all` keeps them exact.
 
 ### Pros
 
 - `input` is always valid JSON; `expected` documents the acceptable inputs as patterns a caller can reuse.
-- A fixed six-value `location` is directly dispatchable; the filename lives in its own `file` field.
+- A fixed six-value `origin` is directly dispatchable; the filename lives in its own `file` field.
 
 ### Cons
 

@@ -66,7 +66,7 @@ module Fusion
 
         WirePair.new(status: 1, data: JSON.generate(
           "kind" => "argument_error",
-          "location" => "input",
+          "origin" => "input",
           "operation" => "decoding input",
           "status" => 0,
           "input" => raw,

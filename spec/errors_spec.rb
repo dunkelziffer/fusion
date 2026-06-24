@@ -100,7 +100,7 @@ RSpec.describe "payloaded errors" do
       expect_pipe
         .in("✅", "5")
         .code('(x => ([x,0] | @divide) | (!msg => msg))')
-        .out("✅", '{"kind":"math_error","location":"builtin","operation":"divide","status":0,"input":[5,0],"message":"division by zero"}')
+        .out("✅", '{"kind":"math_error","origin":"builtin","operation":"divide","status":0,"input":[5,0],"message":"division by zero"}')
     end
 
     it "matches a literal payload with !42" do
@@ -130,7 +130,7 @@ RSpec.describe "payloaded errors" do
       expect_pipe
         .in("✅", "5")
         .code('(x => ([x,0] | @divide) | (n => [n, 1] | @add))')
-        .out("❌", '{"kind":"math_error","location":"builtin","operation":"divide","status":0,"input":[5,0],"message":"division by zero"}')
+        .out("❌", '{"kind":"math_error","origin":"builtin","operation":"divide","status":0,"input":[5,0],"message":"division by zero"}')
     end
 
     it "returns !null on a strict no-match (not the propagated input error)" do
@@ -144,7 +144,7 @@ RSpec.describe "payloaded errors" do
       expect_pipe
         .in("✅", "5")
         .code("(x => !([x,0] | @divide))")
-        .out("❌", '{"kind":"math_error","location":"builtin","operation":"divide","status":0,"input":[5,0],"message":"division by zero"}')
+        .out("❌", '{"kind":"math_error","origin":"builtin","operation":"divide","status":0,"input":[5,0],"message":"division by zero"}')
     end
   end
 
@@ -220,7 +220,7 @@ RSpec.describe "payloaded errors" do
       expect_pipe
         .in("✅", "not json")
         .code("(x => x)")
-        .out("❌", '{"kind":"syntax_error","location":"input","operation":"parsing input as JSON","status":0,"input":"not json","message":"input is not valid JSON"}')
+        .out("❌", '{"kind":"syntax_error","origin":"input","operation":"parsing input as JSON","status":0,"input":"not json","message":"input is not valid JSON"}')
     end
   end
 

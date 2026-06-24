@@ -48,7 +48,7 @@ RSpec.describe "@-resolution" do
     it "errors when there is no enclosing file (an inline program)" do
       expect_pipe
         .code("@@")
-        .out("❌", '{"kind":"reference_error","location":"code","file":"<inline>","operation":"resolving @@","status":0,"input":null,"message":"no enclosing file"}')
+        .out("❌", '{"kind":"reference_error","origin":"code","file":"<inline>","operation":"resolving @@","status":0,"input":null,"message":"no enclosing file"}')
     end
   end
 
@@ -65,7 +65,7 @@ RSpec.describe "@-resolution" do
       expect_pipe
         .in("✅", "null")
         .file_path("ref/readenv.fsn")
-        .out("❌", '{"kind":"access_error","location":"code","file":"readenv.fsn","operation":".CI","status":0,"input":[{},"CI"],"message":"missing key"}')
+        .out("❌", '{"kind":"access_error","origin":"code","file":"readenv.fsn","operation":".CI","status":0,"input":[{},"CI"],"message":"missing key"}')
     end
 
     it "is shadowable by a sibling ENV.fsn" do
@@ -97,7 +97,7 @@ RSpec.describe "@-resolution" do
       expect_pipe
         .in("✅", '"nope.fsn"')
         .file_path("ref/loader.fsn")
-        .out("❌", '{"kind":"reference_error","location":"builtin","operation":"@load","status":0,"input":"nope.fsn","message":"file not found"}')
+        .out("❌", '{"kind":"reference_error","origin":"builtin","operation":"@load","status":0,"input":"nope.fsn","message":"file not found"}')
     end
 
     it "is shadowable by a sibling load.fsn" do
@@ -137,7 +137,7 @@ RSpec.describe "@-resolution" do
         .jail("ref")
         .file_path("ref/sub/usesDotDotBuiltin.fsn")
         .out("❌", a_string_including(
-          '"kind":"reference_error"', '"location":"code"', '"file":"subtract.fsn"', '"operation":"reading file"', '"status":0',
+          '"kind":"reference_error"', '"origin":"code"', '"file":"subtract.fsn"', '"operation":"reading file"', '"status":0',
           /"input":"[^"]*subtract\.fsn"/,
           '"message":"file not found"'
         ))
@@ -152,7 +152,7 @@ RSpec.describe "@-resolution" do
       expect_pipe
         .in("✅", "7")
         .file_path("ref/sub/usesParent.fsn")
-        .out("❌", '{"kind":"reference_error","location":"code","file":"usesParent.fsn","operation":"resolving @../helper","status":0,"input":"../helper","message":"outside the jail"}')
+        .out("❌", '{"kind":"reference_error","origin":"code","file":"usesParent.fsn","operation":"resolving @../helper","status":0,"input":"../helper","message":"outside the jail"}')
     end
 
     # @mapValues is a stdlib file that calls its stdlib sibling @map. Both must
@@ -168,7 +168,7 @@ RSpec.describe "@-resolution" do
     it "blocks an @load target that escapes the jail, without probing its existence" do
       expect_pipe
         .code('"../nope" | @load')
-        .out("❌", '{"kind":"reference_error","location":"builtin","operation":"@load","status":0,"input":"../nope","message":"outside the jail"}')
+        .out("❌", '{"kind":"reference_error","origin":"builtin","operation":"@load","status":0,"input":"../nope","message":"outside the jail"}')
     end
 
     it "disables confinement with a jail of *" do
@@ -187,7 +187,7 @@ RSpec.describe "@-resolution" do
         .in("✅", "null")
         .jail("ref/localmath")
         .file_path("ref/usesAdd.fsn")
-        .out("❌", '{"kind":"reference_error","location":"code","file":"usesAdd.fsn","operation":"resolving @add","status":0,"input":"add","message":"outside the jail"}')
+        .out("❌", '{"kind":"reference_error","origin":"code","file":"usesAdd.fsn","operation":"resolving @add","status":0,"input":"add","message":"outside the jail"}')
     end
   end
 end

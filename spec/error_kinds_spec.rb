@@ -7,30 +7,30 @@
 # cannot be triggered from Fusion code).
 RSpec.describe "error kinds" do
   describe "syntax_error" do
-    it "from inline source (location: code, file <inline>)" do
+    it "from inline source (origin: code, file <inline>)" do
       expect_pipe
         .code("(_ => @")
         .out("❌", a_string_including(
-          '"kind":"syntax_error"', '"location":"code"', '"file":"<inline>"', '"operation":"parsing"', '"status":0', '"input":"(_ => @"',
+          '"kind":"syntax_error"', '"origin":"code"', '"file":"<inline>"', '"operation":"parsing"', '"status":0', '"input":"(_ => @"',
           /"message":"[^"]*"/
         ))
     end
 
-    it "from a file (location: code with file)" do
+    it "from a file (origin: code with file)" do
       expect_pipe
         .file_path("badsyntax.fsn")
         .out("❌", a_string_including(
-          '"kind":"syntax_error"', '"location":"code"', '"file":"badsyntax.fsn"', '"operation":"parsing"', '"status":0',
+          '"kind":"syntax_error"', '"origin":"code"', '"file":"badsyntax.fsn"', '"operation":"parsing"', '"status":0',
           /"input":"(?:[^"\\]|\\.)*"/,
           /"message":"(?:[^"\\]|\\.)*"/
         ))
     end
 
-    it "from non-JSON input (location: input)" do
+    it "from non-JSON input (origin: input)" do
       expect_pipe
         .in("✅", "not json")
         .code("(x => x)")
-        .out("❌", '{"kind":"syntax_error","location":"input","operation":"parsing input as JSON","status":0,"input":"not json","message":"input is not valid JSON"}')
+        .out("❌", '{"kind":"syntax_error","origin":"input","operation":"parsing input as JSON","status":0,"input":"not json","message":"input is not valid JSON"}')
     end
   end
 
@@ -38,14 +38,14 @@ RSpec.describe "error kinds" do
     it "unresolved @name" do
       expect_pipe
         .code("(_ => @no_such_module)")
-        .out("❌", '{"kind":"reference_error","location":"code","file":"<inline>","operation":"resolving @no_such_module","status":0,"input":"no_such_module","message":"unresolved reference"}')
+        .out("❌", '{"kind":"reference_error","origin":"code","file":"<inline>","operation":"resolving @no_such_module","status":0,"input":"no_such_module","message":"unresolved reference"}')
     end
 
     it "non-productive data cycle" do
       expect_pipe
         .file_path("cyclicA.fsn")
         .out("❌", a_string_including(
-          '"kind":"reference_error"', '"location":"code"', '"file":"cyclicA.fsn"', '"operation":"forcing a reference"', '"status":0',
+          '"kind":"reference_error"', '"origin":"code"', '"file":"cyclicA.fsn"', '"operation":"forcing a reference"', '"status":0',
           /"input":"[^"]*cyclicA\.fsn"/,
           '"message":"non-productive data cycle"'
         ))
@@ -56,7 +56,7 @@ RSpec.describe "error kinds" do
         .jail("..") # widen past the default (the program's dir) so @../ stays in the jail
         .code("(_ => @../nonexistent)")
         .out("❌", a_string_including(
-          '"kind":"reference_error"', '"location":"code"', '"file":"nonexistent.fsn"', '"operation":"reading file"', '"status":0',
+          '"kind":"reference_error"', '"origin":"code"', '"file":"nonexistent.fsn"', '"operation":"reading file"', '"status":0',
           /"input":"[^"]*nonexistent\.fsn"/,
           '"message":"file not found"'
         ))
@@ -65,7 +65,7 @@ RSpec.describe "error kinds" do
     it "missing file via @load" do
       expect_pipe
         .code('(_ => "nope.fsn" | @load)')
-        .out("❌", '{"kind":"reference_error","location":"builtin","operation":"@load","status":0,"input":"nope.fsn","message":"file not found"}')
+        .out("❌", '{"kind":"reference_error","origin":"builtin","operation":"@load","status":0,"input":"nope.fsn","message":"file not found"}')
     end
 
     it "a file-system access failure (reading a directory)" do
@@ -73,7 +73,7 @@ RSpec.describe "error kinds" do
       expect_pipe
         .code('(_ => "ref" | @load)')
         .out("❌", a_string_including(
-          '"kind":"reference_error"', '"location":"code"', '"file":"ref"', '"operation":"reading file"', '"status":0',
+          '"kind":"reference_error"', '"origin":"code"', '"file":"ref"', '"operation":"reading file"', '"status":0',
           %r{"input":"[^"]*/ref"},
           /"message":"[^"]*directory[^"]*"/
         ))
@@ -84,14 +84,14 @@ RSpec.describe "error kinds" do
     it "reading an unbound identifier" do
       expect_pipe
         .code("(_ => x)")
-        .out("❌", '{"kind":"binding_error","location":"code","file":"<inline>","operation":"reading identifier x","status":0,"input":"x","message":"unbound identifier"}')
+        .out("❌", '{"kind":"binding_error","origin":"code","file":"<inline>","operation":"reading identifier x","status":0,"input":"x","message":"unbound identifier"}')
     end
 
     it "a duplicate binder in a clause" do
       expect_pipe
         .in("✅", "[1,2]")
         .code("([a, a] => a)")
-        .out("❌", '{"kind":"binding_error","location":"code","file":"<inline>","operation":"binding identifier a","status":0,"input":"a","message":"identifier already bound"}')
+        .out("❌", '{"kind":"binding_error","origin":"code","file":"<inline>","operation":"binding identifier a","status":0,"input":"a","message":"identifier already bound"}')
     end
   end
 
@@ -100,21 +100,21 @@ RSpec.describe "error kinds" do
       expect_pipe
         .in("✅", '{"a":1}')
         .code("(o => o.b)")
-        .out("❌", '{"kind":"access_error","location":"code","file":"<inline>","operation":".b","status":0,"input":[{"a":1},"b"],"message":"missing key"}')
+        .out("❌", '{"kind":"access_error","origin":"code","file":"<inline>","operation":".b","status":0,"input":[{"a":1},"b"],"message":"missing key"}')
     end
 
     it "missing index key on an object" do
       expect_pipe
         .in("✅", '{"a":1}')
         .code('(o => o["b"])')
-        .out("❌", '{"kind":"access_error","location":"code","file":"<inline>","operation":"[\"b\"]","status":0,"input":[{"a":1},"b"],"message":"missing key"}')
+        .out("❌", '{"kind":"access_error","origin":"code","file":"<inline>","operation":"[\"b\"]","status":0,"input":[{"a":1},"b"],"message":"missing key"}')
     end
 
     it "array index out of range" do
       expect_pipe
         .in("✅", "[10,20]")
         .code("(a => a[5])")
-        .out("❌", '{"kind":"access_error","location":"code","file":"<inline>","operation":"[5]","status":0,"input":[[10,20],5],"message":"index out of range"}')
+        .out("❌", '{"kind":"access_error","origin":"code","file":"<inline>","operation":"[5]","status":0,"input":[[10,20],5],"message":"index out of range"}')
     end
   end
 
@@ -122,41 +122,41 @@ RSpec.describe "error kinds" do
     it "array spread of a non-array" do
       expect_pipe
         .code("(_ => [...5])")
-        .out("❌", '{"kind":"argument_error","location":"code","file":"<inline>","operation":"[...] array spread","status":0,"input":5,"expected":["_ ? @Array"]}')
+        .out("❌", '{"kind":"argument_error","origin":"code","file":"<inline>","operation":"[...] array spread","status":0,"input":5,"expected":["_ ? @Array"]}')
     end
 
     it "object spread of a non-object" do
       expect_pipe
         .code("(_ => {...5})")
-        .out("❌", '{"kind":"argument_error","location":"code","file":"<inline>","operation":"{...} object spread","status":0,"input":5,"expected":["_ ? @Object"]}')
+        .out("❌", '{"kind":"argument_error","origin":"code","file":"<inline>","operation":"{...} object spread","status":0,"input":5,"expected":["_ ? @Object"]}')
     end
 
     it "member access on a non-object" do
       expect_pipe
         .in("✅", "5")
         .code("(n => n.foo)")
-        .out("❌", '{"kind":"argument_error","location":"code","file":"<inline>","operation":".foo","status":0,"input":[5,"foo"],"expected":["[_ ? @Object, _]"]}')
+        .out("❌", '{"kind":"argument_error","origin":"code","file":"<inline>","operation":".foo","status":0,"input":[5,"foo"],"expected":["[_ ? @Object, _]"]}')
     end
 
     it "indexing with a wrong-typed key" do
       expect_pipe
         .in("✅", "[1,2]")
         .code('(a => a["x"])')
-        .out("❌", '{"kind":"argument_error","location":"code","file":"<inline>","operation":"[index]","status":0,"input":[[1,2],"x"],"expected":["[_ ? @Array, _ ? @Integer]","[_ ? @Object, _ ? @String]"]}')
+        .out("❌", '{"kind":"argument_error","origin":"code","file":"<inline>","operation":"[index]","status":0,"input":[[1,2],"x"],"expected":["[_ ? @Array, _ ? @Integer]","[_ ? @Object, _ ? @String]"]}')
     end
 
     it "applying a non-function" do
       expect_pipe
         .in("✅", "5")
         .code("(n => n | 42)")
-        .out("❌", '{"kind":"argument_error","location":"code","file":"<inline>","operation":"|","status":0,"input":[5,42],"expected":["[_, _ ? @Function]"]}')
+        .out("❌", '{"kind":"argument_error","origin":"code","file":"<inline>","operation":"|","status":0,"input":[5,42],"expected":["[_, _ ? @Function]"]}')
     end
 
     it "a builtin given the wrong shape of arguments (not a pair)" do
       expect_pipe
         .in("✅", "[1,2,3]")
         .code("(p => p | @add)")
-        .out("❌", '{"kind":"argument_error","location":"builtin","operation":"add","status":0,"input":[1,2,3],"expected":["[_ ? @Number, _ ? @Number]"]}')
+        .out("❌", '{"kind":"argument_error","origin":"builtin","operation":"add","status":0,"input":[1,2,3],"expected":["[_ ? @Number, _ ? @Number]"]}')
     end
   end
 
@@ -165,7 +165,7 @@ RSpec.describe "error kinds" do
       expect_pipe
         .in("✅", "[1,0]")
         .code("(p => p | @divide)")
-        .out("❌", '{"kind":"math_error","location":"builtin","operation":"divide","status":0,"input":[1,0],"message":"division by zero"}')
+        .out("❌", '{"kind":"math_error","origin":"builtin","operation":"divide","status":0,"input":[1,0],"message":"division by zero"}')
     end
   end
 
@@ -174,7 +174,7 @@ RSpec.describe "error kinds" do
       expect_pipe
         .in("✅", "[1,2]")
         .code("(v => v | @toString)")
-        .out("❌", '{"kind":"conversion_error","location":"builtin","operation":"toString","status":0,"input":[1,2],"message":"cannot stringify this value type"}')
+        .out("❌", '{"kind":"conversion_error","origin":"builtin","operation":"toString","status":0,"input":[1,2],"message":"cannot stringify this value type"}')
     end
   end
 
@@ -182,31 +182,31 @@ RSpec.describe "error kinds" do
     it "a bare function result" do
       expect_pipe
         .code("(n => (m => m))")
-        .out("❌", '{"kind":"serialization_error","location":"output","operation":"serializing result","status":0,"input":"<function>","message":"cannot serialize a function"}')
+        .out("❌", '{"kind":"serialization_error","origin":"output","operation":"serializing result","status":0,"input":"<function>","message":"cannot serialize a function"}')
     end
 
     it "a function nested in a result value" do
       expect_pipe
         .code("(_ => [(x => x)])")
-        .out("❌", '{"kind":"serialization_error","location":"output","operation":"serializing result","status":0,"input":["<function>"],"message":"cannot serialize a function"}')
+        .out("❌", '{"kind":"serialization_error","origin":"output","operation":"serializing result","status":0,"input":["<function>"],"message":"cannot serialize a function"}')
     end
 
     it "a non-finite number result (overflow to Infinity has no JSON form)" do
       expect_pipe
         .code("(_ => [1e308, 10] | @multiply)")
-        .out("❌", '{"kind":"serialization_error","location":"output","operation":"serializing result","status":0,"input":"<Infinity>","message":"cannot serialize a non-finite number"}')
+        .out("❌", '{"kind":"serialization_error","origin":"output","operation":"serializing result","status":0,"input":"<Infinity>","message":"cannot serialize a non-finite number"}')
     end
 
     it "a -Infinity result" do
       expect_pipe
         .code("(_ => [1e400, -1] | @multiply)")
-        .out("❌", '{"kind":"serialization_error","location":"output","operation":"serializing result","status":0,"input":"<-Infinity>","message":"cannot serialize a non-finite number"}')
+        .out("❌", '{"kind":"serialization_error","origin":"output","operation":"serializing result","status":0,"input":"<-Infinity>","message":"cannot serialize a non-finite number"}')
     end
 
     it "a NaN result (Infinity - Infinity)" do
       expect_pipe
         .code("(_ => [1e400, 1e400] | @subtract)")
-        .out("❌", '{"kind":"serialization_error","location":"output","operation":"serializing result","status":0,"input":"<NaN>","message":"cannot serialize a non-finite number"}')
+        .out("❌", '{"kind":"serialization_error","origin":"output","operation":"serializing result","status":0,"input":"<NaN>","message":"cannot serialize a non-finite number"}')
     end
 
     # A user error (`!expr`) is serialized strictly, just like a plain result: a
@@ -215,13 +215,13 @@ RSpec.describe "error kinds" do
     it "a user error whose payload is a function" do
       expect_pipe
         .code("(_ => !(y => y))")
-        .out("❌", '{"kind":"serialization_error","location":"output","operation":"serializing result","status":1,"input":"<function>","message":"cannot serialize a function"}')
+        .out("❌", '{"kind":"serialization_error","origin":"output","operation":"serializing result","status":1,"input":"<function>","message":"cannot serialize a function"}')
     end
 
     it "a user error whose payload is a non-finite number" do
       expect_pipe
         .code("(_ => !1e400)")
-        .out("❌", '{"kind":"serialization_error","location":"output","operation":"serializing result","status":1,"input":"<Infinity>","message":"cannot serialize a non-finite number"}')
+        .out("❌", '{"kind":"serialization_error","origin":"output","operation":"serializing result","status":1,"input":"<Infinity>","message":"cannot serialize a non-finite number"}')
     end
 
     # A structured payload stays valid JSON in `input`: an unserializable value
@@ -229,13 +229,13 @@ RSpec.describe "error kinds" do
     it "a user error whose payload is an object containing a function" do
       expect_pipe
         .code('(_ => !{"a": (y => y)})')
-        .out("❌", '{"kind":"serialization_error","location":"output","operation":"serializing result","status":1,"input":{"a":"<function>"},"message":"cannot serialize a function"}')
+        .out("❌", '{"kind":"serialization_error","origin":"output","operation":"serializing result","status":1,"input":{"a":"<function>"},"message":"cannot serialize a function"}')
     end
 
     it "a user error whose payload is an array containing a non-finite number" do
       expect_pipe
         .code("(_ => ![1e400])")
-        .out("❌", '{"kind":"serialization_error","location":"output","operation":"serializing result","status":1,"input":["<Infinity>"],"message":"cannot serialize a non-finite number"}')
+        .out("❌", '{"kind":"serialization_error","origin":"output","operation":"serializing result","status":1,"input":["<Infinity>"],"message":"cannot serialize a non-finite number"}')
     end
   end
 
@@ -246,19 +246,19 @@ RSpec.describe "error kinds" do
     it "renders a function in input as \"<function>\"" do
       expect_pipe
         .code("(_ => (y => y) | @floor)")
-        .out("❌", '{"kind":"argument_error","location":"builtin","operation":"floor","status":0,"input":"<function>","expected":["_ ? @Number"]}')
+        .out("❌", '{"kind":"argument_error","origin":"builtin","operation":"floor","status":0,"input":"<function>","expected":["_ ? @Number"]}')
     end
 
     it "renders a function nested in input as \"<function>\"" do
       expect_pipe
         .code("(_ => [(y => y), 1] | @add)")
-        .out("❌", '{"kind":"argument_error","location":"builtin","operation":"add","status":0,"input":["<function>",1],"expected":["[_ ? @Number, _ ? @Number]"]}')
+        .out("❌", '{"kind":"argument_error","origin":"builtin","operation":"add","status":0,"input":["<function>",1],"expected":["[_ ? @Number, _ ? @Number]"]}')
     end
 
     it "renders a non-finite number in input as \"<Infinity>\"" do
       expect_pipe
         .code("(_ => 1e400 | @floor)")
-        .out("❌", '{"kind":"math_error","location":"builtin","operation":"floor","status":0,"input":"<Infinity>","message":"not a finite number"}')
+        .out("❌", '{"kind":"math_error","origin":"builtin","operation":"floor","status":0,"input":"<Infinity>","message":"not a finite number"}')
     end
   end
 

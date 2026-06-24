@@ -16,7 +16,7 @@ module Fusion
       rescue JSON::ParserError
         Interpreter::ErrorVal.internal(
           kind: "syntax_error",
-          location: "input",
+          origin: "input",
           operation: "parsing input as JSON",
           input: wire_pair.data,
           message: "input is not valid JSON"

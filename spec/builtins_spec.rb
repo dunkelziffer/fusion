@@ -32,28 +32,28 @@ RSpec.describe "builtins" do
       expect_pipe
         .in("✅", '["a","b"]')
         .code("(p => p | @add)")
-        .out("❌", '{"kind":"argument_error","location":"builtin","operation":"add","status":0,"input":["a","b"],"expected":["[_ ? @Number, _ ? @Number]"]}')
+        .out("❌", '{"kind":"argument_error","origin":"builtin","operation":"add","status":0,"input":["a","b"],"expected":["[_ ? @Number, _ ? @Number]"]}')
     end
 
     it "treats a boolean element as the wrong type" do
       expect_pipe
         .in("✅", "[true,1]")
         .code("(p => p | @add)")
-        .out("❌", '{"kind":"argument_error","location":"builtin","operation":"add","status":0,"input":[true,1],"expected":["[_ ? @Number, _ ? @Number]"]}')
+        .out("❌", '{"kind":"argument_error","origin":"builtin","operation":"add","status":0,"input":[true,1],"expected":["[_ ? @Number, _ ? @Number]"]}')
     end
 
     it "errors on a non-pair array" do
       expect_pipe
         .in("✅", "[1,2,3]")
         .code("(p => p | @add)")
-        .out("❌", '{"kind":"argument_error","location":"builtin","operation":"add","status":0,"input":[1,2,3],"expected":["[_ ? @Number, _ ? @Number]"]}')
+        .out("❌", '{"kind":"argument_error","origin":"builtin","operation":"add","status":0,"input":[1,2,3],"expected":["[_ ? @Number, _ ? @Number]"]}')
     end
 
     it "errors on a non-array" do
       expect_pipe
         .in("✅", "5")
         .code("(p => p | @add)")
-        .out("❌", '{"kind":"argument_error","location":"builtin","operation":"add","status":0,"input":5,"expected":["[_ ? @Number, _ ? @Number]"]}')
+        .out("❌", '{"kind":"argument_error","origin":"builtin","operation":"add","status":0,"input":5,"expected":["[_ ? @Number, _ ? @Number]"]}')
     end
   end
 
@@ -76,14 +76,14 @@ RSpec.describe "builtins" do
       expect_pipe
         .in("✅", '[1,"x"]')
         .code("(p => p | @subtract)")
-        .out("❌", '{"kind":"argument_error","location":"builtin","operation":"subtract","status":0,"input":[1,"x"],"expected":["[_ ? @Number, _ ? @Number]"]}')
+        .out("❌", '{"kind":"argument_error","origin":"builtin","operation":"subtract","status":0,"input":[1,"x"],"expected":["[_ ? @Number, _ ? @Number]"]}')
     end
 
     it "errors with argument_error on a non-pair" do
       expect_pipe
         .in("✅", "[1]")
         .code("(p => p | @subtract)")
-        .out("❌", '{"kind":"argument_error","location":"builtin","operation":"subtract","status":0,"input":[1],"expected":["[_ ? @Number, _ ? @Number]"]}')
+        .out("❌", '{"kind":"argument_error","origin":"builtin","operation":"subtract","status":0,"input":[1],"expected":["[_ ? @Number, _ ? @Number]"]}')
     end
   end
 
@@ -106,14 +106,14 @@ RSpec.describe "builtins" do
       expect_pipe
         .in("✅", '["a",2]')
         .code("(p => p | @multiply)")
-        .out("❌", '{"kind":"argument_error","location":"builtin","operation":"multiply","status":0,"input":["a",2],"expected":["[_ ? @Number, _ ? @Number]"]}')
+        .out("❌", '{"kind":"argument_error","origin":"builtin","operation":"multiply","status":0,"input":["a",2],"expected":["[_ ? @Number, _ ? @Number]"]}')
     end
 
     it "errors with argument_error on a non-pair" do
       expect_pipe
         .in("✅", "[1,2,3]")
         .code("(p => p | @multiply)")
-        .out("❌", '{"kind":"argument_error","location":"builtin","operation":"multiply","status":0,"input":[1,2,3],"expected":["[_ ? @Number, _ ? @Number]"]}')
+        .out("❌", '{"kind":"argument_error","origin":"builtin","operation":"multiply","status":0,"input":[1,2,3],"expected":["[_ ? @Number, _ ? @Number]"]}')
     end
   end
 
@@ -143,21 +143,21 @@ RSpec.describe "builtins" do
       expect_pipe
         .in("✅", "[1,0]")
         .code("(p => p | @divide)")
-        .out("❌", '{"kind":"math_error","location":"builtin","operation":"divide","status":0,"input":[1,0],"message":"division by zero"}')
+        .out("❌", '{"kind":"math_error","origin":"builtin","operation":"divide","status":0,"input":[1,0],"message":"division by zero"}')
     end
 
     it "errors on a non-numeric pair" do
       expect_pipe
         .in("✅", '[1,"x"]')
         .code("(p => p | @divide)")
-        .out("❌", '{"kind":"argument_error","location":"builtin","operation":"divide","status":0,"input":[1,"x"],"expected":["[_ ? @Number, _ ? @Number]"]}')
+        .out("❌", '{"kind":"argument_error","origin":"builtin","operation":"divide","status":0,"input":[1,"x"],"expected":["[_ ? @Number, _ ? @Number]"]}')
     end
 
     it "errors with argument_error on a non-pair" do
       expect_pipe
         .in("✅", "[1]")
         .code("(p => p | @divide)")
-        .out("❌", '{"kind":"argument_error","location":"builtin","operation":"divide","status":0,"input":[1],"expected":["[_ ? @Number, _ ? @Number]"]}')
+        .out("❌", '{"kind":"argument_error","origin":"builtin","operation":"divide","status":0,"input":[1],"expected":["[_ ? @Number, _ ? @Number]"]}')
     end
   end
 
@@ -180,21 +180,21 @@ RSpec.describe "builtins" do
       expect_pipe
         .in("✅", "[7,0]")
         .code("(p => p | @mod)")
-        .out("❌", '{"kind":"math_error","location":"builtin","operation":"mod","status":0,"input":[7,0],"message":"modulo by zero"}')
+        .out("❌", '{"kind":"math_error","origin":"builtin","operation":"mod","status":0,"input":[7,0],"message":"modulo by zero"}')
     end
 
     it "errors with argument_error on a non-pair" do
       expect_pipe
         .in("✅", "7")
         .code("(p => p | @mod)")
-        .out("❌", '{"kind":"argument_error","location":"builtin","operation":"mod","status":0,"input":7,"expected":["[_ ? @Number, _ ? @Number]"]}')
+        .out("❌", '{"kind":"argument_error","origin":"builtin","operation":"mod","status":0,"input":7,"expected":["[_ ? @Number, _ ? @Number]"]}')
     end
 
     it "errors on a non-numeric pair" do
       expect_pipe
         .in("✅", '["a","b"]')
         .code("(p => p | @mod)")
-        .out("❌", '{"kind":"argument_error","location":"builtin","operation":"mod","status":0,"input":["a","b"],"expected":["[_ ? @Number, _ ? @Number]"]}')
+        .out("❌", '{"kind":"argument_error","origin":"builtin","operation":"mod","status":0,"input":["a","b"],"expected":["[_ ? @Number, _ ? @Number]"]}')
     end
   end
 
@@ -217,7 +217,7 @@ RSpec.describe "builtins" do
       expect_pipe
         .in("✅", '"x"')
         .code("(n => n | @negate)")
-        .out("❌", '{"kind":"argument_error","location":"builtin","operation":"negate","status":0,"input":"x","expected":["_ ? @Number"]}')
+        .out("❌", '{"kind":"argument_error","origin":"builtin","operation":"negate","status":0,"input":"x","expected":["_ ? @Number"]}')
     end
   end
 
@@ -247,14 +247,14 @@ RSpec.describe "builtins" do
       expect_pipe
         .in("✅", "null")
         .code("(_ => 1e400 | @floor)")
-        .out("❌", '{"kind":"math_error","location":"builtin","operation":"floor","status":0,"input":"<Infinity>","message":"not a finite number"}')
+        .out("❌", '{"kind":"math_error","origin":"builtin","operation":"floor","status":0,"input":"<Infinity>","message":"not a finite number"}')
     end
 
     it "errors on a non-number" do
       expect_pipe
         .in("✅", '"x"')
         .code("(n => n | @floor)")
-        .out("❌", '{"kind":"argument_error","location":"builtin","operation":"floor","status":0,"input":"x","expected":["_ ? @Number"]}')
+        .out("❌", '{"kind":"argument_error","origin":"builtin","operation":"floor","status":0,"input":"x","expected":["_ ? @Number"]}')
     end
   end
 
@@ -298,7 +298,7 @@ RSpec.describe "builtins" do
       expect_pipe
         .in("✅", "[1,2,3]")
         .code("(p => p | @equals)")
-        .out("❌", '{"kind":"argument_error","location":"builtin","operation":"equals","status":0,"input":[1,2,3],"expected":["[_, _]"]}')
+        .out("❌", '{"kind":"argument_error","origin":"builtin","operation":"equals","status":0,"input":[1,2,3],"expected":["[_, _]"]}')
     end
   end
 
@@ -328,14 +328,14 @@ RSpec.describe "builtins" do
       expect_pipe
         .in("✅", '[1,"a"]')
         .code("(p => p | @lessThan)")
-        .out("❌", '{"kind":"argument_error","location":"builtin","operation":"lessThan","status":0,"input":[1,"a"],"expected":["[_ ? @Number, _ ? @Number]","[_ ? @String, _ ? @String]"]}')
+        .out("❌", '{"kind":"argument_error","origin":"builtin","operation":"lessThan","status":0,"input":[1,"a"],"expected":["[_ ? @Number, _ ? @Number]","[_ ? @String, _ ? @String]"]}')
     end
 
     it "errors with argument_error on a non-pair" do
       expect_pipe
         .in("✅", "[1]")
         .code("(p => p | @lessThan)")
-        .out("❌", '{"kind":"argument_error","location":"builtin","operation":"lessThan","status":0,"input":[1],"expected":["[_ ? @Number, _ ? @Number]","[_ ? @String, _ ? @String]"]}')
+        .out("❌", '{"kind":"argument_error","origin":"builtin","operation":"lessThan","status":0,"input":[1],"expected":["[_ ? @Number, _ ? @Number]","[_ ? @String, _ ? @String]"]}')
     end
   end
 
@@ -374,7 +374,7 @@ RSpec.describe "builtins" do
       expect_pipe
         .in("✅", "[true]")
         .code("(p => p | @and)")
-        .out("❌", '{"kind":"argument_error","location":"builtin","operation":"and","status":0,"input":[true],"expected":["[_, _]"]}')
+        .out("❌", '{"kind":"argument_error","origin":"builtin","operation":"and","status":0,"input":[true],"expected":["[_, _]"]}')
     end
   end
 
@@ -411,7 +411,7 @@ RSpec.describe "builtins" do
       expect_pipe
         .in("✅", "[false]")
         .code("(p => p | @or)")
-        .out("❌", '{"kind":"argument_error","location":"builtin","operation":"or","status":0,"input":[false],"expected":["[_, _]"]}')
+        .out("❌", '{"kind":"argument_error","origin":"builtin","operation":"or","status":0,"input":[false],"expected":["[_, _]"]}')
     end
   end
 
@@ -478,7 +478,7 @@ RSpec.describe "builtins" do
       expect_pipe
         .in("✅", "5")
         .code("(v => v | @length)")
-        .out("❌", '{"kind":"argument_error","location":"builtin","operation":"length","status":0,"input":5,"expected":["_ ? @String","_ ? @Array","_ ? @Object"]}')
+        .out("❌", '{"kind":"argument_error","origin":"builtin","operation":"length","status":0,"input":5,"expected":["_ ? @String","_ ? @Array","_ ? @Object"]}')
     end
   end
 
@@ -501,14 +501,14 @@ RSpec.describe "builtins" do
       expect_pipe
         .in("✅", '["a",1]')
         .code("(p => p | @concat)")
-        .out("❌", '{"kind":"argument_error","location":"builtin","operation":"concat","status":0,"input":["a",1],"expected":["[_ ? @String, _ ? @String]"]}')
+        .out("❌", '{"kind":"argument_error","origin":"builtin","operation":"concat","status":0,"input":["a",1],"expected":["[_ ? @String, _ ? @String]"]}')
     end
 
     it "errors with argument_error on a non-pair" do
       expect_pipe
         .in("✅", '["a"]')
         .code("(p => p | @concat)")
-        .out("❌", '{"kind":"argument_error","location":"builtin","operation":"concat","status":0,"input":["a"],"expected":["[_ ? @String, _ ? @String]"]}')
+        .out("❌", '{"kind":"argument_error","origin":"builtin","operation":"concat","status":0,"input":["a"],"expected":["[_ ? @String, _ ? @String]"]}')
     end
   end
 
@@ -531,7 +531,7 @@ RSpec.describe "builtins" do
       expect_pipe
         .in("✅", "5")
         .code("(s => s | @chars)")
-        .out("❌", '{"kind":"argument_error","location":"builtin","operation":"chars","status":0,"input":5,"expected":["_ ? @String"]}')
+        .out("❌", '{"kind":"argument_error","origin":"builtin","operation":"chars","status":0,"input":5,"expected":["_ ? @String"]}')
     end
   end
 
@@ -554,14 +554,14 @@ RSpec.describe "builtins" do
       expect_pipe
         .in("✅", '[[1,2],","]')
         .code("(p => p | @join)")
-        .out("❌", '{"kind":"argument_error","location":"builtin","operation":"join","status":0,"input":[[1,2],","],"expected":["[_ ? (xs => {\"xs\": xs, \"f\": @String} | @all), _ ? @String]"]}')
+        .out("❌", '{"kind":"argument_error","origin":"builtin","operation":"join","status":0,"input":[[1,2],","],"expected":["[_ ? (xs => {\"xs\": xs, \"f\": @String} | @all), _ ? @String]"]}')
     end
 
     it "errors with argument_error on a non-pair" do
       expect_pipe
         .in("✅", '[["a"]]')
         .code("(p => p | @join)")
-        .out("❌", '{"kind":"argument_error","location":"builtin","operation":"join","status":0,"input":[["a"]],"expected":["[_ ? (xs => {\"xs\": xs, \"f\": @String} | @all), _ ? @String]"]}')
+        .out("❌", '{"kind":"argument_error","origin":"builtin","operation":"join","status":0,"input":[["a"]],"expected":["[_ ? (xs => {\"xs\": xs, \"f\": @String} | @all), _ ? @String]"]}')
     end
   end
 
@@ -591,14 +591,14 @@ RSpec.describe "builtins" do
       expect_pipe
         .in("✅", '{"a":1}')
         .code("(v => v | @toString)")
-        .out("❌", '{"kind":"conversion_error","location":"builtin","operation":"toString","status":0,"input":{"a":1},"message":"cannot stringify this value type"}')
+        .out("❌", '{"kind":"conversion_error","origin":"builtin","operation":"toString","status":0,"input":{"a":1},"message":"cannot stringify this value type"}')
     end
 
     it "errors with conversion_error on an array" do
       expect_pipe
         .in("✅", "[1,2]")
         .code("(v => v | @toString)")
-        .out("❌", '{"kind":"conversion_error","location":"builtin","operation":"toString","status":0,"input":[1,2],"message":"cannot stringify this value type"}')
+        .out("❌", '{"kind":"conversion_error","origin":"builtin","operation":"toString","status":0,"input":[1,2],"message":"cannot stringify this value type"}')
     end
   end
 
@@ -628,14 +628,14 @@ RSpec.describe "builtins" do
       expect_pipe
         .in("✅", '"abc"')
         .code("(s => s | @parseNumber)")
-        .out("❌", '{"kind":"conversion_error","location":"builtin","operation":"parseNumber","status":0,"input":"abc","message":"not a numeric string"}')
+        .out("❌", '{"kind":"conversion_error","origin":"builtin","operation":"parseNumber","status":0,"input":"abc","message":"not a numeric string"}')
     end
 
     it "errors on a non-string" do
       expect_pipe
         .in("✅", "5")
         .code("(s => s | @parseNumber)")
-        .out("❌", '{"kind":"argument_error","location":"builtin","operation":"parseNumber","status":0,"input":5,"expected":["_ ? @String"]}')
+        .out("❌", '{"kind":"argument_error","origin":"builtin","operation":"parseNumber","status":0,"input":5,"expected":["_ ? @String"]}')
     end
   end
 
@@ -658,7 +658,7 @@ RSpec.describe "builtins" do
       expect_pipe
         .in("✅", "[1,2]")
         .code("(o => o | @keys)")
-        .out("❌", '{"kind":"argument_error","location":"builtin","operation":"keys","status":0,"input":[1,2],"expected":["_ ? @Object"]}')
+        .out("❌", '{"kind":"argument_error","origin":"builtin","operation":"keys","status":0,"input":[1,2],"expected":["_ ? @Object"]}')
     end
   end
 
@@ -681,7 +681,7 @@ RSpec.describe "builtins" do
       expect_pipe
         .in("✅", "5")
         .code("(o => o | @values)")
-        .out("❌", '{"kind":"argument_error","location":"builtin","operation":"values","status":0,"input":5,"expected":["_ ? @Object"]}')
+        .out("❌", '{"kind":"argument_error","origin":"builtin","operation":"values","status":0,"input":5,"expected":["_ ? @Object"]}')
     end
   end
 
@@ -697,21 +697,21 @@ RSpec.describe "builtins" do
       expect_pipe
         .in("✅", '{"a":1}')
         .code('(o => [o, "z"] | @get)')
-        .out("❌", '{"kind":"access_error","location":"builtin","operation":"get","status":0,"input":[{"a":1},"z"],"message":"missing key"}')
+        .out("❌", '{"kind":"access_error","origin":"builtin","operation":"get","status":0,"input":[{"a":1},"z"],"message":"missing key"}')
     end
 
     it "errors (bad index type) on a string key into a non-object" do
       expect_pipe
         .in("✅", "5")
         .code('(o => [o, "b"] | @get)')
-        .out("❌", '{"kind":"argument_error","location":"builtin","operation":"get","status":0,"input":[5,"b"],"expected":["[_ ? @Array, _ ? @Integer]","[_ ? @Object, _ ? @String]"]}')
+        .out("❌", '{"kind":"argument_error","origin":"builtin","operation":"get","status":0,"input":[5,"b"],"expected":["[_ ? @Array, _ ? @Integer]","[_ ? @Object, _ ? @String]"]}')
     end
 
     it "errors with argument_error on a non-pair" do
       expect_pipe
         .in("✅", "[1,2,3]")
         .code("(o => o | @get)")
-        .out("❌", '{"kind":"argument_error","location":"builtin","operation":"get","status":0,"input":[1,2,3],"expected":["[_ ? @Array, _ ? @Integer]","[_ ? @Object, _ ? @String]"]}')
+        .out("❌", '{"kind":"argument_error","origin":"builtin","operation":"get","status":0,"input":[1,2,3],"expected":["[_ ? @Array, _ ? @Integer]","[_ ? @Object, _ ? @String]"]}')
     end
 
     it "reads an array element by integer index" do
@@ -732,14 +732,14 @@ RSpec.describe "builtins" do
       expect_pipe
         .in("✅", "[10,20]")
         .code("(a => [a, 5] | @get)")
-        .out("❌", '{"kind":"access_error","location":"builtin","operation":"get","status":0,"input":[[10,20],5],"message":"index out of range"}')
+        .out("❌", '{"kind":"access_error","origin":"builtin","operation":"get","status":0,"input":[[10,20],5],"message":"index out of range"}')
     end
 
     it "errors (bad index type) on a string index into an array" do
       expect_pipe
         .in("✅", "[1,2]")
         .code('(a => [a, "x"] | @get)')
-        .out("❌", '{"kind":"argument_error","location":"builtin","operation":"get","status":0,"input":[[1,2],"x"],"expected":["[_ ? @Array, _ ? @Integer]","[_ ? @Object, _ ? @String]"]}')
+        .out("❌", '{"kind":"argument_error","origin":"builtin","operation":"get","status":0,"input":[[1,2],"x"],"expected":["[_ ? @Array, _ ? @Integer]","[_ ? @Object, _ ? @String]"]}')
     end
   end
 
@@ -762,14 +762,14 @@ RSpec.describe "builtins" do
       expect_pipe
         .in("✅", '{"a":1}')
         .code('(o => [o, "b"] | @set)')
-        .out("❌", '{"kind":"argument_error","location":"builtin","operation":"set","status":0,"input":[{"a":1},"b"],"expected":["[_ ? @Array, _ ? @Integer, _]","[_ ? @Object, _ ? @String, _]"]}')
+        .out("❌", '{"kind":"argument_error","origin":"builtin","operation":"set","status":0,"input":[{"a":1},"b"],"expected":["[_ ? @Array, _ ? @Integer, _]","[_ ? @Object, _ ? @String, _]"]}')
     end
 
     it "errors (bad index type) on a string key into a non-object" do
       expect_pipe
         .in("✅", "5")
         .code('(o => [o, "b", 2] | @set)')
-        .out("❌", '{"kind":"argument_error","location":"builtin","operation":"set","status":0,"input":[5,"b",2],"expected":["[_ ? @Array, _ ? @Integer, _]","[_ ? @Object, _ ? @String, _]"]}')
+        .out("❌", '{"kind":"argument_error","origin":"builtin","operation":"set","status":0,"input":[5,"b",2],"expected":["[_ ? @Array, _ ? @Integer, _]","[_ ? @Object, _ ? @String, _]"]}')
     end
 
     it "replaces an array element by integer index, returning a new array" do
@@ -790,7 +790,7 @@ RSpec.describe "builtins" do
       expect_pipe
         .in("✅", "[10,20]")
         .code("(a => [a, 5, 99] | @set)")
-        .out("❌", '{"kind":"access_error","location":"builtin","operation":"set","status":0,"input":[[10,20],5,99],"message":"index out of range"}')
+        .out("❌", '{"kind":"access_error","origin":"builtin","operation":"set","status":0,"input":[[10,20],5,99],"message":"index out of range"}')
     end
   end
 
@@ -820,14 +820,14 @@ RSpec.describe "builtins" do
       expect_pipe
         .in("✅", "5")
         .code("(es => es | @toObject)")
-        .out("❌", '{"kind":"argument_error","location":"builtin","operation":"toObject","status":0,"input":5,"expected":["_ ? (xs => {\"xs\": xs, \"f\": ([_ ? @String, _] => true, _ => false)} | @all)"]}')
+        .out("❌", '{"kind":"argument_error","origin":"builtin","operation":"toObject","status":0,"input":5,"expected":["_ ? (xs => {\"xs\": xs, \"f\": ([_ ? @String, _] => true, _ => false)} | @all)"]}')
     end
 
     it "errors on a malformed entry" do
       expect_pipe
         .in("✅", '[["a",1],5]')
         .code("(es => es | @toObject)")
-        .out("❌", '{"kind":"argument_error","location":"builtin","operation":"toObject","status":0,"input":[["a",1],5],"expected":["_ ? (xs => {\"xs\": xs, \"f\": ([_ ? @String, _] => true, _ => false)} | @all)"]}')
+        .out("❌", '{"kind":"argument_error","origin":"builtin","operation":"toObject","status":0,"input":[["a",1],5],"expected":["_ ? (xs => {\"xs\": xs, \"f\": ([_ ? @String, _] => true, _ => false)} | @all)"]}')
     end
   end
 

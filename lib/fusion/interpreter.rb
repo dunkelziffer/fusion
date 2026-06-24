@@ -80,7 +80,7 @@ module Fusion
       raise
     rescue StandardError => err
       Interpreter::ErrorVal.internal(
-        kind: "runtime_error", location: "interpreter", operation: "running the program",
+        kind: "runtime_error", origin: "interpreter", operation: "running the program",
         input: NULL, message: err.message
       )
     rescue SystemExit
@@ -88,49 +88,49 @@ module Fusion
       raise
     rescue SystemStackError
       Interpreter::ErrorVal.internal(
-        kind: "runtime_error", location: "interpreter", operation: "running the program",
+        kind: "runtime_error", origin: "interpreter", operation: "running the program",
         input: NULL, message: "stack level too deep"
       )
     rescue Exception => err # rubocop:disable Lint/RescueException
       # Final net: any other escaped Ruby error becomes a payloaded error too.
       Interpreter::ErrorVal.internal(
-        kind: "runtime_error", location: "interpreter", operation: "running the program",
+        kind: "runtime_error", origin: "interpreter", operation: "running the program",
         input: NULL, message: err.message
       )
     end
 
     # ---- File loading -----------------------------------------------------
     def load_file(abspath)
-      @file_cache[abspath] ||= Thunk.new(origin: file_origin(abspath), input: abspath) do
+      @file_cache[abspath] ||= Thunk.new(site: file_site(abspath), input: abspath) do
         evaluate_file(abspath)
       end
     end
 
-    # The error fields `{location:, file:}` for code at `abspath`.
-    def file_origin(abspath)
+    # The error fields `{origin:, file:}` for code at `abspath`.
+    def file_site(abspath)
       if abspath.start_with?(@stdlib_dir + File::SEPARATOR)
-        { location: "stdlib", file: File.basename(abspath) }
+        { origin: "stdlib", file: File.basename(abspath) }
       else
-        { location: "code", file: File.basename(abspath) }
+        { origin: "code", file: File.basename(abspath) }
       end
     end
 
-    # The error fields `{location:, file:}` for code being evaluated under `env`.
-    def code_origin(env)
+    # The error fields `{origin:, file:}` for code being evaluated under `env`.
+    def code_site(env)
       f = env.context(:file)
       if f == :__unbound__
         # Inline (`-e`) programs and REPL entries report a "<inline>" file.
-        { location: "code", file: "<inline>" }
+        { origin: "code", file: "<inline>" }
       else
-        file_origin(f)
+        file_site(f)
       end
     end
 
     def evaluate_file(abspath)
-      origin = file_origin(abspath)
+      site = file_site(abspath)
       ast = (@ast_cache[abspath] ||= begin
         src = File.read(abspath)
-        Parser.parse_file(src, origin: origin)
+        Parser.parse_file(src, site: site)
       end)
 
       if ast.is_a?(ErrorVal) # a parse error (already a payloaded value)
@@ -138,14 +138,14 @@ module Fusion
       else
         env = root_env.child
         env.set_context(:dir, File.dirname(abspath)) # for resolving @-refs
-        env.set_context(:file, abspath) # for error locations
+        env.set_context(:file, abspath) # for error origins
         env.set_context(:self, load_file(abspath)) # for `@` self-recursion
         eval_expr(ast, env)
       end
     rescue Errno::ENOENT
-      ErrorVal.internal(kind: "reference_error", **origin, operation: "reading file", input: abspath, message: "file not found")
+      ErrorVal.internal(kind: "reference_error", **site, operation: "reading file", input: abspath, message: "file not found")
     rescue SystemCallError => err # EISDIR, EACCES, ... — file-system access failures
-      ErrorVal.internal(kind: "reference_error", **origin, operation: "reading file", input: abspath, message: err.message)
+      ErrorVal.internal(kind: "reference_error", **site, operation: "reading file", input: abspath, message: err.message)
     end
 
     # Evaluate a top-level unit that has no file of its own:
@@ -156,39 +156,39 @@ module Fusion
       # `@env`'s bindings (only non-empty in the REPL), `:dir`, and jail.
       unit_env = @env.child
 
-      thunk = Thunk.new(origin: code_origin(unit_env), input: NULL) { eval_expr(ast, unit_env) }
+      thunk = Thunk.new(site: code_site(unit_env), input: NULL) { eval_expr(ast, unit_env) }
       unit_env.set_context(:self, thunk) # for `@` self-recursion
       thunk.force
     end
 
     # Resolve a bare "@name": sibling file > builtin (incl. load, ENV) > stdlib > !.
-    # `origin` is the `{location:, file:}` of the referencing code (for the unresolved case).
-    def resolve_name(name, dir, origin)
+    # `site` is the `{origin:, file:}` of the referencing code (for the unresolved case).
+    def resolve_name(name, dir, site)
       sibling_file = File.expand_path(name + ".fsn", dir)
       if File.exist?(sibling_file)
-        return jail_error(origin, "resolving @#{name}", name) unless within_jail?(sibling_file)
+        return jail_error(site, "resolving @#{name}", name) unless within_jail?(sibling_file)
 
         return load_file(sibling_file).force
       end
 
-      resolve_builtin_or_stdlib(name, dir, origin)
+      resolve_builtin_or_stdlib(name, dir, site)
     end
 
     # Resolve "@@": the builtin/stdlib that the referencing file shadows. It is its
     # own name resolved with the sibling step skipped (the sibling is itself), so
     # the file can extend what it overrides. There is no file to take super of in
     # an inline (`-e`) or REPL entry.
-    def resolve_super(env, dir, origin)
+    def resolve_super(env, dir, site)
       file = env.context(:file)
       if file == :__unbound__
-        return ErrorVal.internal(kind: "reference_error", **origin, operation: "resolving @@", input: NULL, message: "no enclosing file")
+        return ErrorVal.internal(kind: "reference_error", **site, operation: "resolving @@", input: NULL, message: "no enclosing file")
       end
 
-      resolve_builtin_or_stdlib(File.basename(file, ".fsn"), dir, origin)
+      resolve_builtin_or_stdlib(File.basename(file, ".fsn"), dir, site)
     end
 
     # The non-sibling tail of @name resolution: builtin (incl. load, ENV) > stdlib > !.
-    def resolve_builtin_or_stdlib(name, dir, origin)
+    def resolve_builtin_or_stdlib(name, dir, site)
       if name == "ENV"
         return @env_vars.dup
       end
@@ -199,17 +199,17 @@ module Fusion
         d = dir
         return NativeFunc.new("load", lambda do |v|
           unless v.is_a?(String)
-            next ErrorVal.internal(kind: "argument_error", location: "builtin", operation: "@load", input: v, expected: ["_ ? @String"])
+            next ErrorVal.internal(kind: "argument_error", origin: "builtin", operation: "@load", input: v, expected: ["_ ? @String"])
           end
 
           target = File.expand_path(v, d)
 
           # Check the jail before touching the filesystem, so an out-of-jail
           # path can't be probed for existence.
-          next jail_error({ location: "builtin", file: nil }, "@load", v) unless within_jail?(target)
+          next jail_error({ origin: "builtin", file: nil }, "@load", v) unless within_jail?(target)
 
           unless File.exist?(target)
-            next ErrorVal.internal(kind: "reference_error", location: "builtin", operation: "@load", input: v, message: "file not found")
+            next ErrorVal.internal(kind: "reference_error", origin: "builtin", operation: "@load", input: v, message: "file not found")
           end
 
           load_file(target).force
@@ -225,13 +225,13 @@ module Fusion
         return load_file(stdlib_file).force
       end
 
-      ErrorVal.internal(kind: "reference_error", **origin, operation: "resolving @#{name}", input: name, message: "unresolved reference")
+      ErrorVal.internal(kind: "reference_error", **site, operation: "resolving @#{name}", input: name, message: "unresolved reference")
     end
 
     # Resolve a pure path "@dir/a" or "@../a": file only, never builtin/stdlib.
-    def resolve_path(relpath, dir, origin)
+    def resolve_path(relpath, dir, site)
       target = File.expand_path(relpath + ".fsn", dir)
-      return jail_error(origin, "resolving @#{relpath}", relpath) unless within_jail?(target)
+      return jail_error(site, "resolving @#{relpath}", relpath) unless within_jail?(target)
 
       load_file(target).force
     end
@@ -255,8 +255,8 @@ module Fusion
       abspath == root || abspath.start_with?(root + File::SEPARATOR)
     end
 
-    def jail_error(origin, operation, input)
-      ErrorVal.internal(kind: "reference_error", **origin, operation: operation, input: input, message: "outside the jail")
+    def jail_error(site, operation, input)
+      ErrorVal.internal(kind: "reference_error", **site, operation: operation, input: input, message: "outside the jail")
     end
 
     # ---- Expression evaluation -------------------------------------------
@@ -281,7 +281,7 @@ module Fusion
         value = env.lookup(node.name)
 
         if value == :__unbound__
-          ErrorVal.internal(kind: "binding_error", **code_origin(env), operation: "reading identifier #{node.name}", input: node.name, message: "unbound identifier")
+          ErrorVal.internal(kind: "binding_error", **code_site(env), operation: "reading identifier #{node.name}", input: node.name, message: "unbound identifier")
         else
           value
         end
@@ -299,11 +299,11 @@ module Fusion
 
           self_thunk.force
         when :super
-          resolve_super(env, dir, code_origin(env))
+          resolve_super(env, dir, code_site(env))
         when :name
-          resolve_name(node.path, dir, code_origin(env))
+          resolve_name(node.path, dir, code_site(env))
         else # :path
-          resolve_path(node.path, dir, code_origin(env))
+          resolve_path(node.path, dir, code_site(env))
         end
       when Expression::ArrLit then eval_array(node, env)
       when Expression::ObjLit then eval_object(node, env)
@@ -337,7 +337,7 @@ module Fusion
           if value.is_a?(Array)
             out.concat(value)
           else
-            return ErrorVal.internal(kind: "argument_error", **code_origin(env), operation: "[...] array spread", input: value, expected: ["_ ? @Array"])
+            return ErrorVal.internal(kind: "argument_error", **code_site(env), operation: "[...] array spread", input: value, expected: ["_ ? @Array"])
           end
         else
           raise Unreachable, "Unknown array item #{item.class}"
@@ -365,7 +365,7 @@ module Fusion
           if value.is_a?(Hash)
             out.merge!(value)
           else
-            return ErrorVal.internal(kind: "argument_error", **code_origin(env), operation: "{...} object spread", input: value, expected: ["_ ? @Object"])
+            return ErrorVal.internal(kind: "argument_error", **code_site(env), operation: "{...} object spread", input: value, expected: ["_ ? @Object"])
           end
         else
           raise Unreachable, "Unknown object pair #{pair.class}"
@@ -378,7 +378,7 @@ module Fusion
     def eval_pipe(node, env)
       value = eval_expr(node.left, env)
       function = eval_expr(node.right, env)
-      apply(function, value, code_origin(env))
+      apply(function, value, code_site(env))
     end
 
     def eval_member(node, env)
@@ -389,13 +389,13 @@ module Fusion
         return obj
       end
 
-      origin = code_origin(env)
+      site = code_site(env)
       unless obj.is_a?(Hash)
-        return ErrorVal.internal(kind: "argument_error", **origin, operation: ".#{node.key}", input: [obj, node.key], expected: ["[_ ? @Object, _]"])
+        return ErrorVal.internal(kind: "argument_error", **site, operation: ".#{node.key}", input: [obj, node.key], expected: ["[_ ? @Object, _]"])
       end
 
       unless obj.key?(node.key)
-        return ErrorVal.internal(kind: "access_error", **origin, operation: ".#{node.key}", input: [obj, node.key], message: "missing key")
+        return ErrorVal.internal(kind: "access_error", **site, operation: ".#{node.key}", input: [obj, node.key], message: "missing key")
       end
 
       obj[node.key]
@@ -416,30 +416,30 @@ module Fusion
         return idx
       end
 
-      origin = code_origin(env)
+      site = code_site(env)
       if obj.is_a?(Array) && idx.is_a?(Integer)
         i = idx >= 0 ? idx : obj.length + idx
         if i >= 0 && i < obj.length
           obj[i]
         else
-          ErrorVal.internal(kind: "access_error", **origin, operation: "[#{idx}]", input: [obj, idx], message: "index out of range")
+          ErrorVal.internal(kind: "access_error", **site, operation: "[#{idx}]", input: [obj, idx], message: "index out of range")
         end
       elsif obj.is_a?(Hash) && idx.is_a?(String)
         if obj.key?(idx)
           obj[idx]
         else
-          ErrorVal.internal(kind: "access_error", **origin, operation: "[#{idx.inspect}]", input: [obj, idx], message: "missing key")
+          ErrorVal.internal(kind: "access_error", **site, operation: "[#{idx.inspect}]", input: [obj, idx], message: "missing key")
         end
       else
-        ErrorVal.internal(kind: "argument_error", **origin, operation: "[index]", input: [obj, idx], expected: ["[_ ? @Array, _ ? @Integer]", "[_ ? @Object, _ ? @String]"])
+        ErrorVal.internal(kind: "argument_error", **site, operation: "[index]", input: [obj, idx], expected: ["[_ ? @Array, _ ? @Integer]", "[_ ? @Object, _ ? @String]"])
       end
     end
 
     # ---- Application & matching ------------------------------------------
-    # `origin` is the `{location:, file:}` of the code where the `|` lives, used
+    # `site` is the `{origin:, file:}` of the code where the `|` lives, used
     # if `f` is not a function. It defaults to `interpreter` for apply calls with
     # no code context (e.g. the CLI applying the whole program).
-    def apply(f, v, origin = { location: "interpreter", file: nil })
+    def apply(f, v, site = { origin: "interpreter", file: nil })
       if f.is_a?(ErrorVal)
         # Propagate errors
         return f
@@ -457,7 +457,7 @@ module Fusion
           f.fn.call(v)
         rescue StandardError => err
           kind = (err.is_a?(FloatDomainError) || err.is_a?(ZeroDivisionError)) ? "math_error" : "runtime_error"
-          ErrorVal.internal(kind: kind, location: "builtin", operation: f.name, input: v, message: err.message)
+          ErrorVal.internal(kind: kind, origin: "builtin", operation: f.name, input: v, message: err.message)
         end
       elsif f.is_a?(Func)
         f.clauses.each do |clause|
@@ -469,7 +469,7 @@ module Fusion
           m = begin
             match(clause.pattern, v, clause_env)
           rescue Env::DuplicateBinding => e
-            return ErrorVal.internal(kind: "binding_error", **code_origin(clause_env), operation: "binding identifier #{e.name}", input: e.name, message: "identifier already bound")
+            return ErrorVal.internal(kind: "binding_error", **code_site(clause_env), operation: "binding identifier #{e.name}", input: e.name, message: "identifier already bound")
           end
 
           if m.is_a?(ErrorVal)
@@ -489,7 +489,7 @@ module Fusion
         # lenient default is `null`.
         v.is_a?(ErrorVal) ? v : NULL
       else
-        ErrorVal.internal(kind: "argument_error", **origin, operation: "|", input: [v, f], expected: ["[_, _ ? @Function]"])
+        ErrorVal.internal(kind: "argument_error", **site, operation: "|", input: [v, f], expected: ["[_, _ ? @Function]"])
       end
     end
 
@@ -501,9 +501,9 @@ module Fusion
     def apply_predicate(pred_expr, value, env)
       if pred_expr.is_a?(Expression::Pipe)
         upstream = apply_predicate(pred_expr.left, value, env)
-        apply(eval_expr(pred_expr.right, env), upstream, code_origin(env))
+        apply(eval_expr(pred_expr.right, env), upstream, code_site(env))
       else
-        apply(eval_expr(pred_expr, env), value, code_origin(env))
+        apply(eval_expr(pred_expr, env), value, code_site(env))
       end
     end
 

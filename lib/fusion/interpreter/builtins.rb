@@ -344,13 +344,13 @@ module Fusion
       # `message` (see docs/user/reference.md §6.5). Use this for failures that
       # aren't an input-shape mismatch (math, conversion, access).
       def error(kind, name, v, message)
-        ErrorVal.internal(kind: kind, location: "builtin", operation: name, input: v, message: message)
+        ErrorVal.internal(kind: kind, origin: "builtin", operation: name, input: v, message: message)
       end
 
       # Build an `argument_error` describing the acceptable inputs as a list of
       # Fusion patterns. The input was unacceptable iff it matches none of them.
       def argument_error(name, v, expected)
-        ErrorVal.internal(kind: "argument_error", location: "builtin", operation: name, input: v, expected: expected)
+        ErrorVal.internal(kind: "argument_error", origin: "builtin", operation: name, input: v, expected: expected)
       end
     end
   end

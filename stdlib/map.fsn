@@ -1,5 +1,5 @@
 (
   {"f": _, "xs": []} => [],
   {"f": f, "xs": [x, ...rest]} => [x | f, ...({"f": f, "xs": rest} | @map)],
-  x => !{"kind": "argument_error", "location": "stdlib", "file": "map.fsn", "operation": "map", "status": 0, "input": x | @sanitize, "expected": ["{\"f\": _, \"xs\": _ ? @Array}"]}
+  x => !{"kind": "argument_error", "origin": "stdlib", "file": "map.fsn", "operation": "map", "status": 0, "input": x | @sanitize, "expected": ["{\"f\": _, \"xs\": _ ? @Array}"]}
 )

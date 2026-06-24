@@ -354,14 +354,14 @@ There are two origins of error values, and they differ in payload:
 #### Payload shape
 
 ```json
-{"kind": "argument_error", "location": "builtin", "operation": "add", "status": 0, "input": [1, "x"], "expected": ["[_ ? @Number, _ ? @Number]"]}
+{"kind": "argument_error", "origin": "builtin", "operation": "add", "status": 0, "input": [1, "x"], "expected": ["[_ ? @Number, _ ? @Number]"]}
 ```
 
 | Field       | Required | Meaning                                                                                                                    |
 | ----------- | -------- | -------------------------------------------------------------------------------------------------------------------------- |
 | `kind`      | yes      | The error category, from the closed set below.                                                                             |
-| `location`  | yes      | Where the failing operation lives, from the closed set of six below.                                                       |
-| `file`      | no       | The source basename when `location` is `code` or `stdlib`; `"<inline>"` for inline `-e`/REPL code. Absent only for `builtin`/`input`/`output`/`interpreter`. |
+| `origin`    | yes      | Where the failing operation lives, from the closed set of six below.                                                       |
+| `file`      | no       | The source basename when `origin` is `code` or `stdlib`; `"<inline>"` for inline `-e`/REPL code. Absent only for `builtin`/`input`/`output`/`interpreter`. |
 | `operation` | yes      | A short description of the operation that failed, e.g. `"\|"`, `".name"`, `"[2]"`, `"add"`, `"reading file"`, `"parsing"`. |
 | `status`    | yes      | `0` or `1` — whether the operation received an ordinary value (`0`) or an error value (`1`), mirroring the wire status codes. When `1`, `input` holds that error's bare payload (so `input` is always plain JSON). |
 | `input`     | yes      | The operand(s) the operation received — often the offending value; for member/index access it is `[object, key]`.          |
@@ -382,9 +382,9 @@ There are two origins of error values, and they differ in payload:
 | `runtime_error`       | an unexpected host/interpreter failure, including a stack overflow (`"stack level too deep"`).                  |
 | `serialization_error` | a result, or a user error's payload, has no JSON form — see §9.3.                                              |
 
-#### `location` — the closed set of six
+#### `origin` — the closed set of six
 
-| `location`    | Meaning                                                                  |
+| `origin`      | Meaning                                                                  |
 | ------------- | ------------------------------------------------------------------------ |
 | `builtin`     | a built-in operation (the built-in's name is in `operation`).            |
 | `stdlib`      | a standard-library file (its basename is in `file`).                     |
@@ -606,7 +606,7 @@ the result instead.
   `@ENV`, and pull in `@`-references, then print the value with no pipeline
   input. (Under `-!` the input is an error value instead; empty input then has no
   payload to mark, which is a usage error — see §9.4.)
-- Non-JSON input yields a `syntax_error` at `location: "input"` (§6.5).
+- Non-JSON input yields a `syntax_error` at `origin: "input"` (§6.5).
 - **If the final result is an error**, the interpreter prints **nothing** to
   standard output, prints the error's **payload** (as JSON) to standard error, and
   exits with status `1`. Otherwise the result is printed to standard output and the
@@ -660,7 +660,7 @@ flags:
   for an error. Output is always on stdout, exit code always `0`.
 
 A malformed `array`/`object` input envelope (any other shape; the array tag must
-be exactly the integer `0` or `1`) is an `argument_error` at `location: "input"`.
+be exactly the integer `0` or `1`) is an `argument_error` at `origin: "input"`.
 Like any input failure it flows into the program as an error and is catchable.
 
 Mode support per use case (defaults in bold):
@@ -729,7 +729,7 @@ relative to the working directory.
 - A bound function can call itself through its own name
   (`fact = (0 => 1, n => [n, [n,1] | @subtract | fact] | @multiply)`), because
   the name is looked up at application time.
-- Entries report errors at `location: "code"` with `file: "<inline>"`, like `-e` programs.
+- Entries report errors at `origin: "code"` with `file: "<inline>"`, like `-e` programs.
 
 **Input editing.** An entry is submitted only once it parses as a complete
 statement or expression; until then the session opens a new line so the entry
