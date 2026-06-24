@@ -376,34 +376,24 @@ Future work and open questions are tracked separately in our [Roadmap](./roadmap
 - 🧑 ✅ Every error payload produced by "the runtime" (the interpreter or a built-in function) has the **same shape**. This shape is enforced by constructing "internal errors" via `ErrorVal.internal`. The full schema is documented in [reference §6.5](../user/reference.md#65-the-standardized-error-payload).
 - 🤖 ✅ The stdlib is "ordinary unpriviledged Fusion code" and doesn't produce internal errors.
 - 🧑 ✅ However, all stdlib functions mirror the built-in error shape.
-- 🧑 ✅ Payload fields, in order: `kind`, `location`, `file?`, `operation`, `status`, `input`, `expected?`, `message?`.
-- 🧑 ✅ `location` is one of six fixed values (`builtin`, `stdlib`, `code`, `input`, `output`, `interpreter`); the source basename moves to the optional `file`, which is `"<inline>"` for inline `-e`/REPL code.
-- 🧑 ✅ `status` is `0` (received a value) or `1` (received an error), split out of `input`; on `1`, `input` carries the error's bare payload, so `input` is always valid JSON (0/1 match the wire status codes).
-- 🧑 ✅ `expected` lists the acceptable inputs as Fusion patterns (the input matched none); an error with `expected` never also carries a `message`.
-- 🧑 ✅ A wrong input shape *or* type is a single `argument_error`; its `expected` subsumes the former shape-vs-type split.
-- 🧑 ✅ A constraint no bare pattern can express (e.g. "every element is a string") uses the `@all` stdlib predicate inside the pattern, e.g. `[_ ? (xs => {"xs": xs, "f": @String} | @all), _ ? @String]`.
+- 🔢 ⏪ During function application we differentiated `argument_error` (bad input *shape*, expressible as a pattern without `?`) from `type_error` (bad input *type*). This distinction was reverted. Both errors got unified into a single `argument_error` in §2.13.
 - 🧑 ✅ Member/index access reserves `access_error` for exactly `missing key` and `index out of range`:
-  - Accessing a member of a non-object or indexing with a wrong-typed key is an `argument_error` instead.
+  - Accessing a member of a non-object or indexing with a wrong-typed key is a `type_error` instead.
   - File-system access failures ("missing file", "directory instead of file", "permission denied") are a `reference_error` instead.
-- 🧑 ✅ `runtime_error` is an unexpected host/interpreter failure; it also absorbs a stack overflow (message `"stack level too deep"`).
 
 ### Alternatives
 
 - 🔢 ⏪ Keep the previous split between builtin errors (string payload) and stdlib errors (object payloads). Only document the rule.
-- 🔢 ⏪ Separate `type_error`/`argument_error` kinds and a dedicated `stack_error` — merged into `argument_error` (subsumed by `expected`) and `runtime_error`.
-- 🤖 ⏪ A variable `location` string embedding the file/builtin name, with the error marker living inside `input` — split into the fixed `location` + `file` and the `status` field.
 - 🧑 💭 Don't standardize the error payloads at all.
 
 ### Pros
 
 - Every catch site (`!` pattern) can rely on this default shape.
 - The structured fields make errors self-describing (what failed, where, on what input).
-- `input` is always valid JSON, and `expected` documents the acceptable inputs as patterns a caller can reuse.
 
 ### Cons
 
 - The new structured payloads are more verbose than the old bare strings.
-- A few `expected` patterns must reference the `@all` stdlib helper, so they aren't purely structural.
 - Some converted Ruby messages still leak host detail (e.g. an `Errno` message). Pending per-case cleanup.
 
 ---
@@ -472,6 +462,37 @@ Future work and open questions are tracked separately in our [Roadmap](./roadmap
 ### Cons
 
 - If you really wanted "strict booleans", you'd now need to build them yourselves.
+
+---
+
+## 2.13 Refining the error payload
+
+Refines §2.9: same shape, but with orthogonal fields and a single input-error kind.
+
+### Decisions
+
+- 🧑 ✅ Payload fields, in order: `kind`, `location`, `file?`, `operation`, `status`, `input`, `expected?`, `message?`.
+- 🧑 ✅ `location` is one of six fixed values (`builtin`, `stdlib`, `code`, `input`, `output`, `interpreter`); the source basename moves to the optional `file`, which is `"<inline>"` for inline `-e`/REPL code.
+- 🧑 ✅ `status` is `0` (received a value) or `1` (received an error), split out of `input`; on `1`, `input` carries the error's bare payload, so `input` is always valid JSON.
+- 🧑 ✅ `expected` lists the acceptable inputs as Fusion patterns (the input matched none); an error with `expected` never also carries a `message`.
+- 🧑 ✅ `type_error` is merged into `argument_error`: any wrong input shape *or* type is one `argument_error`, with `expected` subsuming the old split (so a non-object member access or a wrong-typed index is now an `argument_error`).
+- 🧑 ✅ A constraint no bare pattern can express (e.g. "every element is a string") uses the `@all` stdlib predicate inside the pattern, e.g. `[_ ? (xs => {"xs": xs, "f": @String} | @all), _ ? @String]`.
+- 🧑 ✅ `runtime_error` (new) is an unexpected host/interpreter failure; it absorbs the former `stack_error` (a stack overflow, message `"stack level too deep"`).
+
+### Alternatives
+
+- 🔢 ⏪ A variable `location` string embedding the file/builtin name, with the error marker living inside `input` — split into the fixed `location` + `file`, and the `status` field.
+- 🔢 ❌ `status` as the strings `"value"`/`"error"` — chose the integers `0`/`1` to mirror the wire status codes.
+- 🔢 ❌ Over-approximating `expected` patterns for `@join`/`@toObject` (e.g. `[_ ? @Array, _ ? @String]`) — they would match inputs that still fail, breaking "matches ⇒ acceptable"; `@all` keeps them exact.
+
+### Pros
+
+- `input` is always valid JSON; `expected` documents the acceptable inputs as patterns a caller can reuse.
+- A fixed six-value `location` is directly dispatchable; the filename lives in its own `file` field.
+
+### Cons
+
+- A few `expected` patterns must reference the `@all` stdlib helper, so they aren't purely structural.
 
 ---
 
@@ -755,7 +776,7 @@ All access goes through `@`:
 ### Decisions
 
 - 🧑 ✅ The CLI contract already spends stdout (the result) and stderr (the error payload). There is **no third channel**, so a raw Ruby backtrace on stderr would corrupt the contract. Fusion therefore **catches every Ruby error a program can trigger and converts it to a standardized payload**.
-- 🔢 ✅ Conversion happens *both* **deep** (so an error becomes catchable by other code as soon as possible) *and* at a **top-level net** (so nothing escapes). Notably `SystemStackError` becomes a regular error value `runtime_error` on stderr.
+- 🔢 ✅ Conversion happens *both* **deep** (so an error becomes catchable by other code as soon as possible) *and* at a **top-level net** (so nothing escapes). Notably `SystemStackError` becomes a regular error value `stack_error` on stderr.
 - 🧑 ✅ The internal "assertions" (`raise Unreachable`) are a deliberate exception. Reaching them is an interpreter bug. Interpreter bugs should surface and are allowed to violate our CLI contract.
 - 🧑 ✅ The old `FUSION_DEBUG` env var (which wrote to stderr via `warn`) is removed entirely.
 
@@ -830,7 +851,7 @@ TODO: Under `-!` the input is the error payload, so empty stdin is a usage error
 - 🧑 ✅ An entry is an **expression** (evaluated and printed) or an **assignment statement** `identifier = expression` (evaluated, printed, and bound for later entries).
 - 🧑 ✅ An entry is evaluated only once it parses as a whole statement/expression. An incomplete or invalid buffer keeps the entry open to finish or correct.
 - 🧑 ✅ Error results can also get bound to an identifier via the **assignment statement**. When accessing them, they'll propagate regularly.
-- 🤖 ✅ Results print leniently (a function as `"<function>"`, etc.); entries report errors at `location: "code"` with `file: "<inline>"`, like `-e`.
+- 🤖 ✅ Results print leniently (a function as `"<function>"`, etc.); entries report errors at `location: "code <inline>"`, like `-e`.
 - 🤖 ✅ Results go to stdout; the prompt and echoed input go to stderr (like a shell prompt), so stdout is a clean stream of results.
 - 🧑 ✅ `stderr` decorations are styled. Styling never touches `stdout`.
 
