@@ -20,7 +20,7 @@ module Fusion
       ERROR_MARKER        = "#{RED}✗ #{RESET}"
 
       # REPL entries report errors with the same origin as inline (`-e`) code.
-      ORIGIN = { location: "code", file: nil }.freeze
+      ORIGIN = { location: "code", file: "<inline>" }.freeze
 
       def initialize(root_env:)
         @root_env = root_env

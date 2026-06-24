@@ -7,7 +7,7 @@ require "stringio"
 # parsing, the stdout/stderr/exit contract) lives in cli_subprocess_spec.rb; here
 # each public method is exercised directly against its own input/output types.
 RSpec.describe Fusion::CLI do
-  def parse_entry(source) = Fusion::Parser.parse_repl(source, origin: { location: "code", file: nil })
+  def parse_entry(source) = Fusion::Parser.parse_repl(source, origin: { location: "code", file: "<inline>" })
 
   # Run a block with `$stdin`/`$stdout` swapped for in-memory streams; returns
   # whatever was written to `$stdout`.
@@ -190,7 +190,7 @@ RSpec.describe Fusion::CLI do
       result = described_class.apply(Fusion::NULL, fn, environment: environment)
 
       expect(described_class.serialize(result).data).to eq(
-        '{"kind":"binding_error","location":"code","operation":"reading identifier y","status":0,"input":"y","message":"unbound identifier"}'
+        '{"kind":"binding_error","location":"code","file":"<inline>","operation":"reading identifier y","status":0,"input":"y","message":"unbound identifier"}'
       )
     end
 

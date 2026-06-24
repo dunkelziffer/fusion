@@ -14,7 +14,7 @@ RSpec.describe "object syntax" do
         expect_pipe
           .code(src)
           .out("❌", a_string_including(
-            '"kind":"syntax_error"', '"location":"code"', '"operation":"parsing"', '"status":0', %("input":#{src.to_json}),
+            '"kind":"syntax_error"', '"location":"code"', '"file":"<inline>"', '"operation":"parsing"', '"status":0', %("input":#{src.to_json}),
             /"message":"(?:[^"\\]|\\.)*"/
           ))
       end
@@ -37,7 +37,7 @@ RSpec.describe "object syntax" do
         expect_pipe
           .code(src)
           .out("❌", a_string_including(
-            '"kind":"syntax_error"', '"location":"code"', '"operation":"parsing"', '"status":0', %("input":#{src.to_json}),
+            '"kind":"syntax_error"', '"location":"code"', '"file":"<inline>"', '"operation":"parsing"', '"status":0', %("input":#{src.to_json}),
             /"message":"(?:[^"\\]|\\.)*"/
           ))
       end

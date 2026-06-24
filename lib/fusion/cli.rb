@@ -99,7 +99,7 @@ module Fusion
 
     # String (treated as inline source) -> runtime value
     def load_source(inline_source, root_env)
-      ast = Fusion::Parser.parse_file(inline_source, origin: { location: "code", file: nil })
+      ast = Fusion::Parser.parse_file(inline_source, origin: { location: "code", file: "<inline>" })
       return ast if ast.is_a?(Fusion::Interpreter::ErrorVal) # a parse error
 
       inline_env = root_env.child.set_context(:dir, Dir.pwd)

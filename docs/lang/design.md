@@ -377,7 +377,7 @@ Future work and open questions are tracked separately in our [Roadmap](./roadmap
 - 🤖 ✅ The stdlib is "ordinary unpriviledged Fusion code" and doesn't produce internal errors.
 - 🧑 ✅ However, all stdlib functions mirror the built-in error shape.
 - 🧑 ✅ Payload fields, in order: `kind`, `location`, `file?`, `operation`, `status`, `input`, `expected?`, `message?`.
-- 🧑 ✅ `location` is one of six fixed values (`builtin`, `stdlib`, `code`, `input`, `output`, `interpreter`); the source basename moves to the optional `file` (absent for inline `-e`/REPL).
+- 🧑 ✅ `location` is one of six fixed values (`builtin`, `stdlib`, `code`, `input`, `output`, `interpreter`); the source basename moves to the optional `file`, which is `"<inline>"` for inline `-e`/REPL code.
 - 🧑 ✅ `status` is `0` (received a value) or `1` (received an error), split out of `input`; on `1`, `input` carries the error's bare payload, so `input` is always valid JSON (0/1 match the wire status codes).
 - 🧑 ✅ `expected` lists the acceptable inputs as Fusion patterns (the input matched none); an error with `expected` never also carries a `message`.
 - 🧑 ✅ A wrong input shape *or* type is a single `argument_error`; its `expected` subsumes the former shape-vs-type split.
@@ -830,7 +830,7 @@ TODO: Under `-!` the input is the error payload, so empty stdin is a usage error
 - 🧑 ✅ An entry is an **expression** (evaluated and printed) or an **assignment statement** `identifier = expression` (evaluated, printed, and bound for later entries).
 - 🧑 ✅ An entry is evaluated only once it parses as a whole statement/expression. An incomplete or invalid buffer keeps the entry open to finish or correct.
 - 🧑 ✅ Error results can also get bound to an identifier via the **assignment statement**. When accessing them, they'll propagate regularly.
-- 🤖 ✅ Results print leniently (a function as `"<function>"`, etc.); entries report errors at `location: "code"` (no `file`), like `-e`.
+- 🤖 ✅ Results print leniently (a function as `"<function>"`, etc.); entries report errors at `location: "code"` with `file: "<inline>"`, like `-e`.
 - 🤖 ✅ Results go to stdout; the prompt and echoed input go to stderr (like a shell prompt), so stdout is a clean stream of results.
 - 🧑 ✅ `stderr` decorations are styled. Styling never touches `stdout`.
 

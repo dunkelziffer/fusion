@@ -119,8 +119,8 @@ module Fusion
     def code_origin(env)
       f = env.context(:file)
       if f == :__unbound__
-        # Inline (`-e`) programs and REPL entries have no file.
-        { location: "code", file: nil }
+        # Inline (`-e`) programs and REPL entries report a "<inline>" file.
+        { location: "code", file: "<inline>" }
       else
         file_origin(f)
       end

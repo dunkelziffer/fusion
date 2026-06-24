@@ -7,11 +7,11 @@
 # cannot be triggered from Fusion code).
 RSpec.describe "error kinds" do
   describe "syntax_error" do
-    it "from inline source (location: code, no file)" do
+    it "from inline source (location: code, file <inline>)" do
       expect_pipe
         .code("(_ => @")
         .out("❌", a_string_including(
-          '"kind":"syntax_error"', '"location":"code"', '"operation":"parsing"', '"status":0', '"input":"(_ => @"',
+          '"kind":"syntax_error"', '"location":"code"', '"file":"<inline>"', '"operation":"parsing"', '"status":0', '"input":"(_ => @"',
           /"message":"[^"]*"/
         ))
     end
@@ -38,7 +38,7 @@ RSpec.describe "error kinds" do
     it "unresolved @name" do
       expect_pipe
         .code("(_ => @no_such_module)")
-        .out("❌", '{"kind":"reference_error","location":"code","operation":"resolving @no_such_module","status":0,"input":"no_such_module","message":"unresolved reference"}')
+        .out("❌", '{"kind":"reference_error","location":"code","file":"<inline>","operation":"resolving @no_such_module","status":0,"input":"no_such_module","message":"unresolved reference"}')
     end
 
     it "non-productive data cycle" do
@@ -84,14 +84,14 @@ RSpec.describe "error kinds" do
     it "reading an unbound identifier" do
       expect_pipe
         .code("(_ => x)")
-        .out("❌", '{"kind":"binding_error","location":"code","operation":"reading identifier x","status":0,"input":"x","message":"unbound identifier"}')
+        .out("❌", '{"kind":"binding_error","location":"code","file":"<inline>","operation":"reading identifier x","status":0,"input":"x","message":"unbound identifier"}')
     end
 
     it "a duplicate binder in a clause" do
       expect_pipe
         .in("✅", "[1,2]")
         .code("([a, a] => a)")
-        .out("❌", '{"kind":"binding_error","location":"code","operation":"binding identifier a","status":0,"input":"a","message":"identifier already bound"}')
+        .out("❌", '{"kind":"binding_error","location":"code","file":"<inline>","operation":"binding identifier a","status":0,"input":"a","message":"identifier already bound"}')
     end
   end
 
@@ -100,21 +100,21 @@ RSpec.describe "error kinds" do
       expect_pipe
         .in("✅", '{"a":1}')
         .code("(o => o.b)")
-        .out("❌", '{"kind":"access_error","location":"code","operation":".b","status":0,"input":[{"a":1},"b"],"message":"missing key"}')
+        .out("❌", '{"kind":"access_error","location":"code","file":"<inline>","operation":".b","status":0,"input":[{"a":1},"b"],"message":"missing key"}')
     end
 
     it "missing index key on an object" do
       expect_pipe
         .in("✅", '{"a":1}')
         .code('(o => o["b"])')
-        .out("❌", '{"kind":"access_error","location":"code","operation":"[\"b\"]","status":0,"input":[{"a":1},"b"],"message":"missing key"}')
+        .out("❌", '{"kind":"access_error","location":"code","file":"<inline>","operation":"[\"b\"]","status":0,"input":[{"a":1},"b"],"message":"missing key"}')
     end
 
     it "array index out of range" do
       expect_pipe
         .in("✅", "[10,20]")
         .code("(a => a[5])")
-        .out("❌", '{"kind":"access_error","location":"code","operation":"[5]","status":0,"input":[[10,20],5],"message":"index out of range"}')
+        .out("❌", '{"kind":"access_error","location":"code","file":"<inline>","operation":"[5]","status":0,"input":[[10,20],5],"message":"index out of range"}')
     end
   end
 
@@ -122,34 +122,34 @@ RSpec.describe "error kinds" do
     it "array spread of a non-array" do
       expect_pipe
         .code("(_ => [...5])")
-        .out("❌", '{"kind":"argument_error","location":"code","operation":"[...] array spread","status":0,"input":5,"expected":["_ ? @Array"]}')
+        .out("❌", '{"kind":"argument_error","location":"code","file":"<inline>","operation":"[...] array spread","status":0,"input":5,"expected":["_ ? @Array"]}')
     end
 
     it "object spread of a non-object" do
       expect_pipe
         .code("(_ => {...5})")
-        .out("❌", '{"kind":"argument_error","location":"code","operation":"{...} object spread","status":0,"input":5,"expected":["_ ? @Object"]}')
+        .out("❌", '{"kind":"argument_error","location":"code","file":"<inline>","operation":"{...} object spread","status":0,"input":5,"expected":["_ ? @Object"]}')
     end
 
     it "member access on a non-object" do
       expect_pipe
         .in("✅", "5")
         .code("(n => n.foo)")
-        .out("❌", '{"kind":"argument_error","location":"code","operation":".foo","status":0,"input":[5,"foo"],"expected":["[_ ? @Object, _]"]}')
+        .out("❌", '{"kind":"argument_error","location":"code","file":"<inline>","operation":".foo","status":0,"input":[5,"foo"],"expected":["[_ ? @Object, _]"]}')
     end
 
     it "indexing with a wrong-typed key" do
       expect_pipe
         .in("✅", "[1,2]")
         .code('(a => a["x"])')
-        .out("❌", '{"kind":"argument_error","location":"code","operation":"[index]","status":0,"input":[[1,2],"x"],"expected":["[_ ? @Array, _ ? @Integer]","[_ ? @Object, _ ? @String]"]}')
+        .out("❌", '{"kind":"argument_error","location":"code","file":"<inline>","operation":"[index]","status":0,"input":[[1,2],"x"],"expected":["[_ ? @Array, _ ? @Integer]","[_ ? @Object, _ ? @String]"]}')
     end
 
     it "applying a non-function" do
       expect_pipe
         .in("✅", "5")
         .code("(n => n | 42)")
-        .out("❌", '{"kind":"argument_error","location":"code","operation":"|","status":0,"input":[5,42],"expected":["[_, _ ? @Function]"]}')
+        .out("❌", '{"kind":"argument_error","location":"code","file":"<inline>","operation":"|","status":0,"input":[5,42],"expected":["[_, _ ? @Function]"]}')
     end
 
     it "a builtin given the wrong shape of arguments (not a pair)" do

@@ -48,7 +48,7 @@ RSpec.describe "@-resolution" do
     it "errors when there is no enclosing file (an inline program)" do
       expect_pipe
         .code("@@")
-        .out("❌", '{"kind":"reference_error","location":"code","operation":"resolving @@","status":0,"input":null,"message":"no enclosing file"}')
+        .out("❌", '{"kind":"reference_error","location":"code","file":"<inline>","operation":"resolving @@","status":0,"input":null,"message":"no enclosing file"}')
     end
   end
 

@@ -45,7 +45,7 @@ RSpec.describe "comments" do
       expect_pipe
         .code("(_ => 1) # nope")
         .out("❌", a_string_including(
-          '"kind":"syntax_error"', '"location":"code"', '"operation":"parsing"', '"status":0', '"input":"(_ => 1) # nope"',
+          '"kind":"syntax_error"', '"location":"code"', '"file":"<inline>"', '"operation":"parsing"', '"status":0', '"input":"(_ => 1) # nope"',
           /"message":"(?:[^"\\]|\\.)*"/
         ))
     end
@@ -54,7 +54,7 @@ RSpec.describe "comments" do
       expect_pipe
         .code("(_ => 1 # nope\n)")
         .out("❌", a_string_including(
-          '"kind":"syntax_error"', '"location":"code"', '"operation":"parsing"', '"status":0', '"input":"(_ => 1 # nope\n)"',
+          '"kind":"syntax_error"', '"location":"code"', '"file":"<inline>"', '"operation":"parsing"', '"status":0', '"input":"(_ => 1 # nope\n)"',
           /"message":"(?:[^"\\]|\\.)*"/
         ))
     end
@@ -63,7 +63,7 @@ RSpec.describe "comments" do
       expect_pipe
         .code("(_ => \"line1\nline2\")")
         .out("❌", a_string_including(
-          '"kind":"syntax_error"', '"location":"code"', '"operation":"parsing"', '"status":0', '"input":"(_ => \"line1\nline2\")"',
+          '"kind":"syntax_error"', '"location":"code"', '"file":"<inline>"', '"operation":"parsing"', '"status":0', '"input":"(_ => \"line1\nline2\")"',
           /"message":"(?:[^"\\]|\\.)*"/
         ))
     end

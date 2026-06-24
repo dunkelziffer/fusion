@@ -361,7 +361,7 @@ There are two origins of error values, and they differ in payload:
 | ----------- | -------- | -------------------------------------------------------------------------------------------------------------------------- |
 | `kind`      | yes      | The error category, from the closed set below.                                                                             |
 | `location`  | yes      | Where the failing operation lives, from the closed set of six below.                                                       |
-| `file`      | no       | The source basename, when `location` is `code` or `stdlib` and there is a file (absent for inline `-e`/REPL code).         |
+| `file`      | no       | The source basename when `location` is `code` or `stdlib`; `"<inline>"` for inline `-e`/REPL code. Absent only for `builtin`/`input`/`output`/`interpreter`. |
 | `operation` | yes      | A short description of the operation that failed, e.g. `"\|"`, `".name"`, `"[2]"`, `"add"`, `"reading file"`, `"parsing"`. |
 | `status`    | yes      | `0` or `1` — whether the operation received an ordinary value (`0`) or an error value (`1`), mirroring the wire status codes. When `1`, `input` holds that error's bare payload (so `input` is always plain JSON). |
 | `input`     | yes      | The operand(s) the operation received — often the offending value; for member/index access it is `[object, key]`.          |
@@ -388,7 +388,7 @@ There are two origins of error values, and they differ in payload:
 | ------------- | ------------------------------------------------------------------------ |
 | `builtin`     | a built-in operation (the built-in's name is in `operation`).            |
 | `stdlib`      | a standard-library file (its basename is in `file`).                     |
-| `code`        | user source — a file (basename in `file`) or inline `-e`/REPL (no `file`). |
+| `code`        | user source — a file (basename in `file`) or inline `-e`/REPL (`file` is `"<inline>"`). |
 | `input`       | the input channel (stdin or the CLI-argument).                           |
 | `output`      | the output channel (the serialized result).                              |
 | `interpreter` | the interpreter itself, e.g. a stack overflow.                           |
@@ -729,7 +729,7 @@ relative to the working directory.
 - A bound function can call itself through its own name
   (`fact = (0 => 1, n => [n, [n,1] | @subtract | fact] | @multiply)`), because
   the name is looked up at application time.
-- Entries report errors at `location: "code"` (no `file`), like `-e` programs.
+- Entries report errors at `location: "code"` with `file: "<inline>"`, like `-e` programs.
 
 **Input editing.** An entry is submitted only once it parses as a complete
 statement or expression; until then the session opens a new line so the entry
