@@ -373,8 +373,8 @@ Future work and open questions are tracked separately in our [Roadmap](./roadmap
 
 ### Decisions
 
-- 🧑 ✅ Every error payload produced by "the runtime" (the interpreter or a built-in function) has the **same shape**. This shape is enforced by constructing "internal errors" via `ErrorVal.from_runtime`. The full schema is documented in [reference §6.5](../user/reference.md#65-the-standardized-error-payload).
-- 🤖 ✅ The stdlib is "ordinary unpriviledged Fusion code" and doesn't produce internal errors.
+- 🧑 ✅ Every error payload produced by "the runtime" (the interpreter or a built-in function) has the **same shape**. This shape is enforced by constructing "runtime errors" via `ErrorVal.from_runtime`. The full schema is documented in [reference §6.5](../user/reference.md#65-the-standardized-error-payload).
+- 🤖 ✅ The stdlib is "ordinary unpriviledged Fusion code" and doesn't produce runtime errors.
 - 🧑 ✅ However, all stdlib functions mirror the built-in error shape.
 - 🔢 ⏪ During function application we differentiated `argument_error` (bad input *shape*, expressible as a pattern without `?`) from `type_error` (bad input *type*). This distinction was reverted. Both errors got unified into a single `argument_error` in §2.13.
 - 🧑 ✅ Member/index access reserves `access_error` for exactly `missing key` and `index out of range`:
@@ -770,7 +770,7 @@ All access goes through `@`:
 ### Cons
 
 - No streaming; whole input must be buffered and parsed.
-- 🩹 A bare `!` with nonzero exit gives little diagnostic detail. Mitigated for internal errors by more detailed error payloads in 2.9.
+- 🩹 A bare `!` with nonzero exit gives little diagnostic detail. Mitigated for runtime errors by more detailed error payloads in 2.9.
 
 ---
 
@@ -800,21 +800,21 @@ All access goes through `@`:
 
 ---
 
-## 4.3 Internal errors and lenient JSON serialization
+## 4.3 Runtime errors and lenient JSON serialization
 
 ### Decisions
 
 - 🔢 ✅ To serialize values without a valid JSON representation, we introduce "lenient serialization". Values without JSON representation get turned into string representations (`"<function>"` and `"<Infinity>"`/`"<-Infinity>"`/`"<NaN>"`).
 - 🧑 ✅ The remaining data structure gets preserved.
-- 🔢 ✅ Internal errors (`ErrorVal#runtime?`) get serialized leniently by default, so their info isn't obscured by a `serialization_error`.
-- 🤖 ✅ The stdlib doesn't produce internal errors.
+- 🔢 ✅ Runtime errors (`ErrorVal#runtime?`) get serialized leniently by default, so their info isn't obscured by a `serialization_error`.
+- 🤖 ✅ The stdlib doesn't produce runtime errors.
 - 🧑 ✅ However, all stdlib functions use `@sanitize` to mimick the lenient JSON serialization and preserve as much info as possible.
-- 🧑 ✅ Ordinary values and user errors are serialized strictly to avoid surprising type conversions. If they fail to serialize, they get turned into an internal `serialization_error` and will subsequently get serialized leniently.
+- 🧑 ✅ Ordinary values and user errors are serialized strictly to avoid surprising type conversions. If they fail to serialize, they get turned into a runtime `serialization_error` and will subsequently get serialized leniently.
 
 ### Alternatives
 
-- 🤖 ❌ The standard library could create real "internal errors" via a dedicated `@raise` primitive. Declined, because it offers little over the `!` prefix and would let any code (not just the stdlib) create internal errors. The main reason for internal errors (apart from enforcing a consistent shape) is lenient serialization.
-- 🧑 ❌ Internal errors also serialize strictly by default. Rejected, because this would turn too many errors into a `serialization_error` and would lose too much information.
+- 🤖 ❌ The standard library could create real "runtime errors" via a dedicated `@raise` primitive. Declined, because it offers little over the `!` prefix and would let any code (not just the stdlib) create runtime errors. The main reason for runtime errors (apart from enforcing a consistent shape) is lenient serialization.
+- 🧑 ❌ Runtime errors also serialize strictly by default. Rejected, because this would turn too many errors into a `serialization_error` and would lose too much information.
 - 🧑 💭 All errors serialize leniently by default. Rejected, because this hides real errors (e.g. `NaN` or a function as a result) behind an automatic type conversion.
 
 ---
