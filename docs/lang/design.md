@@ -376,6 +376,8 @@ Future work and open questions are tracked separately in our [Roadmap](./roadmap
 - 🧑 ✅ Every error payload produced by "the runtime" (the interpreter or a built-in function) has the **same shape**. This shape is enforced by constructing "runtime errors" via `ErrorVal.from_runtime`. The full schema is documented in [reference §6.5](../user/reference.md#65-the-standardized-error-payload).
 - 🤖 ✅ The stdlib is "ordinary unpriviledged Fusion code" and doesn't produce runtime errors.
 - 🧑 ✅ However, all stdlib functions mirror the built-in error shape.
+- 🧑 ✅ stdlib functions preemptively handle all *argument* errors: for those they appear atomic, and the error refers to the stdlib function itself (its `origin`/`file`/`operation`).
+- 🧑 ✅ stdlib functions are *transparent* for inner errors — they can't catch every possible error from inner operations, so an inner error bubbles through unchanged. The purest example is `@map`, which knows nothing about the given `f`: an error from `f` originates from `f` and simply bubbles through `map`.
 - 🔢 ⏪ During function application we differentiated `argument_error` (bad input *shape*, expressible as a pattern without `?`) from `type_error` (bad input *type*). This distinction was reverted. Both errors got unified into a single `argument_error` in §2.13.
 - 🧑 ✅ Member/index access reserves `access_error` for exactly `missing key` and `index out of range`:
   - Accessing a member of a non-object or indexing with a wrong-typed key is a `type_error` instead.
