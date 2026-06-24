@@ -19,7 +19,7 @@ RSpec.describe "CLI (exe/fusion)" do
   FIX  = File.expand_path("fixtures", __dir__)
 
   let(:division_by_zero) do
-    '{"kind":"math_error","origin":"builtin","operation":"divide","status":0,"input":[1,0],"message":"division by zero"}'
+    '{"kind":"math_error","origin":"builtin","operation":"@divide","status":0,"input":[1,0],"message":"division by zero"}'
   end
 
   # Run the binary with the given args and stdin; returns [stdout, stderr, status].

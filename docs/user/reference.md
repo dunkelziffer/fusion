@@ -354,15 +354,15 @@ There are two origins of error values, and they differ in payload:
 #### Payload shape
 
 ```json
-{"kind": "argument_error", "origin": "builtin", "operation": "add", "status": 0, "input": [1, "x"], "expected": ["[_ ? @Number, _ ? @Number]"]}
+{"kind": "argument_error", "origin": "builtin", "operation": "@add", "status": 0, "input": [1, "x"], "expected": ["[_ ? @Number, _ ? @Number]"]}
 ```
 
 | Field       | Required | Meaning                                                                                                                    |
 | ----------- | -------- | -------------------------------------------------------------------------------------------------------------------------- |
 | `kind`      | yes      | The error category, from the closed set below.                                                                             |
 | `origin`    | yes      | Where the failing operation lives, from the closed set of six below.                                                       |
-| `file`      | no       | The source basename when `origin` is `code` or `stdlib`; `"<inline>"` for inline `-e`/REPL code. Absent only for `builtin`/`input`/`output`/`interpreter`. |
-| `operation` | yes      | A short description of the operation that failed, e.g. `"\|"`, `".name"`, `"[2]"`, `"add"`, `"reading file"`, `"parsing"`. |
+| `file`      | no       | The source file's basename — only when `origin` is `code` (`"<inline>"` for inline `-e`/REPL). Absent for every other origin.                          |
+| `operation` | yes      | The operation that failed. A built-in or stdlib function is named by its `@`-reference (`"@add"`, `"@math/square"`) — exactly the expression that retrieves it; a syntactic operation by its form (`"\|"`, `".name"`, `"[2]"`, `"reading file"`, `"parsing"`). |
 | `status`    | yes      | `0` or `1` — whether the operation received an ordinary value (`0`) or an error value (`1`), mirroring the wire status codes. When `1`, `input` holds that error's bare payload (so `input` is always plain JSON). |
 | `input`     | yes      | The operand(s) the operation received — often the offending value; for member/index access it is `[object, key]`.          |
 | `expected`  | no       | The acceptable inputs as a list of Fusion **patterns**; the input matched none of them (e.g. `["[_ ? @Number, _ ? @Number]"]`). Mutually exclusive with `message`. |
@@ -387,8 +387,8 @@ There are two origins of error values, and they differ in payload:
 
 | `origin`      | Meaning                                                                  |
 | ------------- | ------------------------------------------------------------------------ |
-| `builtin`     | a built-in operation (the built-in's name is in `operation`).            |
-| `stdlib`      | a standard-library file (its basename is in `file`).                     |
+| `builtin`     | a built-in operation (named by its `@`-reference in `operation`).        |
+| `stdlib`      | a standard-library function (named by its `@`-reference in `operation`; no `file`). |
 | `code`        | user source — a file (basename in `file`) or inline `-e`/REPL (`file` is `"<inline>"`). |
 | `input`       | the input channel (stdin or the CLI-argument).                           |
 | `output`      | the output channel (the serialized result).                              |

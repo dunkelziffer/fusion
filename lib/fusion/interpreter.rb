@@ -106,10 +106,12 @@ module Fusion
       end
     end
 
-    # The error fields `{origin:, file:}` for code at `abspath`.
+    # The error origin (`{origin:, file?:}`) for code at `abspath`. stdlib is part
+    # of the core language, so its internal filenames are never exposed; only
+    # user `code` carries a `file`.
     def file_site(abspath)
       if abspath.start_with?(@stdlib_dir + File::SEPARATOR)
-        { origin: "stdlib", file: File.basename(abspath) }
+        { origin: "stdlib" }
       else
         { origin: "code", file: File.basename(abspath) }
       end
@@ -458,7 +460,7 @@ module Fusion
         rescue StandardError => err
           # TODO: move math errors into the builtins. This should become a safety net for unpredicted errors.
           kind = (err.is_a?(FloatDomainError) || err.is_a?(ZeroDivisionError)) ? "math_error" : "internal_error"
-          ErrorVal.from_runtime(kind: kind, origin: "builtin", operation: f.name, input: v, message: err.message)
+          ErrorVal.from_runtime(kind: kind, origin: "builtin", operation: "@#{f.name}", input: v, message: err.message)
         end
       elsif f.is_a?(Func)
         f.clauses.each do |clause|

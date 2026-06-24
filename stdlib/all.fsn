@@ -3,5 +3,5 @@
 (
   {"f": _, "xs": []} => true,
   {"f": f, "xs": [x, ...rest]} => [x | f, {"f": f, "xs": rest} | @all] | @and,
-  x => !{"kind": "argument_error", "origin": "stdlib", "file": "all.fsn", "operation": "all", "status": 0, "input": x | @sanitize, "expected": ["{\"f\": _, \"xs\": _ ? @Array}"]}
+  x => !{"kind": "argument_error", "origin": "stdlib", "operation": "@all", "status": 0, "input": x | @sanitize, "expected": ["{\"f\": _, \"xs\": _ ? @Array}"]}
 )

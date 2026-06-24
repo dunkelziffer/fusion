@@ -156,7 +156,7 @@ RSpec.describe "error kinds" do
       expect_pipe
         .in("✅", "[1,2,3]")
         .code("(p => p | @add)")
-        .out("❌", '{"kind":"argument_error","origin":"builtin","operation":"add","status":0,"input":[1,2,3],"expected":["[_ ? @Number, _ ? @Number]"]}')
+        .out("❌", '{"kind":"argument_error","origin":"builtin","operation":"@add","status":0,"input":[1,2,3],"expected":["[_ ? @Number, _ ? @Number]"]}')
     end
   end
 
@@ -165,7 +165,7 @@ RSpec.describe "error kinds" do
       expect_pipe
         .in("✅", "[1,0]")
         .code("(p => p | @divide)")
-        .out("❌", '{"kind":"math_error","origin":"builtin","operation":"divide","status":0,"input":[1,0],"message":"division by zero"}')
+        .out("❌", '{"kind":"math_error","origin":"builtin","operation":"@divide","status":0,"input":[1,0],"message":"division by zero"}')
     end
   end
 
@@ -174,7 +174,7 @@ RSpec.describe "error kinds" do
       expect_pipe
         .in("✅", "[1,2]")
         .code("(v => v | @toString)")
-        .out("❌", '{"kind":"conversion_error","origin":"builtin","operation":"toString","status":0,"input":[1,2],"message":"cannot stringify this value type"}')
+        .out("❌", '{"kind":"conversion_error","origin":"builtin","operation":"@toString","status":0,"input":[1,2],"message":"cannot stringify this value type"}')
     end
   end
 
@@ -246,19 +246,19 @@ RSpec.describe "error kinds" do
     it "renders a function in input as \"<function>\"" do
       expect_pipe
         .code("(_ => (y => y) | @floor)")
-        .out("❌", '{"kind":"argument_error","origin":"builtin","operation":"floor","status":0,"input":"<function>","expected":["_ ? @Number"]}')
+        .out("❌", '{"kind":"argument_error","origin":"builtin","operation":"@floor","status":0,"input":"<function>","expected":["_ ? @Number"]}')
     end
 
     it "renders a function nested in input as \"<function>\"" do
       expect_pipe
         .code("(_ => [(y => y), 1] | @add)")
-        .out("❌", '{"kind":"argument_error","origin":"builtin","operation":"add","status":0,"input":["<function>",1],"expected":["[_ ? @Number, _ ? @Number]"]}')
+        .out("❌", '{"kind":"argument_error","origin":"builtin","operation":"@add","status":0,"input":["<function>",1],"expected":["[_ ? @Number, _ ? @Number]"]}')
     end
 
     it "renders a non-finite number in input as \"<Infinity>\"" do
       expect_pipe
         .code("(_ => 1e400 | @floor)")
-        .out("❌", '{"kind":"math_error","origin":"builtin","operation":"floor","status":0,"input":"<Infinity>","message":"not a finite number"}')
+        .out("❌", '{"kind":"math_error","origin":"builtin","operation":"@floor","status":0,"input":"<Infinity>","message":"not a finite number"}')
     end
   end
 

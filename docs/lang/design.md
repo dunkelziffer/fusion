@@ -376,7 +376,7 @@ Future work and open questions are tracked separately in our [Roadmap](./roadmap
 - 🧑 ✅ Every error payload produced by "the runtime" (the interpreter or a built-in function) has the **same shape**. This shape is enforced by constructing "runtime errors" via `ErrorVal.from_runtime`. The full schema is documented in [reference §6.5](../user/reference.md#65-the-standardized-error-payload).
 - 🤖 ✅ The stdlib is "ordinary unpriviledged Fusion code" and doesn't produce runtime errors.
 - 🧑 ✅ However, all stdlib functions mirror the built-in error shape.
-- 🧑 ✅ stdlib functions preemptively handle all *argument* errors: for those they appear atomic, and the error refers to the stdlib function itself (its `origin`/`file`/`operation`).
+- 🧑 ✅ stdlib functions preemptively handle all *argument* errors: for those they appear atomic, and the error refers to the stdlib function itself (`origin: "stdlib"`, `operation` = its `@`-reference).
 - 🧑 ✅ stdlib functions are *transparent* for inner errors — they can't catch every possible error from inner operations, so an inner error bubbles through unchanged. The purest example is `@map`, which knows nothing about the given `f`: an error from `f` originates from `f` and simply bubbles through `map`.
 - 🔢 ⏪ During function application we differentiated `argument_error` (bad input *shape*, expressible as a pattern without `?`) from `type_error` (bad input *type*). This distinction was reverted. Both errors got unified into a single `argument_error` in §2.13.
 - 🧑 ✅ Member/index access reserves `access_error` for exactly `missing key` and `index out of range`:
@@ -474,7 +474,8 @@ Refines §2.9: same shape, but with orthogonal fields and a single input-error k
 ### Decisions
 
 - 🧑 ✅ Payload fields, in order: `kind`, `origin`, `file?`, `operation`, `status`, `input`, `expected?`, `message?`.
-- 🧑 ✅ `origin` is one of six fixed values (`builtin`, `stdlib`, `code`, `input`, `output`, `interpreter`); the source basename moves to the optional `file`, which is `"<inline>"` for inline `-e`/REPL code.
+- 🧑 ✅ `origin` is one of six fixed values (`builtin`, `stdlib`, `code`, `input`, `output`, `interpreter`). The optional `file` carries the user source basename — only for `code` (`"<inline>"` for inline `-e`/REPL); other origins have no `file`.
+- 🧑 ✅ `operation` is the failing operation's own **`@`-reference** for a builtin or stdlib function (`@add`, `@math/square`, `@OP.add`) — exactly the expression that retrieves that function, so `[failed_fn, @ref] | @equals` holds. Built-in *syntax* names its form instead (`|`, `.key`, `[i]`, `parsing`, …). Since the `@`-reference already identifies the stdlib source, `stdlib` needs no `file`.
 - 🧑 ✅ `status` is `0` (received a value) or `1` (received an error), split out of `input`; on `1`, `input` carries the error's bare payload, so `input` is always valid JSON.
 - 🧑 ✅ `expected` lists the acceptable inputs as Fusion patterns (the input matched none); an error with `expected` never also carries a `message`.
 - 🧑 ✅ `type_error` is merged into `argument_error`: any wrong input shape *or* type is one `argument_error`, with `expected` subsuming the old split (so a non-object member access or a wrong-typed index is now an `argument_error`).
@@ -488,6 +489,7 @@ Refines §2.9: same shape, but with orthogonal fields and a single input-error k
 - 🔢 ⏪ Named this field `location` — renamed to `origin`, a better fit for a coarse "which subsystem" tag now that the filename lives in `file`.
 - 🔢 ❌ `status` as the strings `"value"`/`"error"` — chose the integers `0`/`1` to mirror the wire status codes.
 - 🔢 ❌ Over-approximating `expected` patterns for `@join`/`@toObject` (e.g. `[_ ? @Array, _ ? @String]`) — they would match inputs that still fail, breaking "matches ⇒ acceptable"; `@all` keeps them exact.
+- 🔢 ❌ `operation` = the *literal source text* of the `|`'s right-hand side. Not implementable: the text isn't available where the error is born; stamping it at `apply` would relabel inner errors bubbling *through* a function (violating §2.9 transparency); and an indirect RHS like `f` is uninformative. The producer's own `@`-reference gives the same result for a direct call and stays correct otherwise.
 - 🧑 ❌ Drop `conversion_error` and have a failed conversion (e.g. `@parseNumber` of `"abc"`) return `null` (a "Maybe", as Ruby's `Integer(s, exception: false)` does). Rejected: the error payload carries more information, `| (! => null)` recovers the lenient form in one token, and forcing a catch keeps errors local — which matters with no backtraces. (A `null` would slip downstream and surface far from its cause.)
 
 ### Pros

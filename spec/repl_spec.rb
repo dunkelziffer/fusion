@@ -17,7 +17,7 @@ RSpec.describe Fusion::CLI::Repl do
   let(:environment) { Fusion::Interpreter::Env.new.set_context(:dir, Dir.pwd) }
 
   let(:division_by_zero) do
-    '{"kind":"math_error","origin":"builtin","operation":"divide","status":0,"input":[1,0],"message":"division by zero"}'
+    '{"kind":"math_error","origin":"builtin","operation":"@divide","status":0,"input":[1,0],"message":"division by zero"}'
   end
 
   let(:self_cycle) do

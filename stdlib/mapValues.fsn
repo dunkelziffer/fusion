@@ -1,5 +1,5 @@
 # Apply f to each value of an object, keeping the keys. Input: {"f": fn, "object": obj}.
 (
   {"f": f, "object": obj ? @Object} => {"f": (k => [k, [obj, k] | @get | f]), "xs": obj | @keys} | @map | @toObject,
-  x => !{"kind": "argument_error", "origin": "stdlib", "file": "mapValues.fsn", "operation": "mapValues", "status": 0, "input": x | @sanitize, "expected": ["{\"f\": _, \"object\": _ ? @Object}"]}
+  x => !{"kind": "argument_error", "origin": "stdlib", "operation": "@mapValues", "status": 0, "input": x | @sanitize, "expected": ["{\"f\": _, \"object\": _ ? @Object}"]}
 )
