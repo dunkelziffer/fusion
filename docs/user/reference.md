@@ -379,7 +379,8 @@ There are two origins of error values, and they differ in payload:
 | `access_error`        | a missing object key or an out-of-range array index — and nothing else (a non-object member access or a wrong-typed index is an `argument_error`). |
 | `math_error`          | division or modulo by zero, or a non-finite number.                                                            |
 | `conversion_error`    | a value cannot be converted (`@toString` of an unconvertible type, `@parseNumber` of a non-numeric string).    |
-| `runtime_error`       | an unexpected host/interpreter failure, including a stack overflow (`"stack level too deep"`).                  |
+| `limit_error`         | a runtime resource limit was exceeded — currently a stack overflow (`"stack level too deep"`).                                                       |
+| `internal_error`      | an unexpected host/interpreter failure: a Ruby error the engine caught rather than letting it crash the process. Should not happen in correct programs. |
 | `serialization_error` | a result, or a user error's payload, has no JSON form — see §9.3.                                              |
 
 #### `origin` — the closed set of six

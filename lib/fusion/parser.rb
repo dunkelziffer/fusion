@@ -31,7 +31,7 @@ module Fusion
       p.expect(:eof)
       expr
     rescue ParseError => err
-      Interpreter::ErrorVal.internal(kind: "syntax_error", **site, operation: "parsing", input: src, message: err.message)
+      Interpreter::ErrorVal.from_runtime(kind: "syntax_error", **site, operation: "parsing", input: src, message: err.message)
     end
 
     # Parse one REPL entry — a statement (`identifier "=" expr`) or a bare
@@ -46,7 +46,7 @@ module Fusion
       p.expect(:eof)
       entry
     rescue ParseError => err
-      Interpreter::ErrorVal.internal(kind: "syntax_error", **site, operation: "parsing", input: src, message: err.message)
+      Interpreter::ErrorVal.from_runtime(kind: "syntax_error", **site, operation: "parsing", input: src, message: err.message)
     end
 
     # A leading `identifier =` marks a statement; anything else is an expression.

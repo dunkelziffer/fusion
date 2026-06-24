@@ -263,7 +263,7 @@ RSpec.describe "error kinds" do
   end
 
   # NOTE: observable only at the CLI boundary, tested in cli_spec.rb
-  describe "runtime_error (stack overflow)"
+  describe "limit_error (stack overflow)"
 
   # The interpreter keeps two internal-invariant guards that raise a Ruby
   # Fusion::Unreachable instead of producing a payload (design §2.9, the one deliberate

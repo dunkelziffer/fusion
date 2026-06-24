@@ -100,10 +100,10 @@ RSpec.describe Fusion::CLI::Repl do
   end
 
   describe "#handle (per-entry safety net)" do
-    it "turns a stack overflow into a runtime_error and keeps the session alive" do
+    it "turns a stack overflow into a limit_error and keeps the session alive" do
       repl.handle("loop = (n => n | loop)", environment)
       expect(repl.handle("1 | loop", environment)).to eq(
-        '!{"kind":"runtime_error","origin":"interpreter",' \
+        '!{"kind":"limit_error","origin":"interpreter",' \
         '"operation":"running the program","status":0,"input":null,"message":"stack level too deep"}'
       )
       expect(repl.handle('"still alive"', environment)).to eq('"still alive"')

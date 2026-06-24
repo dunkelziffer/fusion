@@ -79,22 +79,22 @@ module Fusion
       # An interpreter bug. Allowed to surface.
       raise
     rescue StandardError => err
-      Interpreter::ErrorVal.internal(
-        kind: "runtime_error", origin: "interpreter", operation: "running the program",
+      Interpreter::ErrorVal.from_runtime(
+        kind: "internal_error", origin: "interpreter", operation: "running the program",
         input: NULL, message: err.message
       )
     rescue SystemExit
       # Let exit/abort through.
       raise
     rescue SystemStackError
-      Interpreter::ErrorVal.internal(
-        kind: "runtime_error", origin: "interpreter", operation: "running the program",
+      Interpreter::ErrorVal.from_runtime(
+        kind: "limit_error", origin: "interpreter", operation: "running the program",
         input: NULL, message: "stack level too deep"
       )
     rescue Exception => err # rubocop:disable Lint/RescueException
       # Final net: any other escaped Ruby error becomes a payloaded error too.
-      Interpreter::ErrorVal.internal(
-        kind: "runtime_error", origin: "interpreter", operation: "running the program",
+      Interpreter::ErrorVal.from_runtime(
+        kind: "internal_error", origin: "interpreter", operation: "running the program",
         input: NULL, message: err.message
       )
     end
@@ -143,9 +143,9 @@ module Fusion
         eval_expr(ast, env)
       end
     rescue Errno::ENOENT
-      ErrorVal.internal(kind: "reference_error", **site, operation: "reading file", input: abspath, message: "file not found")
+      ErrorVal.from_runtime(kind: "reference_error", **site, operation: "reading file", input: abspath, message: "file not found")
     rescue SystemCallError => err # EISDIR, EACCES, ... — file-system access failures
-      ErrorVal.internal(kind: "reference_error", **site, operation: "reading file", input: abspath, message: err.message)
+      ErrorVal.from_runtime(kind: "reference_error", **site, operation: "reading file", input: abspath, message: err.message)
     end
 
     # Evaluate a top-level unit that has no file of its own:
@@ -181,7 +181,7 @@ module Fusion
     def resolve_super(env, dir, site)
       file = env.context(:file)
       if file == :__unbound__
-        return ErrorVal.internal(kind: "reference_error", **site, operation: "resolving @@", input: NULL, message: "no enclosing file")
+        return ErrorVal.from_runtime(kind: "reference_error", **site, operation: "resolving @@", input: NULL, message: "no enclosing file")
       end
 
       resolve_builtin_or_stdlib(File.basename(file, ".fsn"), dir, site)
@@ -199,7 +199,7 @@ module Fusion
         d = dir
         return NativeFunc.new("load", lambda do |v|
           unless v.is_a?(String)
-            next ErrorVal.internal(kind: "argument_error", origin: "builtin", operation: "@load", input: v, expected: ["_ ? @String"])
+            next ErrorVal.from_runtime(kind: "argument_error", origin: "builtin", operation: "@load", input: v, expected: ["_ ? @String"])
           end
 
           target = File.expand_path(v, d)
@@ -209,7 +209,7 @@ module Fusion
           next jail_error({ origin: "builtin", file: nil }, "@load", v) unless within_jail?(target)
 
           unless File.exist?(target)
-            next ErrorVal.internal(kind: "reference_error", origin: "builtin", operation: "@load", input: v, message: "file not found")
+            next ErrorVal.from_runtime(kind: "reference_error", origin: "builtin", operation: "@load", input: v, message: "file not found")
           end
 
           load_file(target).force
@@ -225,7 +225,7 @@ module Fusion
         return load_file(stdlib_file).force
       end
 
-      ErrorVal.internal(kind: "reference_error", **site, operation: "resolving @#{name}", input: name, message: "unresolved reference")
+      ErrorVal.from_runtime(kind: "reference_error", **site, operation: "resolving @#{name}", input: name, message: "unresolved reference")
     end
 
     # Resolve a pure path "@dir/a" or "@../a": file only, never builtin/stdlib.
@@ -256,7 +256,7 @@ module Fusion
     end
 
     def jail_error(site, operation, input)
-      ErrorVal.internal(kind: "reference_error", **site, operation: operation, input: input, message: "outside the jail")
+      ErrorVal.from_runtime(kind: "reference_error", **site, operation: operation, input: input, message: "outside the jail")
     end
 
     # ---- Expression evaluation -------------------------------------------
@@ -281,7 +281,7 @@ module Fusion
         value = env.lookup(node.name)
 
         if value == :__unbound__
-          ErrorVal.internal(kind: "binding_error", **code_site(env), operation: "reading identifier #{node.name}", input: node.name, message: "unbound identifier")
+          ErrorVal.from_runtime(kind: "binding_error", **code_site(env), operation: "reading identifier #{node.name}", input: node.name, message: "unbound identifier")
         else
           value
         end
@@ -337,7 +337,7 @@ module Fusion
           if value.is_a?(Array)
             out.concat(value)
           else
-            return ErrorVal.internal(kind: "argument_error", **code_site(env), operation: "[...] array spread", input: value, expected: ["_ ? @Array"])
+            return ErrorVal.from_runtime(kind: "argument_error", **code_site(env), operation: "[...] array spread", input: value, expected: ["_ ? @Array"])
           end
         else
           raise Unreachable, "Unknown array item #{item.class}"
@@ -365,7 +365,7 @@ module Fusion
           if value.is_a?(Hash)
             out.merge!(value)
           else
-            return ErrorVal.internal(kind: "argument_error", **code_site(env), operation: "{...} object spread", input: value, expected: ["_ ? @Object"])
+            return ErrorVal.from_runtime(kind: "argument_error", **code_site(env), operation: "{...} object spread", input: value, expected: ["_ ? @Object"])
           end
         else
           raise Unreachable, "Unknown object pair #{pair.class}"
@@ -391,11 +391,11 @@ module Fusion
 
       site = code_site(env)
       unless obj.is_a?(Hash)
-        return ErrorVal.internal(kind: "argument_error", **site, operation: ".#{node.key}", input: [obj, node.key], expected: ["[_ ? @Object, _]"])
+        return ErrorVal.from_runtime(kind: "argument_error", **site, operation: ".#{node.key}", input: [obj, node.key], expected: ["[_ ? @Object, _]"])
       end
 
       unless obj.key?(node.key)
-        return ErrorVal.internal(kind: "access_error", **site, operation: ".#{node.key}", input: [obj, node.key], message: "missing key")
+        return ErrorVal.from_runtime(kind: "access_error", **site, operation: ".#{node.key}", input: [obj, node.key], message: "missing key")
       end
 
       obj[node.key]
@@ -422,16 +422,16 @@ module Fusion
         if i >= 0 && i < obj.length
           obj[i]
         else
-          ErrorVal.internal(kind: "access_error", **site, operation: "[#{idx}]", input: [obj, idx], message: "index out of range")
+          ErrorVal.from_runtime(kind: "access_error", **site, operation: "[#{idx}]", input: [obj, idx], message: "index out of range")
         end
       elsif obj.is_a?(Hash) && idx.is_a?(String)
         if obj.key?(idx)
           obj[idx]
         else
-          ErrorVal.internal(kind: "access_error", **site, operation: "[#{idx.inspect}]", input: [obj, idx], message: "missing key")
+          ErrorVal.from_runtime(kind: "access_error", **site, operation: "[#{idx.inspect}]", input: [obj, idx], message: "missing key")
         end
       else
-        ErrorVal.internal(kind: "argument_error", **site, operation: "[index]", input: [obj, idx], expected: ["[_ ? @Array, _ ? @Integer]", "[_ ? @Object, _ ? @String]"])
+        ErrorVal.from_runtime(kind: "argument_error", **site, operation: "[index]", input: [obj, idx], expected: ["[_ ? @Array, _ ? @Integer]", "[_ ? @Object, _ ? @String]"])
       end
     end
 
@@ -456,8 +456,9 @@ module Fusion
         begin
           f.fn.call(v)
         rescue StandardError => err
-          kind = (err.is_a?(FloatDomainError) || err.is_a?(ZeroDivisionError)) ? "math_error" : "runtime_error"
-          ErrorVal.internal(kind: kind, origin: "builtin", operation: f.name, input: v, message: err.message)
+          # TODO: move math errors into the builtins. This should become a safety net for unpredicted errors.
+          kind = (err.is_a?(FloatDomainError) || err.is_a?(ZeroDivisionError)) ? "math_error" : "internal_error"
+          ErrorVal.from_runtime(kind: kind, origin: "builtin", operation: f.name, input: v, message: err.message)
         end
       elsif f.is_a?(Func)
         f.clauses.each do |clause|
@@ -469,7 +470,7 @@ module Fusion
           m = begin
             match(clause.pattern, v, clause_env)
           rescue Env::DuplicateBinding => e
-            return ErrorVal.internal(kind: "binding_error", **code_site(clause_env), operation: "binding identifier #{e.name}", input: e.name, message: "identifier already bound")
+            return ErrorVal.from_runtime(kind: "binding_error", **code_site(clause_env), operation: "binding identifier #{e.name}", input: e.name, message: "identifier already bound")
           end
 
           if m.is_a?(ErrorVal)
@@ -489,7 +490,7 @@ module Fusion
         # lenient default is `null`.
         v.is_a?(ErrorVal) ? v : NULL
       else
-        ErrorVal.internal(kind: "argument_error", **site, operation: "|", input: [v, f], expected: ["[_, _ ? @Function]"])
+        ErrorVal.from_runtime(kind: "argument_error", **site, operation: "|", input: [v, f], expected: ["[_, _ ? @Function]"])
       end
     end
 

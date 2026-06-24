@@ -216,11 +216,11 @@ RSpec.describe "CLI (exe/fusion)" do
   end
 
   describe "the top-level Ruby-error net" do
-    it "converts a stack overflow (SystemStackError) into a runtime_error payload" do
+    it "converts a stack overflow (SystemStackError) into a limit_error payload" do
       out, err, status = run_cli(File.join(FIX, "loop.fsn"), stdin: "0")
       expect(out).to eq("")
       expect(err).to include(
-        '"kind":"runtime_error"', '"origin":"interpreter"', '"message":"stack level too deep"'
+        '"kind":"limit_error"', '"origin":"interpreter"', '"message":"stack level too deep"'
       )
       expect(status.exitstatus).to eq(1)
     end
@@ -461,10 +461,10 @@ RSpec.describe "CLI (exe/fusion)" do
       expect(status.exitstatus).to eq(0)
     end
 
-    it "keeps the top-level net's runtime_error in-band" do
+    it "keeps the top-level net's limit_error in-band" do
       out, err, status = run_cli("--output", "object", File.join(FIX, "loop.fsn"), stdin: "0")
       expect(out).to eq(
-        %({"error":{"kind":"runtime_error","origin":"interpreter","operation":"running the program","status":0,"input":null,"message":"stack level too deep"}}\n)
+        %({"error":{"kind":"limit_error","origin":"interpreter","operation":"running the program","status":0,"input":null,"message":"stack level too deep"}}\n)
       )
       expect(err).to eq("")
       expect(status.exitstatus).to eq(0)
@@ -525,10 +525,10 @@ RSpec.describe "CLI (exe/fusion)" do
     end
 
     it "keeps a per-record stack overflow in-band and continues the stream" do
-      stack_error =
-        '{"kind":"runtime_error","origin":"interpreter","operation":"running the program","status":0,"input":null,"message":"stack level too deep"}'
+      limit_error =
+        '{"kind":"limit_error","origin":"interpreter","operation":"running the program","status":0,"input":null,"message":"stack level too deep"}'
       out, err, status = run_cli("--stream", File.join(FIX, "loop.fsn"), stdin: "[0,0]\n[0,1]\n")
-      expect(out).to eq("[1,#{stack_error}]\n[1,#{stack_error}]\n")
+      expect(out).to eq("[1,#{limit_error}]\n[1,#{limit_error}]\n")
       expect(err).to eq("")
       expect(status.exitstatus).to eq(0)
     end

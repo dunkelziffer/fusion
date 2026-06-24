@@ -373,7 +373,7 @@ Future work and open questions are tracked separately in our [Roadmap](./roadmap
 
 ### Decisions
 
-- 🧑 ✅ Every error payload produced by "the runtime" (the interpreter or a built-in function) has the **same shape**. This shape is enforced by constructing "internal errors" via `ErrorVal.internal`. The full schema is documented in [reference §6.5](../user/reference.md#65-the-standardized-error-payload).
+- 🧑 ✅ Every error payload produced by "the runtime" (the interpreter or a built-in function) has the **same shape**. This shape is enforced by constructing "internal errors" via `ErrorVal.from_runtime`. The full schema is documented in [reference §6.5](../user/reference.md#65-the-standardized-error-payload).
 - 🤖 ✅ The stdlib is "ordinary unpriviledged Fusion code" and doesn't produce internal errors.
 - 🧑 ✅ However, all stdlib functions mirror the built-in error shape.
 - 🔢 ⏪ During function application we differentiated `argument_error` (bad input *shape*, expressible as a pattern without `?`) from `type_error` (bad input *type*). This distinction was reverted. Both errors got unified into a single `argument_error` in §2.13.
@@ -477,7 +477,8 @@ Refines §2.9: same shape, but with orthogonal fields and a single input-error k
 - 🧑 ✅ `expected` lists the acceptable inputs as Fusion patterns (the input matched none); an error with `expected` never also carries a `message`.
 - 🧑 ✅ `type_error` is merged into `argument_error`: any wrong input shape *or* type is one `argument_error`, with `expected` subsuming the old split (so a non-object member access or a wrong-typed index is now an `argument_error`).
 - 🧑 ✅ A constraint no bare pattern can express (e.g. "every element is a string") uses the `@all` stdlib predicate inside the pattern, e.g. `[_ ? (xs => {"xs": xs, "f": @String} | @all), _ ? @String]`.
-- 🧑 ✅ `runtime_error` (new) is an unexpected host/interpreter failure; it absorbs the former `stack_error` (a stack overflow, message `"stack level too deep"`).
+- 🧑 ✅ `internal_error` (new) is the catch-all for an unexpected host/interpreter failure — a Ruby error the engine caught rather than letting it crash the process (`origin` `interpreter` or `builtin`).
+- 🧑 ✅ A runtime resource limit being exceeded is a separate `limit_error` (currently a stack overflow, `"stack level too deep"`): the runtime gave up because a space/time budget ran out — not an engine defect. The general name (vs `stack_error`) lets future runtime resource limits share the kind.
 
 ### Alternatives
 
@@ -485,6 +486,7 @@ Refines §2.9: same shape, but with orthogonal fields and a single input-error k
 - 🔢 ⏪ Named this field `location` — renamed to `origin`, a better fit for a coarse "which subsystem" tag now that the filename lives in `file`.
 - 🔢 ❌ `status` as the strings `"value"`/`"error"` — chose the integers `0`/`1` to mirror the wire status codes.
 - 🔢 ❌ Over-approximating `expected` patterns for `@join`/`@toObject` (e.g. `[_ ? @Array, _ ? @String]`) — they would match inputs that still fail, breaking "matches ⇒ acceptable"; `@all` keeps them exact.
+- 🧑 ❌ Drop `conversion_error` and have a failed conversion (e.g. `@parseNumber` of `"abc"`) return `null` (a "Maybe", as Ruby's `Integer(s, exception: false)` does). Rejected: the error payload carries more information, `| (! => null)` recovers the lenient form in one token, and forcing a catch keeps errors local — which matters with no backtraces. (A `null` would slip downstream and surface far from its cause.)
 
 ### Pros
 
@@ -804,7 +806,7 @@ All access goes through `@`:
 
 - 🔢 ✅ To serialize values without a valid JSON representation, we introduce "lenient serialization". Values without JSON representation get turned into string representations (`"<function>"` and `"<Infinity>"`/`"<-Infinity>"`/`"<NaN>"`).
 - 🧑 ✅ The remaining data structure gets preserved.
-- 🔢 ✅ Internal errors (`ErrorVal.internal_error?`) get serialized leniently by default, so their info isn't obscured by a `serialization_error`.
+- 🔢 ✅ Internal errors (`ErrorVal#runtime?`) get serialized leniently by default, so their info isn't obscured by a `serialization_error`.
 - 🤖 ✅ The stdlib doesn't produce internal errors.
 - 🧑 ✅ However, all stdlib functions use `@sanitize` to mimick the lenient JSON serialization and preserve as much info as possible.
 - 🧑 ✅ Ordinary values and user errors are serialized strictly to avoid surprising type conversions. If they fail to serialize, they get turned into an internal `serialization_error` and will subsequently get serialized leniently.

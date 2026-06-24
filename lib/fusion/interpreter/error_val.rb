@@ -11,16 +11,17 @@ module Fusion
 
       def initialize(payload)
         @payload = payload
-        @internal = false
+        @runtime = false
       end
 
-      # Whether this is an interpreter-produced error (vs. a user-constructed
-      # `!expr`). Governs serialization — see docs/user/reference.md §9.3.
-      def internal_error?
-        @internal
+      # Whether this error was produced by the runtime (vs. a user-constructed
+      # `!expr`, or an error arriving as input). Governs serialization — see
+      # docs/user/reference.md §9.3.
+      def runtime?
+        @runtime
       end
 
-      # Build an interpreter-produced error with the standardized payload shape
+      # Build a runtime-produced error with the standardized payload shape
       # documented in docs/user/reference.md §6.5. `origin` is one of the six
       # fixed values; `file` carries the source basename when there is one.
       #
@@ -29,7 +30,7 @@ module Fusion
       # valid JSON); otherwise `status` is 0 and `input` is the value itself
       # (0/1 mirror the wire status codes). `expected` lists acceptable inputs as
       # Fusion patterns and is mutually exclusive with `message`.
-      def self.internal(kind:, origin:, operation:, input:, file: nil, expected: nil, message: nil)
+      def self.from_runtime(kind:, origin:, operation:, input:, file: nil, expected: nil, message: nil)
         raise Unreachable, "an error with `expected` must not also carry a `message`" if expected && message
 
         received_error = input.is_a?(ErrorVal)
@@ -44,8 +45,8 @@ module Fusion
 
         error = new(payload)
 
-        # Mark as "@internal" to activate lenient serialization.
-        error.instance_variable_set(:@internal, true)
+        # Flag as runtime-produced to activate lenient serialization.
+        error.instance_variable_set(:@runtime, true)
 
         error
       end

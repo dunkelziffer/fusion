@@ -21,7 +21,7 @@ module Fusion
         when :forcing
           # We are already evaluating this unit and were asked for it again
           # without any intervening function boundary => non-productive data cycle.
-          ErrorVal.internal(
+          ErrorVal.from_runtime(
             kind: "reference_error",
             **@site,
             operation: "forcing a reference",
