@@ -11,11 +11,12 @@
 #     .file_path("test.fsn")     # program: a fixture file …
 #     .out("❌", "42")           # … or .code("(x => …)") for inline source
 #
-# `.out(marker, payload)` runs the pipe and asserts the result; a matcher object
-# (e.g. a_string_including(...)) is allowed in the payload slot. A program that
-# fails to parse is not an exception — it is a payloaded syntax_error, asserted
-# with `.out("❌", ...)` like any other failure. `.env(CI: "1")` supplies
-# variables visible to @ENV.
+# `.out(marker, payload)` runs the pipe and asserts the result. The payload slot
+# takes the exact JSON string where it is stable, or a `Regexp` matcher when part
+# of the payload is machine-dependent (an absolute path, a Ruby/parser message) —
+# pin every key and wildcard only the dynamic value. A program that fails to parse
+# is not an exception — it is a payloaded syntax_error, asserted with `.out("❌",
+# ...)` like any other failure. `.env(CI: "1")` supplies variables visible to @ENV.
 #
 # Both input and output are (marker, payload) pairs mirroring the CLI (see
 # exe/fusion): "✅" for exit 0 (a value), "❌" for exit 1 (an error payload).

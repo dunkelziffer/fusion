@@ -10,13 +10,20 @@ RSpec.describe "error kinds" do
     it "from inline source (location: code, no file)" do
       expect_pipe
         .code("(_ => @")
-        .out("❌", a_string_including('"kind":"syntax_error"', '"location":"code"'))
+        .out("❌", a_string_including(
+          '"kind":"syntax_error"', '"location":"code"', '"operation":"parsing"', '"status":0', '"input":"(_ => @"',
+          /"message":"[^"]*"/
+        ))
     end
 
     it "from a file (location: code with file)" do
       expect_pipe
         .file_path("badsyntax.fsn")
-        .out("❌", a_string_including('"kind":"syntax_error"', '"location":"code"', '"file":"badsyntax.fsn"'))
+        .out("❌", a_string_including(
+          '"kind":"syntax_error"', '"location":"code"', '"file":"badsyntax.fsn"', '"operation":"parsing"', '"status":0',
+          /"input":"(?:[^"\\]|\\.)*"/,
+          /"message":"(?:[^"\\]|\\.)*"/
+        ))
     end
 
     it "from non-JSON input (location: input)" do
@@ -37,14 +44,22 @@ RSpec.describe "error kinds" do
     it "non-productive data cycle" do
       expect_pipe
         .file_path("cyclicA.fsn")
-        .out("❌", a_string_including('"kind":"reference_error"', '"message":"non-productive data cycle"', "cyclicA.fsn"))
+        .out("❌", a_string_including(
+          '"kind":"reference_error"', '"location":"code"', '"file":"cyclicA.fsn"', '"operation":"forcing a reference"', '"status":0',
+          /"input":"[^"]*cyclicA\.fsn"/,
+          '"message":"non-productive data cycle"'
+        ))
     end
 
     it "missing file via @../ path" do
       expect_pipe
         .jail("..") # widen past the default (the program's dir) so @../ stays in the jail
         .code("(_ => @../nonexistent)")
-        .out("❌", a_string_including('"kind":"reference_error"', '"operation":"reading file"', '"message":"file not found"'))
+        .out("❌", a_string_including(
+          '"kind":"reference_error"', '"location":"code"', '"file":"nonexistent.fsn"', '"operation":"reading file"', '"status":0',
+          /"input":"[^"]*nonexistent\.fsn"/,
+          '"message":"file not found"'
+        ))
     end
 
     it "missing file via @load" do
@@ -57,7 +72,11 @@ RSpec.describe "error kinds" do
       # @load of a directory hits Errno::EISDIR, rescued into reference_error.
       expect_pipe
         .code('(_ => "ref" | @load)')
-        .out("❌", a_string_including('"kind":"reference_error"', '"operation":"reading file"', "directory"))
+        .out("❌", a_string_including(
+          '"kind":"reference_error"', '"location":"code"', '"file":"ref"', '"operation":"reading file"', '"status":0',
+          %r{"input":"[^"]*/ref"},
+          /"message":"[^"]*directory[^"]*"/
+        ))
     end
   end
 
@@ -72,7 +91,7 @@ RSpec.describe "error kinds" do
       expect_pipe
         .in("✅", "[1,2]")
         .code("([a, a] => a)")
-        .out("❌", a_string_including('"kind":"binding_error"', '"message":"identifier already bound"'))
+        .out("❌", '{"kind":"binding_error","location":"code","operation":"binding identifier a","status":0,"input":"a","message":"identifier already bound"}')
     end
   end
 
@@ -137,7 +156,7 @@ RSpec.describe "error kinds" do
       expect_pipe
         .in("✅", "[1,2,3]")
         .code("(p => p | @add)")
-        .out("❌", a_string_including('"kind":"argument_error"', '"expected":["[_ ? @Number, _ ? @Number]"]'))
+        .out("❌", '{"kind":"argument_error","location":"builtin","operation":"add","status":0,"input":[1,2,3],"expected":["[_ ? @Number, _ ? @Number]"]}')
     end
   end
 
@@ -146,7 +165,7 @@ RSpec.describe "error kinds" do
       expect_pipe
         .in("✅", "[1,0]")
         .code("(p => p | @divide)")
-        .out("❌", a_string_including('"kind":"math_error"', '"message":"division by zero"'))
+        .out("❌", '{"kind":"math_error","location":"builtin","operation":"divide","status":0,"input":[1,0],"message":"division by zero"}')
     end
   end
 
@@ -155,7 +174,7 @@ RSpec.describe "error kinds" do
       expect_pipe
         .in("✅", "[1,2]")
         .code("(v => v | @toString)")
-        .out("❌", a_string_including('"kind":"conversion_error"', '"message":"cannot stringify this value type"'))
+        .out("❌", '{"kind":"conversion_error","location":"builtin","operation":"toString","status":0,"input":[1,2],"message":"cannot stringify this value type"}')
     end
   end
 

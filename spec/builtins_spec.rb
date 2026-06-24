@@ -39,7 +39,7 @@ RSpec.describe "builtins" do
       expect_pipe
         .in("✅", "[true,1]")
         .code("(p => p | @add)")
-        .out("❌", a_string_including('"kind":"argument_error"', '"expected":["[_ ? @Number, _ ? @Number]"]'))
+        .out("❌", '{"kind":"argument_error","location":"builtin","operation":"add","status":0,"input":[true,1],"expected":["[_ ? @Number, _ ? @Number]"]}')
     end
 
     it "errors on a non-pair array" do
@@ -76,14 +76,14 @@ RSpec.describe "builtins" do
       expect_pipe
         .in("✅", '[1,"x"]')
         .code("(p => p | @subtract)")
-        .out("❌", a_string_including('"kind":"argument_error"', '"expected":["[_ ? @Number, _ ? @Number]"]'))
+        .out("❌", '{"kind":"argument_error","location":"builtin","operation":"subtract","status":0,"input":[1,"x"],"expected":["[_ ? @Number, _ ? @Number]"]}')
     end
 
     it "errors with argument_error on a non-pair" do
       expect_pipe
         .in("✅", "[1]")
         .code("(p => p | @subtract)")
-        .out("❌", a_string_including('"kind":"argument_error"'))
+        .out("❌", '{"kind":"argument_error","location":"builtin","operation":"subtract","status":0,"input":[1],"expected":["[_ ? @Number, _ ? @Number]"]}')
     end
   end
 
@@ -106,14 +106,14 @@ RSpec.describe "builtins" do
       expect_pipe
         .in("✅", '["a",2]')
         .code("(p => p | @multiply)")
-        .out("❌", a_string_including('"kind":"argument_error"'))
+        .out("❌", '{"kind":"argument_error","location":"builtin","operation":"multiply","status":0,"input":["a",2],"expected":["[_ ? @Number, _ ? @Number]"]}')
     end
 
     it "errors with argument_error on a non-pair" do
       expect_pipe
         .in("✅", "[1,2,3]")
         .code("(p => p | @multiply)")
-        .out("❌", a_string_including('"kind":"argument_error"'))
+        .out("❌", '{"kind":"argument_error","location":"builtin","operation":"multiply","status":0,"input":[1,2,3],"expected":["[_ ? @Number, _ ? @Number]"]}')
     end
   end
 
@@ -150,14 +150,14 @@ RSpec.describe "builtins" do
       expect_pipe
         .in("✅", '[1,"x"]')
         .code("(p => p | @divide)")
-        .out("❌", a_string_including('"kind":"argument_error"', '"expected":["[_ ? @Number, _ ? @Number]"]'))
+        .out("❌", '{"kind":"argument_error","location":"builtin","operation":"divide","status":0,"input":[1,"x"],"expected":["[_ ? @Number, _ ? @Number]"]}')
     end
 
     it "errors with argument_error on a non-pair" do
       expect_pipe
         .in("✅", "[1]")
         .code("(p => p | @divide)")
-        .out("❌", a_string_including('"kind":"argument_error"'))
+        .out("❌", '{"kind":"argument_error","location":"builtin","operation":"divide","status":0,"input":[1],"expected":["[_ ? @Number, _ ? @Number]"]}')
     end
   end
 
@@ -194,7 +194,7 @@ RSpec.describe "builtins" do
       expect_pipe
         .in("✅", '["a","b"]')
         .code("(p => p | @mod)")
-        .out("❌", a_string_including('"kind":"argument_error"'))
+        .out("❌", '{"kind":"argument_error","location":"builtin","operation":"mod","status":0,"input":["a","b"],"expected":["[_ ? @Number, _ ? @Number]"]}')
     end
   end
 
@@ -247,14 +247,14 @@ RSpec.describe "builtins" do
       expect_pipe
         .in("✅", "null")
         .code("(_ => 1e400 | @floor)")
-        .out("❌", a_string_including('"kind":"math_error"', '"location":"builtin"', '"message":"not a finite number"'))
+        .out("❌", '{"kind":"math_error","location":"builtin","operation":"floor","status":0,"input":"<Infinity>","message":"not a finite number"}')
     end
 
     it "errors on a non-number" do
       expect_pipe
         .in("✅", '"x"')
         .code("(n => n | @floor)")
-        .out("❌", a_string_including('"kind":"argument_error"', '"expected":["_ ? @Number"]'))
+        .out("❌", '{"kind":"argument_error","location":"builtin","operation":"floor","status":0,"input":"x","expected":["_ ? @Number"]}')
     end
   end
 
@@ -335,7 +335,7 @@ RSpec.describe "builtins" do
       expect_pipe
         .in("✅", "[1]")
         .code("(p => p | @lessThan)")
-        .out("❌", a_string_including('"kind":"argument_error"'))
+        .out("❌", '{"kind":"argument_error","location":"builtin","operation":"lessThan","status":0,"input":[1],"expected":["[_ ? @Number, _ ? @Number]","[_ ? @String, _ ? @String]"]}')
     end
   end
 
@@ -374,7 +374,7 @@ RSpec.describe "builtins" do
       expect_pipe
         .in("✅", "[true]")
         .code("(p => p | @and)")
-        .out("❌", a_string_including('"kind":"argument_error"'))
+        .out("❌", '{"kind":"argument_error","location":"builtin","operation":"and","status":0,"input":[true],"expected":["[_, _]"]}')
     end
   end
 
@@ -411,7 +411,7 @@ RSpec.describe "builtins" do
       expect_pipe
         .in("✅", "[false]")
         .code("(p => p | @or)")
-        .out("❌", a_string_including('"kind":"argument_error"'))
+        .out("❌", '{"kind":"argument_error","location":"builtin","operation":"or","status":0,"input":[false],"expected":["[_, _]"]}')
     end
   end
 
@@ -508,7 +508,7 @@ RSpec.describe "builtins" do
       expect_pipe
         .in("✅", '["a"]')
         .code("(p => p | @concat)")
-        .out("❌", a_string_including('"kind":"argument_error"'))
+        .out("❌", '{"kind":"argument_error","location":"builtin","operation":"concat","status":0,"input":["a"],"expected":["[_ ? @String, _ ? @String]"]}')
     end
   end
 
@@ -561,7 +561,7 @@ RSpec.describe "builtins" do
       expect_pipe
         .in("✅", '[["a"]]')
         .code("(p => p | @join)")
-        .out("❌", a_string_including('"kind":"argument_error"'))
+        .out("❌", '{"kind":"argument_error","location":"builtin","operation":"join","status":0,"input":[["a"]],"expected":["[_ ? (xs => {\"xs\": xs, \"f\": @String} | @all), _ ? @String]"]}')
     end
   end
 
@@ -598,7 +598,7 @@ RSpec.describe "builtins" do
       expect_pipe
         .in("✅", "[1,2]")
         .code("(v => v | @toString)")
-        .out("❌", a_string_including('"kind":"conversion_error"'))
+        .out("❌", '{"kind":"conversion_error","location":"builtin","operation":"toString","status":0,"input":[1,2],"message":"cannot stringify this value type"}')
     end
   end
 

@@ -97,7 +97,7 @@ RSpec.describe "@-resolution" do
       expect_pipe
         .in("✅", '"nope.fsn"')
         .file_path("ref/loader.fsn")
-        .out("❌", a_string_including('"kind":"reference_error"', '"message":"file not found"', "nope.fsn"))
+        .out("❌", '{"kind":"reference_error","location":"builtin","operation":"@load","status":0,"input":"nope.fsn","message":"file not found"}')
     end
 
     it "is shadowable by a sibling load.fsn" do
@@ -136,7 +136,11 @@ RSpec.describe "@-resolution" do
         .in("✅", "null")
         .jail("ref")
         .file_path("ref/sub/usesDotDotBuiltin.fsn")
-        .out("❌", a_string_including('"kind":"reference_error"', '"message":"file not found"', "subtract.fsn"))
+        .out("❌", a_string_including(
+          '"kind":"reference_error"', '"location":"code"', '"file":"subtract.fsn"', '"operation":"reading file"', '"status":0',
+          /"input":"[^"]*subtract\.fsn"/,
+          '"message":"file not found"'
+        ))
     end
   end
 
