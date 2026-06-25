@@ -47,6 +47,19 @@ RSpec.describe "error kinds" do
         .out("❌", '{"kind":"reference_error","origin":"code","file":"cyclicA.fsn","operation":"forcing a reference","status":0,"input":"spec/fixtures/cyclicA.fsn","message":"non-productive data cycle"}')
     end
 
+    # The `input` path is relative to the invocation directory (`Dir.pwd`), so it
+    # reads as the route from where you ran the command to the offending file.
+    # The cycle above reports "spec/fixtures/cyclicA.fsn" because the suite runs
+    # from the project root; run the same program *from* the fixtures directory
+    # and the very same error reports just "cyclicA.fsn" — no "spec/fixtures/".
+    it "reports the input path relative to the invocation directory (Dir.pwd)" do
+      Dir.chdir(FusionHelpers::FIXTURES) do
+        expect_pipe
+          .file_path("cyclicA.fsn")
+          .out("❌", '{"kind":"reference_error","origin":"code","file":"cyclicA.fsn","operation":"forcing a reference","status":0,"input":"cyclicA.fsn","message":"non-productive data cycle"}')
+      end
+    end
+
     it "missing file via @../ path" do
       expect_pipe
         .jail("..") # widen past the default (the program's dir) so @../ stays in the jail
