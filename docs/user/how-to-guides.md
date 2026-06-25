@@ -9,7 +9,8 @@ basics. Scan for the problem you have and copy the solution.*
 
 When you run a program and see an error payload on stderr, the payload itself
 tells you what went wrong. Interpreter errors carry a standardized object whose
-fields (`kind`, `origin`, `operation`, `input`, `message`) are documented in
+fields (`kind`, `origin`, `file`, `operation`, `status`, `input`, `expected`,
+`message`) are documented in
 [reference §6.5](./reference.md#65-the-standardized-error-payload).
 
 For a missing file or a parse error in an `@`-referenced file, the `file` and

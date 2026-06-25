@@ -362,11 +362,13 @@ There are two origins of error values, and they differ in payload:
 | `kind`      | yes      | The error category, from the closed set below.                                                                             |
 | `origin`    | yes      | Where the failing operation lives, from the closed set of six below.                                                       |
 | `file`      | no       | The source file's basename — only when `origin` is `code` (`"<inline>"` for inline `-e`/REPL). Absent for every other origin.                          |
-| `operation` | yes      | The operation that failed. A built-in or stdlib function is named by its `@`-reference (`"@add"`, `"@math/square"`) — exactly the expression that retrieves it; a syntactic operation by its form (`"\|"`, `".name"`, `"[]"`, `"reading file"`, `"parsing code"`). |
+| `operation` | yes      | The operation that failed. A built-in or stdlib function is named by its `@`-reference (`"@add"`, `"@math/square"`) — exactly the expression that retrieves it; a syntactic operation by its form (`"\|"`, `".name"`, `"[]"`, `"reading file"`, `"parsing code"`, `"parsing JSON"`). |
 | `status`    | yes      | `0` or `1` — whether the operation received an ordinary value (`0`) or an error value (`1`), mirroring the wire status codes. When `1`, `input` holds that error's bare payload (so `input` is always plain JSON). |
 | `input`     | yes      | The operand(s) the operation received — often the offending value. For `.name` it is the object alone (the key is in `operation`); for `[]` it is `[collection, key]` (the key is a dynamic value). |
 | `expected`  | no       | The acceptable inputs as a list of Fusion **patterns**; the input matched none of them (e.g. `["[_ ? @Number, _ ? @Number]"]`). Mutually exclusive with `message`. |
 | `message`   | no       | Extra human-readable detail, e.g. `"division by zero"`. Absent whenever `expected` is present.                            |
+
+A file path in a payload — e.g. the `input` of a `reading file` or cycle error — is written **relative to the directory you ran the command from**, so it doubles as the route to the offending file.
 
 #### `kind` — the closed set
 

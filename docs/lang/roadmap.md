@@ -33,7 +33,7 @@ help in deep pipelines.
 
 Populate Tier 1 (written in Fusion): `filter`, `reduce`/`fold`, `reverse`,
 `head`, `tail`, `last`, `init`, `take`, `drop`, `zip`, `flatten`, `member`,
-`find`, `all`, `any`, `count`; comparison derivatives `lessEq`, `greaterThan`,
+`find`, `any`, `count`; comparison derivatives `lessEq`, `greaterThan`,
 `greaterEq`, `notEquals`; object helpers `entries`, `merge`; an
 `if` helper. This is also the best stress test of whether the language is
 pleasant to *write* in, not just to implement.
