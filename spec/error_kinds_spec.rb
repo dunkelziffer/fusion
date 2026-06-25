@@ -11,7 +11,7 @@ RSpec.describe "error kinds" do
       expect_pipe
         .code("(_ => @")
         .out("❌", a_string_including(
-          '"kind":"syntax_error"', '"origin":"code"', '"file":"<inline>"', '"operation":"parsing"', '"status":0', '"input":"(_ => @"',
+          '"kind":"syntax_error"', '"origin":"code"', '"file":"<inline>"', '"operation":"parsing code"', '"status":0', '"input":"(_ => @"',
           /"message":"[^"]*"/
         ))
     end
@@ -20,7 +20,7 @@ RSpec.describe "error kinds" do
       expect_pipe
         .file_path("badsyntax.fsn")
         .out("❌", a_string_including(
-          '"kind":"syntax_error"', '"origin":"code"', '"file":"badsyntax.fsn"', '"operation":"parsing"', '"status":0',
+          '"kind":"syntax_error"', '"origin":"code"', '"file":"badsyntax.fsn"', '"operation":"parsing code"', '"status":0',
           /"input":"(?:[^"\\]|\\.)*"/,
           /"message":"(?:[^"\\]|\\.)*"/
         ))
@@ -30,7 +30,7 @@ RSpec.describe "error kinds" do
       expect_pipe
         .in("✅", "not json")
         .code("(x => x)")
-        .out("❌", '{"kind":"syntax_error","origin":"input","operation":"parsing input as JSON","status":0,"input":"not json","message":"input is not valid JSON"}')
+        .out("❌", '{"kind":"syntax_error","origin":"input","operation":"parsing JSON","status":0,"input":"not json","message":"input is not valid JSON"}')
     end
   end
 
@@ -44,22 +44,14 @@ RSpec.describe "error kinds" do
     it "non-productive data cycle" do
       expect_pipe
         .file_path("cyclicA.fsn")
-        .out("❌", a_string_including(
-          '"kind":"reference_error"', '"origin":"code"', '"file":"cyclicA.fsn"', '"operation":"forcing a reference"', '"status":0',
-          /"input":"[^"]*cyclicA\.fsn"/,
-          '"message":"non-productive data cycle"'
-        ))
+        .out("❌", '{"kind":"reference_error","origin":"code","file":"cyclicA.fsn","operation":"forcing a reference","status":0,"input":"spec/fixtures/cyclicA.fsn","message":"non-productive data cycle"}')
     end
 
     it "missing file via @../ path" do
       expect_pipe
         .jail("..") # widen past the default (the program's dir) so @../ stays in the jail
         .code("(_ => @../nonexistent)")
-        .out("❌", a_string_including(
-          '"kind":"reference_error"', '"origin":"code"', '"file":"nonexistent.fsn"', '"operation":"reading file"', '"status":0',
-          /"input":"[^"]*nonexistent\.fsn"/,
-          '"message":"file not found"'
-        ))
+        .out("❌", '{"kind":"reference_error","origin":"code","file":"nonexistent.fsn","operation":"reading file","status":0,"input":"spec/nonexistent.fsn","message":"file not found"}')
     end
 
     it "missing file via @load" do
@@ -73,9 +65,8 @@ RSpec.describe "error kinds" do
       expect_pipe
         .code('(_ => "ref" | @load)')
         .out("❌", a_string_including(
-          '"kind":"reference_error"', '"origin":"code"', '"file":"ref"', '"operation":"reading file"', '"status":0',
-          %r{"input":"[^"]*/ref"},
-          /"message":"[^"]*directory[^"]*"/
+          '"kind":"reference_error"', '"origin":"code"', '"file":"ref"', '"operation":"reading file"', '"status":0', '"input":"spec/fixtures/ref"',
+          /"message":"[^"]*directory[^"]*"/ # OS strerror text, kept loose
         ))
     end
   end
@@ -100,21 +91,21 @@ RSpec.describe "error kinds" do
       expect_pipe
         .in("✅", '{"a":1}')
         .code("(o => o.b)")
-        .out("❌", '{"kind":"access_error","origin":"code","file":"<inline>","operation":".b","status":0,"input":[{"a":1},"b"],"message":"missing key"}')
+        .out("❌", '{"kind":"access_error","origin":"code","file":"<inline>","operation":".b","status":0,"input":{"a":1},"message":"missing key"}')
     end
 
     it "missing index key on an object" do
       expect_pipe
         .in("✅", '{"a":1}')
         .code('(o => o["b"])')
-        .out("❌", '{"kind":"access_error","origin":"code","file":"<inline>","operation":"[\"b\"]","status":0,"input":[{"a":1},"b"],"message":"missing key"}')
+        .out("❌", '{"kind":"access_error","origin":"code","file":"<inline>","operation":"[]","status":0,"input":[{"a":1},"b"],"message":"missing key"}')
     end
 
     it "array index out of range" do
       expect_pipe
         .in("✅", "[10,20]")
         .code("(a => a[5])")
-        .out("❌", '{"kind":"access_error","origin":"code","file":"<inline>","operation":"[5]","status":0,"input":[[10,20],5],"message":"index out of range"}')
+        .out("❌", '{"kind":"access_error","origin":"code","file":"<inline>","operation":"[]","status":0,"input":[[10,20],5],"message":"index out of range"}')
     end
   end
 
@@ -135,14 +126,14 @@ RSpec.describe "error kinds" do
       expect_pipe
         .in("✅", "5")
         .code("(n => n.foo)")
-        .out("❌", '{"kind":"argument_error","origin":"code","file":"<inline>","operation":".foo","status":0,"input":[5,"foo"],"expected":["[_ ? @Object, _]"]}')
+        .out("❌", '{"kind":"argument_error","origin":"code","file":"<inline>","operation":".foo","status":0,"input":5,"expected":["_ ? @Object"]}')
     end
 
     it "indexing with a wrong-typed key" do
       expect_pipe
         .in("✅", "[1,2]")
         .code('(a => a["x"])')
-        .out("❌", '{"kind":"argument_error","origin":"code","file":"<inline>","operation":"[index]","status":0,"input":[[1,2],"x"],"expected":["[_ ? @Array, _ ? @Integer]","[_ ? @Object, _ ? @String]"]}')
+        .out("❌", '{"kind":"argument_error","origin":"code","file":"<inline>","operation":"[]","status":0,"input":[[1,2],"x"],"expected":["[_ ? @Array, _ ? @Integer]","[_ ? @Object, _ ? @String]"]}')
     end
 
     it "applying a non-function" do

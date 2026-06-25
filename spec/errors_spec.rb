@@ -220,7 +220,7 @@ RSpec.describe "payloaded errors" do
       expect_pipe
         .in("✅", "not json")
         .code("(x => x)")
-        .out("❌", '{"kind":"syntax_error","origin":"input","operation":"parsing input as JSON","status":0,"input":"not json","message":"input is not valid JSON"}')
+        .out("❌", '{"kind":"syntax_error","origin":"input","operation":"parsing JSON","status":0,"input":"not json","message":"input is not valid JSON"}')
     end
   end
 

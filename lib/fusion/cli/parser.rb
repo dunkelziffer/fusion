@@ -17,7 +17,7 @@ module Fusion
         Interpreter::ErrorVal.from_runtime(
           kind: "syntax_error",
           origin: "input",
-          operation: "parsing input as JSON",
+          operation: "parsing JSON",
           input: wire_pair.data,
           message: "input is not valid JSON"
         )

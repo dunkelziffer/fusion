@@ -17,7 +17,7 @@ RSpec.describe "error pattern syntax" do
         expect_pipe
           .code(src)
           .out("❌", a_string_including(
-            '"kind":"syntax_error"', '"origin":"code"', '"file":"<inline>"', '"operation":"parsing"', '"status":0', %("input":#{src.to_json}),
+            '"kind":"syntax_error"', '"origin":"code"', '"file":"<inline>"', '"operation":"parsing code"', '"status":0', %("input":#{src.to_json}),
             /"message":"(?:[^"\\]|\\.)*"/
           ))
       end
@@ -34,7 +34,7 @@ RSpec.describe "error pattern syntax" do
         expect_pipe
           .code(src)
           .out("❌", a_string_including(
-            '"kind":"syntax_error"', '"origin":"code"', '"file":"<inline>"', '"operation":"parsing"', '"status":0', %("input":#{src.to_json}),
+            '"kind":"syntax_error"', '"origin":"code"', '"file":"<inline>"', '"operation":"parsing code"', '"status":0', %("input":#{src.to_json}),
             /"message":"(?:[^"\\]|\\.)*"/
           ))
       end

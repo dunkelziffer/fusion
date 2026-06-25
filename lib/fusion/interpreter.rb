@@ -18,6 +18,8 @@
 #   object -> Hash (String keys, insertion-ordered as Ruby preserves)
 #   func   -> Func (closure over an Env)
 
+require "pathname"
+
 require_relative "ast"
 require_relative "null"
 require_relative "interpreter/error_val"
@@ -101,9 +103,18 @@ module Fusion
 
     # ---- File loading -----------------------------------------------------
     def load_file(abspath)
-      @file_cache[abspath] ||= Thunk.new(site: file_site(abspath), input: abspath) do
+      @file_cache[abspath] ||= Thunk.new(site: file_site(abspath), input: display_path(abspath)) do
         evaluate_file(abspath)
       end
+    end
+
+    # A file path for error payloads: relative to the working directory, so a
+    # payload carries no machine-specific absolute prefix (and stays stable when
+    # a whole project is moved together).
+    def display_path(abspath)
+      Pathname.new(abspath).relative_path_from(Dir.pwd).to_s
+    rescue ArgumentError
+      abspath # no relative path exists (e.g. different roots) — keep the absolute
     end
 
     # The error origin (`{origin:, file?:}`) for code at `abspath`. stdlib is part
@@ -145,9 +156,10 @@ module Fusion
         eval_expr(ast, env)
       end
     rescue Errno::ENOENT
-      ErrorVal.from_runtime(kind: "reference_error", **site, operation: "reading file", input: abspath, message: "file not found")
+      ErrorVal.from_runtime(kind: "reference_error", **site, operation: "reading file", input: display_path(abspath), message: "file not found")
     rescue SystemCallError => err # EISDIR, EACCES, ... — file-system access failures
-      ErrorVal.from_runtime(kind: "reference_error", **site, operation: "reading file", input: abspath, message: err.message)
+      # Keep the strerror ("Is a directory"), drop Ruby's "@ io_fread - <path>" tail (path is in `input`).
+      ErrorVal.from_runtime(kind: "reference_error", **site, operation: "reading file", input: display_path(abspath), message: err.message.split(" @ ").first)
     end
 
     # Evaluate a top-level unit that has no file of its own:
@@ -393,11 +405,11 @@ module Fusion
 
       site = code_site(env)
       unless obj.is_a?(Hash)
-        return ErrorVal.from_runtime(kind: "argument_error", **site, operation: ".#{node.key}", input: [obj, node.key], expected: ["[_ ? @Object, _]"])
+        return ErrorVal.from_runtime(kind: "argument_error", **site, operation: ".#{node.key}", input: obj, expected: ["_ ? @Object"])
       end
 
       unless obj.key?(node.key)
-        return ErrorVal.from_runtime(kind: "access_error", **site, operation: ".#{node.key}", input: [obj, node.key], message: "missing key")
+        return ErrorVal.from_runtime(kind: "access_error", **site, operation: ".#{node.key}", input: obj, message: "missing key")
       end
 
       obj[node.key]
@@ -424,16 +436,16 @@ module Fusion
         if i >= 0 && i < obj.length
           obj[i]
         else
-          ErrorVal.from_runtime(kind: "access_error", **site, operation: "[#{idx}]", input: [obj, idx], message: "index out of range")
+          ErrorVal.from_runtime(kind: "access_error", **site, operation: "[]", input: [obj, idx], message: "index out of range")
         end
       elsif obj.is_a?(Hash) && idx.is_a?(String)
         if obj.key?(idx)
           obj[idx]
         else
-          ErrorVal.from_runtime(kind: "access_error", **site, operation: "[#{idx.inspect}]", input: [obj, idx], message: "missing key")
+          ErrorVal.from_runtime(kind: "access_error", **site, operation: "[]", input: [obj, idx], message: "missing key")
         end
       else
-        ErrorVal.from_runtime(kind: "argument_error", **site, operation: "[index]", input: [obj, idx], expected: ["[_ ? @Array, _ ? @Integer]", "[_ ? @Object, _ ? @String]"])
+        ErrorVal.from_runtime(kind: "argument_error", **site, operation: "[]", input: [obj, idx], expected: ["[_ ? @Array, _ ? @Integer]", "[_ ? @Object, _ ? @String]"])
       end
     end
 
