@@ -10,8 +10,7 @@ module Fusion
     module Decoder
       extend self
 
-      # The acceptable envelope shapes, as Fusion patterns, per input mode.
-      ENVELOPE_SHAPES = {
+      EXPECTED_ENVELOPE_SHAPES = {
         array: ["[0, _]", "[1, _]"],
         object: ['{"value": _}', '{"error": _}'],
       }.freeze
@@ -51,6 +50,10 @@ module Fusion
         return WirePair.new(status: 0, data: text) unless stripped.start_with?("!")
 
         payload = stripped.delete_prefix("!")
+        # TODO: BUG? should we really convert "" to "null"?
+        # Feels inconsistent with '-!' flag, but might be slightly different case.
+        # Also, definitely inconsistent with non-error case above.
+        # Also, the "!" == "!null" leniency holds only in code, not in input/output JSON.
         WirePair.new(status: 1, data: payload.strip.empty? ? "null" : payload)
       end
 
@@ -70,7 +73,7 @@ module Fusion
           "operation" => "decoding input",
           "status" => 0,
           "input" => raw,
-          "expected" => ENVELOPE_SHAPES.fetch(mode)
+          "expected" => EXPECTED_ENVELOPE_SHAPES.fetch(mode)
         ))
       rescue JSON::ParserError
         # TODO: BUG ???
