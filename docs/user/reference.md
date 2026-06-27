@@ -361,8 +361,8 @@ There are two origins of error values, and they differ in payload:
 | Field       | Required | Meaning                                                                                                                    |
 | ----------- | -------- | -------------------------------------------------------------------------------------------------------------------------- |
 | `kind`      | yes      | The error category, from the closed set below.                                                                             |
-| `origin`    | yes      | Where the failing operation lives, from the closed set of six below.                                                       |
-| `file`      | no       | The source file the failing code lives in, as a path **relative to the directory you ran the command from** (`Dir.pwd`) — only when `origin` is `code` (`"<inline>"` for inline `-e`/REPL). Absent for every other origin. |
+| `origin`    | yes      | Where the failing operation is *defined*, from the closed set of six below.                                                |
+| `file`      | no       | The **call site** of `operation` — the user source that invoked it, as a path **relative to the directory you ran the command from** (`Dir.pwd`), or `"<inline>"` for inline `-e`/REPL. Independent of `origin`: a built-in or stdlib operation called from your code carries *your* file. Absent when there is no user call site (an operation reached from stdlib internals, or a channel/runtime error). |
 | `operation` | yes      | The operation that failed. A built-in or stdlib function is named by its `@`-reference (`"@add"`, `"@math/square"`) — exactly the expression that retrieves it; a syntactic operation by its form (`"\|"`, `".name"`, `"[]"`, `"reading file"`, `"parsing code"`, `"parsing JSON"`). |
 | `status`    | yes      | `0` or `1` — whether the operation received an ordinary value (`0`) or an error value (`1`), mirroring the wire status codes. When `1`, `input` holds that error's bare payload (so `input` is always plain JSON). |
 | `input`     | yes      | The operand(s) the operation received — often the offending value. For `.name` it is the object alone (the key is in `operation`); for `[]` it is `[collection, key]` (the key is a dynamic value). |
@@ -391,8 +391,8 @@ The `file` field is written **relative to the directory you ran the command from
 | `origin`      | Meaning                                                                  |
 | ------------- | ------------------------------------------------------------------------ |
 | `builtin`     | a built-in operation (named by its `@`-reference in `operation`).        |
-| `stdlib`      | a standard-library function (named by its `@`-reference in `operation`; no `file`). |
-| `code`        | user source — a file (its `Dir.pwd`-relative path in `file`) or inline `-e`/REPL (`file` is `"<inline>"`). |
+| `stdlib`      | a standard-library function (named by its `@`-reference in `operation`). |
+| `code`        | user source — a file or inline `-e`/REPL.                                |
 | `input`       | the input channel (stdin or the CLI-argument).                           |
 | `output`      | the output channel (the serialized result).                              |
 | `interpreter` | the interpreter itself, e.g. a stack overflow.                           |

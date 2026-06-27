@@ -97,7 +97,7 @@ RSpec.describe "@-resolution" do
       expect_pipe
         .in("✅", '"nope.fsn"')
         .file_path("ref/loader.fsn")
-        .out("❌", '{"kind":"reference_error","origin":"builtin","operation":"@load","status":0,"input":"nope.fsn","message":"file not found"}')
+        .out("❌", '{"kind":"reference_error","origin":"builtin","file":"spec/fixtures/ref/loader.fsn","operation":"@load","status":0,"input":"nope.fsn","message":"file not found"}')
     end
 
     it "is shadowable by a sibling load.fsn" do
@@ -164,7 +164,7 @@ RSpec.describe "@-resolution" do
     it "blocks an @load target that escapes the jail, without probing its existence" do
       expect_pipe
         .code('"../nope" | @load')
-        .out("❌", '{"kind":"reference_error","origin":"builtin","operation":"@load","status":0,"input":"../nope","message":"outside the jail"}')
+        .out("❌", '{"kind":"reference_error","origin":"builtin","file":"<inline>","operation":"@load","status":0,"input":"../nope","message":"outside the jail"}')
     end
 
     it "disables confinement with a jail of *" do

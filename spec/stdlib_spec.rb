@@ -18,14 +18,14 @@ RSpec.describe "stdlib error handling" do
       expect_pipe
         .in("✅", '"hi"')
         .code("(x => x | @math/square)")
-        .out("❌", '{"kind":"argument_error","origin":"stdlib","operation":"@math/square","status":0,"input":"hi","expected":["_ ? @Integer"]}')
+        .out("❌", '{"kind":"argument_error","origin":"stdlib","file":"<inline>","operation":"@math/square","status":0,"input":"hi","expected":["_ ? @Integer"]}')
     end
 
     it "errors on a float (square is integer-only)" do
       expect_pipe
         .in("✅", "2.5")
         .code("(x => x | @math/square)")
-        .out("❌", '{"kind":"argument_error","origin":"stdlib","operation":"@math/square","status":0,"input":2.5,"expected":["_ ? @Integer"]}')
+        .out("❌", '{"kind":"argument_error","origin":"stdlib","file":"<inline>","operation":"@math/square","status":0,"input":2.5,"expected":["_ ? @Integer"]}')
     end
   end
 
@@ -48,14 +48,14 @@ RSpec.describe "stdlib error handling" do
       expect_pipe
         .in("✅", '"hi"')
         .code("(x => x | @range)")
-        .out("❌", '{"kind":"argument_error","origin":"stdlib","operation":"@range","status":0,"input":"hi","expected":["_ ? (m ? @Integer => [-1, m] | @lessThan)"]}')
+        .out("❌", '{"kind":"argument_error","origin":"stdlib","file":"<inline>","operation":"@range","status":0,"input":"hi","expected":["_ ? (m ? @Integer => [-1, m] | @lessThan)"]}')
     end
 
     it "errors on a negative integer (rather than recursing forever)" do
       expect_pipe
         .in("✅", "-1")
         .code("(x => x | @range)")
-        .out("❌", '{"kind":"argument_error","origin":"stdlib","operation":"@range","status":0,"input":-1,"expected":["_ ? (m ? @Integer => [-1, m] | @lessThan)"]}')
+        .out("❌", '{"kind":"argument_error","origin":"stdlib","file":"<inline>","operation":"@range","status":0,"input":-1,"expected":["_ ? (m ? @Integer => [-1, m] | @lessThan)"]}')
     end
   end
 
@@ -71,28 +71,28 @@ RSpec.describe "stdlib error handling" do
       expect_pipe
         .in("✅", "5")
         .code("(x => x | @map)")
-        .out("❌", '{"kind":"argument_error","origin":"stdlib","operation":"@map","status":0,"input":5,"expected":["{\"f\": _ ? @Function, \"xs\": _ ? @Array}"]}')
+        .out("❌", '{"kind":"argument_error","origin":"stdlib","file":"<inline>","operation":"@map","status":0,"input":5,"expected":["{\"f\": _ ? @Function, \"xs\": _ ? @Array}"]}')
     end
 
     it "errors when a required key is missing" do
       expect_pipe
         .in("✅", "[1,2]")
         .code('(xs => {"xs": xs} | @map)')
-        .out("❌", '{"kind":"argument_error","origin":"stdlib","operation":"@map","status":0,"input":{"xs":[1,2]},"expected":["{\"f\": _ ? @Function, \"xs\": _ ? @Array}"]}')
+        .out("❌", '{"kind":"argument_error","origin":"stdlib","file":"<inline>","operation":"@map","status":0,"input":{"xs":[1,2]},"expected":["{\"f\": _ ? @Function, \"xs\": _ ? @Array}"]}')
     end
 
     it "errors when xs is present but not an array" do
       expect_pipe
         .in("✅", "null")
         .code('(_ => {"f": @negate, "xs": "nope"} | @map)')
-        .out("❌", '{"kind":"argument_error","origin":"stdlib","operation":"@map","status":0,"input":{"f":"<function>","xs":"nope"},"expected":["{\"f\": _ ? @Function, \"xs\": _ ? @Array}"]}')
+        .out("❌", '{"kind":"argument_error","origin":"stdlib","file":"<inline>","operation":"@map","status":0,"input":{"f":"<function>","xs":"nope"},"expected":["{\"f\": _ ? @Function, \"xs\": _ ? @Array}"]}')
     end
 
     it "validates f eagerly: a non-function f errors even when xs is empty" do
       expect_pipe
         .in("✅", "[]")
         .code('(xs => {"f": 5, "xs": xs} | @map)')
-        .out("❌", '{"kind":"argument_error","origin":"stdlib","operation":"@map","status":0,"input":{"f":5,"xs":[]},"expected":["{\"f\": _ ? @Function, \"xs\": _ ? @Array}"]}')
+        .out("❌", '{"kind":"argument_error","origin":"stdlib","file":"<inline>","operation":"@map","status":0,"input":{"f":5,"xs":[]},"expected":["{\"f\": _ ? @Function, \"xs\": _ ? @Array}"]}')
     end
   end
 
@@ -106,42 +106,62 @@ RSpec.describe "stdlib error handling" do
       expect_pipe
         .in("✅", "null")
         .code("(_ => (y => y) | @math/square)")
-        .out("❌", '{"kind":"argument_error","origin":"stdlib","operation":"@math/square","status":0,"input":"<function>","expected":["_ ? @Integer"]}')
+        .out("❌", '{"kind":"argument_error","origin":"stdlib","file":"<inline>","operation":"@math/square","status":0,"input":"<function>","expected":["_ ? @Integer"]}')
     end
 
     it "@math/square of a non-finite number echoes the placeholder" do
       expect_pipe
         .in("✅", "null")
         .code("(_ => 1e400 | @math/square)")
-        .out("❌", '{"kind":"argument_error","origin":"stdlib","operation":"@math/square","status":0,"input":"<Infinity>","expected":["_ ? @Integer"]}')
+        .out("❌", '{"kind":"argument_error","origin":"stdlib","file":"<inline>","operation":"@math/square","status":0,"input":"<Infinity>","expected":["_ ? @Integer"]}')
     end
 
     it "@range of a non-finite number echoes the placeholder" do
       expect_pipe
         .in("✅", "null")
         .code("(_ => 1e400 | @range)")
-        .out("❌", '{"kind":"argument_error","origin":"stdlib","operation":"@range","status":0,"input":"<Infinity>","expected":["_ ? (m ? @Integer => [-1, m] | @lessThan)"]}')
+        .out("❌", '{"kind":"argument_error","origin":"stdlib","file":"<inline>","operation":"@range","status":0,"input":"<Infinity>","expected":["_ ? (m ? @Integer => [-1, m] | @lessThan)"]}')
     end
 
     it "@map of a {f} missing xs echoes the function placeholder" do
       expect_pipe
         .in("✅", "null")
         .code('(_ => {"f": @negate} | @map)')
-        .out("❌", '{"kind":"argument_error","origin":"stdlib","operation":"@map","status":0,"input":{"f":"<function>"},"expected":["{\"f\": _ ? @Function, \"xs\": _ ? @Array}"]}')
+        .out("❌", '{"kind":"argument_error","origin":"stdlib","file":"<inline>","operation":"@map","status":0,"input":{"f":"<function>"},"expected":["{\"f\": _ ? @Function, \"xs\": _ ? @Array}"]}')
     end
 
     it "@map of a bare function echoes the function placeholder" do
       expect_pipe
         .in("✅", "null")
         .code("(_ => (y => y) | @map)")
-        .out("❌", '{"kind":"argument_error","origin":"stdlib","operation":"@map","status":0,"input":"<function>","expected":["{\"f\": _ ? @Function, \"xs\": _ ? @Array}"]}')
+        .out("❌", '{"kind":"argument_error","origin":"stdlib","file":"<inline>","operation":"@map","status":0,"input":"<function>","expected":["{\"f\": _ ? @Function, \"xs\": _ ? @Array}"]}')
     end
 
     it "sanitizes deeply nested functions and non-finite numbers in the echoed input" do
       expect_pipe
         .in("✅", "null")
         .code('(_ => {"a": [1, (y => y), {"deep": @negate}], "b": [1e400]} | @map)')
-        .out("❌", '{"kind":"argument_error","origin":"stdlib","operation":"@map","status":0,"input":{"a":[1,"<function>",{"deep":"<function>"}],"b":["<Infinity>"]},"expected":["{\"f\": _ ? @Function, \"xs\": _ ? @Array}"]}')
+        .out("❌", '{"kind":"argument_error","origin":"stdlib","file":"<inline>","operation":"@map","status":0,"input":{"a":[1,"<function>",{"deep":"<function>"}],"b":["<Infinity>"]},"expected":["{\"f\": _ ? @Function, \"xs\": _ ? @Array}"]}')
+    end
+  end
+
+  # An error from the supplied `f` bubbles through @map unchanged (it is not
+  # @map's own failure). Its `file` is the call site of the operation that failed
+  # — which is *inside* @map (stdlib internals, hence no `file`) when `f` is a bare
+  # builtin, but the user's own source when `f`'s body invokes the operation.
+  describe "an error from f keeps its own call site, not @map's" do
+    it "leaves a bare-builtin f's error file-less (its call site is stdlib-internal)" do
+      expect_pipe
+        .in("✅", '[["a","b"]]')
+        .code('(xs => {"f": @add, "xs": xs} | @map)')
+        .out("❌", '{"kind":"argument_error","origin":"builtin","operation":"@add","status":0,"input":["a","b"],"expected":["[_ ? @Number, _ ? @Number]"]}')
+    end
+
+    it "keeps the user's file when f's own body invokes the failing operation" do
+      expect_pipe
+        .in("✅", "[1]")
+        .code('(xs => {"f": (n => [n, "x"] | @add), "xs": xs} | @map)')
+        .out("❌", '{"kind":"argument_error","origin":"builtin","file":"<inline>","operation":"@add","status":0,"input":[1,"x"],"expected":["[_ ? @Number, _ ? @Number]"]}')
     end
   end
 
@@ -164,21 +184,21 @@ RSpec.describe "stdlib error handling" do
       expect_pipe
         .in("✅", "5")
         .code('(o => {"f": (n => n), "object": o} | @mapValues)')
-        .out("❌", '{"kind":"argument_error","origin":"stdlib","operation":"@mapValues","status":0,"input":{"f":"<function>","object":5},"expected":["{\"f\": _ ? @Function, \"object\": _ ? @Object}"]}')
+        .out("❌", '{"kind":"argument_error","origin":"stdlib","file":"<inline>","operation":"@mapValues","status":0,"input":{"f":"<function>","object":5},"expected":["{\"f\": _ ? @Function, \"object\": _ ? @Object}"]}')
     end
 
     it "errors on a non-{f,object} value" do
       expect_pipe
         .in("✅", "5")
         .code("(x => x | @mapValues)")
-        .out("❌", '{"kind":"argument_error","origin":"stdlib","operation":"@mapValues","status":0,"input":5,"expected":["{\"f\": _ ? @Function, \"object\": _ ? @Object}"]}')
+        .out("❌", '{"kind":"argument_error","origin":"stdlib","file":"<inline>","operation":"@mapValues","status":0,"input":5,"expected":["{\"f\": _ ? @Function, \"object\": _ ? @Object}"]}')
     end
 
     it "validates f eagerly: a non-function f errors even when the object is empty" do
       expect_pipe
         .in("✅", "{}")
         .code('(o => {"f": 5, "object": o} | @mapValues)')
-        .out("❌", '{"kind":"argument_error","origin":"stdlib","operation":"@mapValues","status":0,"input":{"f":5,"object":{}},"expected":["{\"f\": _ ? @Function, \"object\": _ ? @Object}"]}')
+        .out("❌", '{"kind":"argument_error","origin":"stdlib","file":"<inline>","operation":"@mapValues","status":0,"input":{"f":5,"object":{}},"expected":["{\"f\": _ ? @Function, \"object\": _ ? @Object}"]}')
     end
   end
 
@@ -208,14 +228,14 @@ RSpec.describe "stdlib error handling" do
       expect_pipe
         .in("✅", "5")
         .code("(x => x | @all)")
-        .out("❌", '{"kind":"argument_error","origin":"stdlib","operation":"@all","status":0,"input":5,"expected":["{\"f\": _ ? @Function, \"xs\": _ ? @Array}"]}')
+        .out("❌", '{"kind":"argument_error","origin":"stdlib","file":"<inline>","operation":"@all","status":0,"input":5,"expected":["{\"f\": _ ? @Function, \"xs\": _ ? @Array}"]}')
     end
 
     it "validates f eagerly: a non-function f errors even when xs is empty" do
       expect_pipe
         .in("✅", "[]")
         .code('(xs => {"f": 5, "xs": xs} | @all)')
-        .out("❌", '{"kind":"argument_error","origin":"stdlib","operation":"@all","status":0,"input":{"f":5,"xs":[]},"expected":["{\"f\": _ ? @Function, \"xs\": _ ? @Array}"]}')
+        .out("❌", '{"kind":"argument_error","origin":"stdlib","file":"<inline>","operation":"@all","status":0,"input":{"f":5,"xs":[]},"expected":["{\"f\": _ ? @Function, \"xs\": _ ? @Array}"]}')
     end
 
     # Proper recursion short-circuits: once an item is falsey the result is

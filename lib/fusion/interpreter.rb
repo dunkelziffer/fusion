@@ -462,6 +462,13 @@ module Fusion
     # if `f` is not a function. It defaults to `interpreter` for apply calls with
     # no code context (e.g. the CLI applying the whole program).
     def apply(f, v, site = { origin: "interpreter", file: nil })
+      result = dispatch_apply(f, v, site)
+      # A builtin/stdlib error gets the file of the call site that invoked the
+      # operation (resolved once, where the error is born — see resolve_call_site).
+      result.is_a?(ErrorVal) ? result.resolve_call_site(site[:file]) : result
+    end
+
+    def dispatch_apply(f, v, site)
       if f.is_a?(ErrorVal)
         # Propagate errors
         return f

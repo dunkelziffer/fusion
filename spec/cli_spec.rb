@@ -207,7 +207,7 @@ RSpec.describe Fusion::CLI do
       result = described_class.apply(Fusion::NULL, fn, environment: jailed)
 
       expect(described_class.serialize(result).data).to eq(
-        '{"kind":"reference_error","origin":"builtin","operation":"@load","status":0,"input":"/nope/x.fsn","message":"outside the jail"}'
+        '{"kind":"reference_error","origin":"builtin","file":"<inline>","operation":"@load","status":0,"input":"/nope/x.fsn","message":"outside the jail"}'
       )
     end
   end
