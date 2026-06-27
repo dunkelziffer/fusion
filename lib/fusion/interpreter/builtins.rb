@@ -342,13 +342,13 @@ module Fusion
       # aren't an input-shape mismatch (math, conversion, access). `operation`
       # is the builtin's own `@`-reference (`@#{name}`).
       def error(kind, name, v, message)
-        ErrorVal.from_runtime(kind: kind, origin: "builtin", operation: "@#{name}", input: v, message: message)
+        ErrorVal.from_runtime(kind: kind, origin: "builtin", file: @interp.active_call_site, operation: "@#{name}", input: v, message: message)
       end
 
       # Build an `argument_error` describing the acceptable inputs as a list of
       # Fusion patterns. The input was unacceptable iff it matches none of them.
       def argument_error(name, v, expected)
-        ErrorVal.from_runtime(kind: "argument_error", origin: "builtin", operation: "@#{name}", input: v, expected: expected)
+        ErrorVal.from_runtime(kind: "argument_error", origin: "builtin", file: @interp.active_call_site, operation: "@#{name}", input: v, expected: expected)
       end
     end
   end

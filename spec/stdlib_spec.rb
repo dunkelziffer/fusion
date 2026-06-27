@@ -145,19 +145,19 @@ RSpec.describe "stdlib error handling" do
     end
   end
 
-  # An error from the supplied `f` bubbles through @map unchanged (it is not
-  # @map's own failure). Its `file` is the call site of the operation that failed
-  # — which is *inside* @map (stdlib internals, hence no `file`) when `f` is a bare
-  # builtin, but the user's own source when `f`'s body invokes the operation.
-  describe "an error from f keeps its own call site, not @map's" do
-    it "leaves a bare-builtin f's error file-less (its call site is stdlib-internal)" do
+  # An error from the supplied `f` bubbles through @map unchanged; its `file` is
+  # the innermost *user* file, which @map's stdlib frame is transparent to. So a
+  # bare-builtin `f` and a user-function `f` both report the user's own source
+  # (here "<inline>"), never @map's stdlib internals.
+  describe "an error from f reports the innermost user file, through @map" do
+    it "attributes a bare-builtin f's error to the user call site" do
       expect_pipe
         .in("✅", '[["a","b"]]')
         .code('(xs => {"f": @add, "xs": xs} | @map)')
-        .out("❌", '{"kind":"argument_error","origin":"builtin","operation":"@add","status":0,"input":["a","b"],"expected":["[_ ? @Number, _ ? @Number]"]}')
+        .out("❌", '{"kind":"argument_error","origin":"builtin","file":"<inline>","operation":"@add","status":0,"input":["a","b"],"expected":["[_ ? @Number, _ ? @Number]"]}')
     end
 
-    it "keeps the user's file when f's own body invokes the failing operation" do
+    it "attributes a user-function f's error to the user call site too" do
       expect_pipe
         .in("✅", "[1]")
         .code('(xs => {"f": (n => [n, "x"] | @add), "xs": xs} | @map)')

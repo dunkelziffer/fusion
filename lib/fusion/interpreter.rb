@@ -52,8 +52,15 @@ module Fusion
       @file_cache = {} # abspath -> Thunk
       @ast_cache = {}  # abspath -> AST
       @builtins = {}   # name -> NativeFunc  (consulted by @name, not via env)
+      # The innermost user-code file a built-in is currently running for, so its
+      # error payloads can carry that `file` (set per call in #apply).
+      @active_call_site = "<fusion>"
       Builtins.install(@builtins, self)
     end
+
+    # The call site (innermost user-code file) of the built-in currently running;
+    # read by the built-in error helpers (see interpreter/builtins.rb).
+    attr_reader :active_call_site
 
     # Apply the program to one input behind a safety net: a Ruby-level failure
     # (notably a stack overflow) becomes a payloaded error rather than a raw
@@ -144,6 +151,35 @@ module Fusion
       end
     end
 
+    # The `file` an error here should carry: the innermost *user-code* file on the
+    # dynamic call chain. When stdlib code runs, it borrows the user call site that
+    # reached it (injected as `:call_site` in #apply); user/inline code is its own
+    # file (derived from `code_site`); above any user code, the runtime: "<fusion>".
+    def call_site(env)
+      injected = env.context(:call_site)
+      return injected unless injected == :__unbound__
+
+      site = code_site(env)
+      site[:origin] == "code" ? site[:file] : "<fusion>"
+    end
+
+    # A stdlib `!{...}` payload mirrors the standardized error shape but can't name
+    # its own call site, so we fill `file` (slotted after `origin`) here, where the
+    # env is in hand. Plain user errors — no `builtin`/`stdlib` `origin` — are left
+    # untouched, as is a re-raised payload that already carries a `file`.
+    def with_call_site(payload, env)
+      return payload unless payload.is_a?(Hash)
+
+      origin = payload["origin"]
+      return payload unless (origin == "stdlib" || origin == "builtin") && !payload.key?("file")
+
+      file = call_site(env)
+      payload.each_with_object({}) do |(key, value), out|
+        out[key] = value
+        out["file"] = file if key == "origin"
+      end
+    end
+
     # `ref_site`/`ref_input` attribute a *read* failure to the referring code (see
     # load_file). A syntax error in the file's own source is attributed to the file.
     def evaluate_file(abspath, ref_site, ref_input)
@@ -218,21 +254,25 @@ module Fusion
         # loads a VERBATIM filename (no ".fsn" appended) so arbitrary names work.
         d = dir
         return NativeFunc.new("load", lambda do |v|
+          # `@active_call_site` is set by #apply just before this runs: the user
+          # file that wrote `| @load`, which every @load error reports as its `file`.
+          site = { origin: "builtin", file: @active_call_site }
+
           unless v.is_a?(String)
-            next ErrorVal.from_runtime(kind: "argument_error", origin: "builtin", operation: "@load", input: v, expected: ["_ ? @String"])
+            next ErrorVal.from_runtime(kind: "argument_error", **site, operation: "@load", input: v, expected: ["_ ? @String"])
           end
 
           target = File.expand_path(v, d)
 
           # Check the jail before touching the filesystem, so an out-of-jail
           # path can't be probed for existence.
-          next jail_error({ origin: "builtin", file: nil }, "@load", v) unless within_jail?(target)
+          next jail_error(site, "@load", v) unless within_jail?(target)
 
           unless File.exist?(target)
-            next ErrorVal.from_runtime(kind: "reference_error", origin: "builtin", operation: "@load", input: v, message: "file not found")
+            next ErrorVal.from_runtime(kind: "reference_error", **site, operation: "@load", input: v, message: "file not found")
           end
 
-          load_file(target, site: { origin: "builtin", file: nil }, input: v).force
+          load_file(target, site: site, input: v).force
         end)
       end
 
@@ -296,7 +336,7 @@ module Fusion
             # No nested errors. Propagate inner error.
             payload
           else
-            ErrorVal.new(payload)
+            ErrorVal.new(with_call_site(payload, env))
           end
         end
       when Expression::Ident
@@ -400,7 +440,7 @@ module Fusion
     def eval_pipe(node, env)
       value = eval_expr(node.left, env)
       function = eval_expr(node.right, env)
-      apply(function, value, code_site(env))
+      apply(function, value, call_site(env))
     end
 
     def eval_member(node, env)
@@ -458,17 +498,12 @@ module Fusion
     end
 
     # ---- Application & matching ------------------------------------------
-    # `site` is the `{origin:, file:}` of the code where the `|` lives, used
-    # if `f` is not a function. It defaults to `interpreter` for apply calls with
-    # no code context (e.g. the CLI applying the whole program).
-    def apply(f, v, site = { origin: "interpreter", file: nil })
-      result = dispatch_apply(f, v, site)
-      # A builtin/stdlib error gets the file of the call site that invoked the
-      # operation (resolved once, where the error is born — see resolve_call_site).
-      result.is_a?(ErrorVal) ? result.resolve_call_site(site[:file]) : result
-    end
-
-    def dispatch_apply(f, v, site)
+    # `call_site` is the innermost user-code file the application runs for (see
+    # #call_site): a built-in/stdlib error reports it as its `file`, and a stdlib
+    # function passes it on to the operations it calls. It defaults to the runtime
+    # ("<fusion>") for an apply with no user-code caller (e.g. the CLI applying the
+    # whole program directly to a value).
+    def apply(f, v, call_site = "<fusion>")
       if f.is_a?(ErrorVal)
         # Propagate errors
         return f
@@ -480,6 +515,9 @@ module Fusion
           return v
         end
 
+        # Built-in error helpers read this to stamp the call site as their `file`.
+        @active_call_site = call_site
+
         # Safety net: a builtin that raises a Ruby error (e.g. a domain error)
         # becomes a payloaded error rather than a raw backtrace on stderr.
         begin
@@ -487,15 +525,21 @@ module Fusion
         rescue StandardError => err
           # TODO: move math errors into the builtins. This should become a safety net for unpredicted errors.
           kind = (err.is_a?(FloatDomainError) || err.is_a?(ZeroDivisionError)) ? "math_error" : "internal_error"
-          ErrorVal.from_runtime(kind: kind, origin: "builtin", operation: "@#{f.name}", input: v, message: err.message)
+          ErrorVal.from_runtime(kind: kind, origin: "builtin", file: call_site, operation: "@#{f.name}", input: v, message: err.message)
         end
       elsif f.is_a?(Func)
+        # Stdlib code has no user file of its own: errors inside it (and in the
+        # built-ins it calls) report the user `call_site` that reached it. User and
+        # inline functions are their own call site (derived lexically from their env).
+        body_call_site = (code_site(f.env)[:origin] == "stdlib") ? call_site : nil
+
         f.clauses.each do |clause|
           # Bindings are inserted directly into a fresh child env as the pattern
           # matches; a duplicate binder (e.g. `[a, a]`) trips Env#bind, which we
           # convert to a binding_error here. A failed/abandoned clause just drops
           # its env, so partial bindings never leak.
           clause_env = f.env.child
+          clause_env.set_context(:call_site, body_call_site) if body_call_site
           m = begin
             match(clause.pattern, v, clause_env)
           rescue Env::DuplicateBinding => e
@@ -519,7 +563,7 @@ module Fusion
         # lenient default is `null`.
         v.is_a?(ErrorVal) ? v : NULL
       else
-        ErrorVal.from_runtime(kind: "argument_error", **site, operation: "|", input: [v, f], expected: ["[_, _ ? @Function]"])
+        ErrorVal.from_runtime(kind: "argument_error", origin: "code", file: call_site, operation: "|", input: [v, f], expected: ["[_, _ ? @Function]"])
       end
     end
 
@@ -531,9 +575,9 @@ module Fusion
     def apply_predicate(pred_expr, value, env)
       if pred_expr.is_a?(Expression::Pipe)
         upstream = apply_predicate(pred_expr.left, value, env)
-        apply(eval_expr(pred_expr.right, env), upstream, code_site(env))
+        apply(eval_expr(pred_expr.right, env), upstream, call_site(env))
       else
-        apply(eval_expr(pred_expr, env), value, code_site(env))
+        apply(eval_expr(pred_expr, env), value, call_site(env))
       end
     end
 
