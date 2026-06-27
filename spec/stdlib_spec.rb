@@ -2,10 +2,9 @@
 
 # The stdlib is ordinary Fusion code, so it cannot forge runtime errors.
 # Instead each stdlib function signals bad input with a user error (`!`) whose
-# payload mirrors the builtin error shape (kind/origin/operation/status/input/
-# expected), with `origin: "stdlib"` and `operation` the function's own
-# `@`-reference (e.g. `@map`, `@math/square`). stdlib carries no `file`. See
-# docs/lang/design.md §2.9.
+# payload mirrors the builtin error shape (docs/user/reference.md §6.5) with
+# `origin` "stdlib", no `file` field and the function's own @-reference as
+# `operation`.
 RSpec.describe "stdlib error handling" do
   describe "@math/square" do
     it "squares an integer" do
