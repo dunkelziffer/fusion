@@ -3,8 +3,8 @@
 # Built-in operations, reached via @name and applied to a value over a pipe.
 #
 # Each builtin is exercised for its happy paths and its failure payloads. A
-# wrong input shape or type is a single `argument_error` whose `expected` lists
-# the acceptable inputs as Fusion patterns. See docs/lang/design.md §2.9.
+# wrong input shape or type is an `argument_error` whose `expected` field
+# lists the acceptable inputs as Fusion patterns. See docs/lang/design.md §2.9.
 RSpec.describe "builtins" do
   describe "@add" do
     it "adds two integers" do
