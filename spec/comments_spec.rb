@@ -46,7 +46,7 @@ RSpec.describe "comments" do
         .code("(_ => 1) # nope")
         .out("❌", a_string_including(
           '"kind":"syntax_error"', '"origin":"code"', '"file":"<inline>"', '"operation":"parsing code"', '"status":0', '"input":"(_ => 1) # nope"',
-          /"message":"(?:[^"\\]|\\.)*"/
+          '"message":'
         ))
     end
 
@@ -55,7 +55,7 @@ RSpec.describe "comments" do
         .code("(_ => 1 # nope\n)")
         .out("❌", a_string_including(
           '"kind":"syntax_error"', '"origin":"code"', '"file":"<inline>"', '"operation":"parsing code"', '"status":0', '"input":"(_ => 1 # nope\n)"',
-          /"message":"(?:[^"\\]|\\.)*"/
+          '"message":'
         ))
     end
 
@@ -64,7 +64,7 @@ RSpec.describe "comments" do
         .code("(_ => \"line1\nline2\")")
         .out("❌", a_string_including(
           '"kind":"syntax_error"', '"origin":"code"', '"file":"<inline>"', '"operation":"parsing code"', '"status":0', '"input":"(_ => \"line1\nline2\")"',
-          /"message":"(?:[^"\\]|\\.)*"/
+          '"message":'
         ))
     end
   end

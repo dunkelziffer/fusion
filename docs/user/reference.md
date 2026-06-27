@@ -334,9 +334,10 @@ particular built-ins:
 If a `?` predicate evaluates to an error (the predicate function itself errored,
 or it was a non-function error value), that error becomes the function's return
 value immediately. Subsequent clauses are **not** tried — predicate-errors are
-treated as program failures, not as "no match." This is the key reason to make
-your predicates *total* (end with `_ => false`): a predicate that can crash will
-short-circuit your whole function.
+treated as program failures, not as "no match." This is the key reason to keep a
+`?` predicate from raising: a predicate that can crash will short-circuit your
+whole function. A non-matching input is not a crash — it falls through to `null`
+(falsey) — so a predicate needs no `_ => false` catch-all to be safe here.
 
 ### 6.5 The standardized error payload
 

@@ -12,7 +12,7 @@ RSpec.describe "error kinds" do
         .code("(_ => @")
         .out("❌", a_string_including(
           '"kind":"syntax_error"', '"origin":"code"', '"file":"<inline>"', '"operation":"parsing code"', '"status":0', '"input":"(_ => @"',
-          /"message":"[^"]*"/
+          '"message":'
         ))
     end
 
@@ -21,8 +21,7 @@ RSpec.describe "error kinds" do
         .file_path("badsyntax.fsn")
         .out("❌", a_string_including(
           '"kind":"syntax_error"', '"origin":"code"', '"file":"badsyntax.fsn"', '"operation":"parsing code"', '"status":0',
-          /"input":"(?:[^"\\]|\\.)*"/,
-          /"message":"(?:[^"\\]|\\.)*"/
+          '"input":', '"message":'
         ))
     end
 

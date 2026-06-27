@@ -1,5 +1,5 @@
 (
-  {"f": _, "xs": []} => [],
-  {"f": f, "xs": [x, ...rest]} => [x | f, ...({"f": f, "xs": rest} | @map)],
-  x => !{"kind": "argument_error", "origin": "stdlib", "operation": "@map", "status": 0, "input": x | @sanitize, "expected": ["{\"f\": _, \"xs\": _ ? @Array}"]}
+  {"f": _ ? @Function, "xs": []} => [],
+  {"f": f ? @Function, "xs": [x, ...rest]} => [x | f, ...({"f": f, "xs": rest} | @)],
+  x => !{"kind": "argument_error", "origin": "stdlib", "operation": "@map", "status": 0, "input": x | @sanitize, "expected": ["{\"f\": _ ? @Function, \"xs\": _ ? @Array}"]}
 )

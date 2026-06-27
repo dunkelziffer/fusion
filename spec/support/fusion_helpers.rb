@@ -15,7 +15,9 @@
 # The payload slot takes the exact JSON string where it is stable. When parts of
 # that string are machine-dependent, use the `a_string_including`-matcher.
 # That matcher supports string AND `Regexp`. Use a string for all stable key-value
-# pairs. Use a `Regexp` matcher for variable key-value pairs.
+# pairs. Use a `Regexp` matcher for variable key-value pairs. If the value of a
+# key-value pair is allowed to be an arbitrary string, only assert the key via
+# '"key":'.
 #
 # A program that fails to parse is not an exception. It is a payloaded syntax_error,
 # asserted with `.out("❌", ...)` like any other failure.

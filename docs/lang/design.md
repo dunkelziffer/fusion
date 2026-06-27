@@ -274,7 +274,7 @@ Future work and open questions are tracked separately in our [Roadmap](./roadmap
 - 🧑 ✅ Introduce a distinct error mode `!`, separate from `null`.
 - 🧑 ✅ `null` = legitimate absence; `!` = failure.
 - 🧑 ✅ A function is made *strict* by ending with `_ => !` (error on no match) and is otherwise *lenient* (returns `null` on no match).
-- 🧑 ✅ Total predicates end with `_ => false`.
+- 🧑 ✅ A `?` predicate must not raise — a predicate error short-circuits the whole function. A non-match needs no `_ => false`; it already yields `null` (falsey).
 - 🤖 ✅ Built-in operations return `!` on bad input; built-in predicates return `false`.
 - 🧑 ✅ The form of `!` (always carrying a payload) is fixed by 2.8.
 - 🤖 ✅ `!` matches **only** error patterns (not `_`, not a binder).
@@ -482,6 +482,8 @@ Refines §2.9: same shape, but with orthogonal fields and a single input-error k
 - 🧑 ✅ `expected` lists the acceptable inputs as Fusion patterns (the input matched none); an error with `expected` never also carries a `message`.
 - 🧑 ✅ `type_error` is merged into `argument_error`: any wrong input shape *or* type is one `argument_error`, with `expected` subsuming the old split (so a non-object member access or a wrong-typed index is now an `argument_error`).
 - 🧑 ✅ A constraint no bare pattern can express (e.g. "every element is a string") uses the `@all` stdlib predicate inside the pattern, e.g. `[_ ? (xs => {"xs": xs, "f": @String} | @all), _ ? @String]`.
+- 🧑 ✅ stdlib higher-order functions (`@all`/`@map`/`@mapValues`) guard `f ? @Function` in every clause — a non-function `f` errors even on an empty collection — and `expected` shows the guard.
+- 🧑 ✅ `@all` short-circuits: the first falsey item yields `false`, the rest go untested.
 - 🧑 ✅ `internal_error` (new) is the catch-all for an unexpected host/interpreter failure — a Ruby error the engine caught rather than letting it crash the process (`origin` `interpreter` or `builtin`).
 - 🧑 ✅ A runtime resource limit being exceeded is a separate `limit_error` (currently a stack overflow, `"stack level too deep"`): the runtime gave up because a space/time budget ran out — not an engine defect. The general name (vs `stack_error`) lets future runtime resource limits share the kind.
 
