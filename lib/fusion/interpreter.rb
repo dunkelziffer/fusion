@@ -102,9 +102,14 @@ module Fusion
     end
 
     # ---- File loading -----------------------------------------------------
-    def load_file(abspath)
-      @file_cache[abspath] ||= Thunk.new(site: file_site(abspath), input: display_path(abspath)) do
-        evaluate_file(abspath)
+    # `site` and `input` describe the *referring* code, for errors that are about
+    # reaching this file at all (a failed read, a load cycle): `site` is the
+    # referrer's `{origin:, file:}` and `input` echoes the user's own reference.
+    # They default to this file's own identity, for the top-level program (which
+    # has no referrer). A syntax error *inside* the file is attributed to the file.
+    def load_file(abspath, site: file_site(abspath), input: display_path(abspath))
+      @file_cache[abspath] ||= Thunk.new(site: site, input: input) do
+        evaluate_file(abspath, site, input)
       end
     end
 
@@ -124,7 +129,7 @@ module Fusion
       if abspath.start_with?(@stdlib_dir + File::SEPARATOR)
         { origin: "stdlib" }
       else
-        { origin: "code", file: File.basename(abspath) }
+        { origin: "code", file: display_path(abspath) }
       end
     end
 
@@ -139,11 +144,12 @@ module Fusion
       end
     end
 
-    def evaluate_file(abspath)
-      site = file_site(abspath)
+    # `ref_site`/`ref_input` attribute a *read* failure to the referring code (see
+    # load_file). A syntax error in the file's own source is attributed to the file.
+    def evaluate_file(abspath, ref_site, ref_input)
       ast = (@ast_cache[abspath] ||= begin
         src = File.read(abspath)
-        Parser.parse_file(src, site: site)
+        Parser.parse_file(src, site: file_site(abspath))
       end)
 
       if ast.is_a?(ErrorVal) # a parse error (already a payloaded value)
@@ -156,10 +162,10 @@ module Fusion
         eval_expr(ast, env)
       end
     rescue Errno::ENOENT
-      ErrorVal.from_runtime(kind: "reference_error", **site, operation: "reading file", input: display_path(abspath), message: "file not found")
+      ErrorVal.from_runtime(kind: "reference_error", **ref_site, operation: "reading file", input: ref_input, message: "file not found")
     rescue SystemCallError => err # EISDIR, EACCES, ... — file-system access failures
       # Keep the strerror ("Is a directory"), drop Ruby's "@ io_fread - <path>" tail (path is in `input`).
-      ErrorVal.from_runtime(kind: "reference_error", **site, operation: "reading file", input: display_path(abspath), message: err.message.split(" @ ").first)
+      ErrorVal.from_runtime(kind: "reference_error", **ref_site, operation: "reading file", input: ref_input, message: err.message.split(" @ ").first)
     end
 
     # Evaluate a top-level unit that has no file of its own:
@@ -182,7 +188,7 @@ module Fusion
       if File.exist?(sibling_file)
         return jail_error(site, "resolving @#{name}", name) unless within_jail?(sibling_file)
 
-        return load_file(sibling_file).force
+        return load_file(sibling_file, site: site, input: name).force
       end
 
       resolve_builtin_or_stdlib(name, dir, site)
@@ -226,7 +232,7 @@ module Fusion
             next ErrorVal.from_runtime(kind: "reference_error", origin: "builtin", operation: "@load", input: v, message: "file not found")
           end
 
-          load_file(target).force
+          load_file(target, site: { origin: "builtin", file: nil }, input: v).force
         end)
       end
 
@@ -236,7 +242,9 @@ module Fusion
 
       stdlib_file = File.join(@stdlib_dir, name + ".fsn")
       if File.exist?(stdlib_file)
-        return load_file(stdlib_file).force
+        # stdlib keeps its own `{origin: "stdlib"}` site (no path leaked); `input`
+        # echoes the reference name rather than the internal stdlib path.
+        return load_file(stdlib_file, input: name).force
       end
 
       ErrorVal.from_runtime(kind: "reference_error", **site, operation: "resolving @#{name}", input: name, message: "unresolved reference")
@@ -247,7 +255,7 @@ module Fusion
       target = File.expand_path(relpath + ".fsn", dir)
       return jail_error(site, "resolving @#{relpath}", relpath) unless within_jail?(target)
 
-      load_file(target).force
+      load_file(target, site: site, input: relpath).force
     end
 
     # The run's jail (the `:jail` context, an absolute path or nil) confines

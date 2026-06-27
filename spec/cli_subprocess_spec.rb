@@ -159,7 +159,7 @@ RSpec.describe "CLI (exe/fusion)" do
       out, err, status = run_cli(File.join(FIX, "ref", "sub", "usesParent.fsn"), stdin: "7")
       expect(out).to eq("")
       expect(err).to eq(
-        %({"kind":"reference_error","origin":"code","file":"usesParent.fsn","operation":"resolving @../helper","status":0,"input":"../helper","message":"outside the jail"}\n)
+        %({"kind":"reference_error","origin":"code","file":"spec/fixtures/ref/sub/usesParent.fsn","operation":"resolving @../helper","status":0,"input":"../helper","message":"outside the jail"}\n)
       )
       expect(status.exitstatus).to eq(1)
     end

@@ -20,7 +20,7 @@ RSpec.describe "error kinds" do
       expect_pipe
         .file_path("badsyntax.fsn")
         .out("❌", a_string_including(
-          '"kind":"syntax_error"', '"origin":"code"', '"file":"badsyntax.fsn"', '"operation":"parsing code"', '"status":0',
+          '"kind":"syntax_error"', '"origin":"code"', '"file":"spec/fixtures/badsyntax.fsn"', '"operation":"parsing code"', '"status":0',
           '"input":', '"message":'
         ))
     end
@@ -43,15 +43,15 @@ RSpec.describe "error kinds" do
     it "non-productive data cycle" do
       expect_pipe
         .file_path("cyclicA.fsn")
-        .out("❌", '{"kind":"reference_error","origin":"code","file":"cyclicA.fsn","operation":"forcing a reference","status":0,"input":"spec/fixtures/cyclicA.fsn","message":"non-productive data cycle"}')
+        .out("❌", '{"kind":"reference_error","origin":"code","file":"spec/fixtures/cyclicA.fsn","operation":"forcing a reference","status":0,"input":"spec/fixtures/cyclicA.fsn","message":"non-productive data cycle"}')
     end
 
-    # The `input` path is relative to the invocation directory (`Dir.pwd`), so it
-    # reads as the route from where you ran the command to the offending file.
-    # The cycle above reports "spec/fixtures/cyclicA.fsn" because the suite runs
-    # from the project root; run the same program *from* the fixtures directory
-    # and the very same error reports just "cyclicA.fsn" — no "spec/fixtures/".
-    it "reports the input path relative to the invocation directory (Dir.pwd)" do
+    # The `file` (and any path in `input`) is relative to the invocation directory
+    # (`Dir.pwd`), so it reads as the route from where you ran the command to the
+    # offending file. The cycle above reports "spec/fixtures/cyclicA.fsn" because
+    # the suite runs from the project root; run the same program *from* the
+    # fixtures directory and the very same error reports just "cyclicA.fsn".
+    it "reports the file path relative to the invocation directory (Dir.pwd)" do
       Dir.chdir(FusionHelpers::FIXTURES) do
         expect_pipe
           .file_path("cyclicA.fsn")
@@ -63,7 +63,7 @@ RSpec.describe "error kinds" do
       expect_pipe
         .jail("..") # widen past the default (the program's dir) so @../ stays in the jail
         .code("(_ => @../nonexistent)")
-        .out("❌", '{"kind":"reference_error","origin":"code","file":"nonexistent.fsn","operation":"reading file","status":0,"input":"spec/nonexistent.fsn","message":"file not found"}')
+        .out("❌", '{"kind":"reference_error","origin":"code","file":"<inline>","operation":"reading file","status":0,"input":"../nonexistent","message":"file not found"}')
     end
 
     it "missing file via @load" do
@@ -74,10 +74,11 @@ RSpec.describe "error kinds" do
 
     it "a file-system access failure (reading a directory)" do
       # @load of a directory hits Errno::EISDIR, rescued into reference_error.
+      # Attributed to the builtin (no file), echoing the user's argument "ref".
       expect_pipe
         .code('(_ => "ref" | @load)')
         .out("❌", a_string_including(
-          '"kind":"reference_error"', '"origin":"code"', '"file":"ref"', '"operation":"reading file"', '"status":0', '"input":"spec/fixtures/ref"',
+          '"kind":"reference_error"', '"origin":"builtin"', '"operation":"reading file"', '"status":0', '"input":"ref"',
           /"message":"[^"]*directory[^"]*"/ # OS strerror text, kept loose
         ))
     end

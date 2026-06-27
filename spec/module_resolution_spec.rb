@@ -65,7 +65,7 @@ RSpec.describe "@-resolution" do
       expect_pipe
         .in("✅", "null")
         .file_path("ref/readenv.fsn")
-        .out("❌", '{"kind":"access_error","origin":"code","file":"readenv.fsn","operation":".CI","status":0,"input":{},"message":"missing key"}')
+        .out("❌", '{"kind":"access_error","origin":"code","file":"spec/fixtures/ref/readenv.fsn","operation":".CI","status":0,"input":{},"message":"missing key"}')
     end
 
     it "is shadowable by a sibling ENV.fsn" do
@@ -136,7 +136,7 @@ RSpec.describe "@-resolution" do
         .in("✅", "null")
         .jail("ref")
         .file_path("ref/sub/usesDotDotBuiltin.fsn")
-        .out("❌", '{"kind":"reference_error","origin":"code","file":"subtract.fsn","operation":"reading file","status":0,"input":"spec/fixtures/ref/subtract.fsn","message":"file not found"}')
+        .out("❌", '{"kind":"reference_error","origin":"code","file":"spec/fixtures/ref/sub/usesDotDotBuiltin.fsn","operation":"reading file","status":0,"input":"../subtract","message":"file not found"}')
     end
   end
 
@@ -148,7 +148,7 @@ RSpec.describe "@-resolution" do
       expect_pipe
         .in("✅", "7")
         .file_path("ref/sub/usesParent.fsn")
-        .out("❌", '{"kind":"reference_error","origin":"code","file":"usesParent.fsn","operation":"resolving @../helper","status":0,"input":"../helper","message":"outside the jail"}')
+        .out("❌", '{"kind":"reference_error","origin":"code","file":"spec/fixtures/ref/sub/usesParent.fsn","operation":"resolving @../helper","status":0,"input":"../helper","message":"outside the jail"}')
     end
 
     # @mapValues is a stdlib file that calls its stdlib sibling @map. Both must
@@ -183,7 +183,7 @@ RSpec.describe "@-resolution" do
         .in("✅", "null")
         .jail("ref/localmath")
         .file_path("ref/usesAdd.fsn")
-        .out("❌", '{"kind":"reference_error","origin":"code","file":"usesAdd.fsn","operation":"resolving @add","status":0,"input":"add","message":"outside the jail"}')
+        .out("❌", '{"kind":"reference_error","origin":"code","file":"spec/fixtures/ref/usesAdd.fsn","operation":"resolving @add","status":0,"input":"add","message":"outside the jail"}')
     end
   end
 end
