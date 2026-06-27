@@ -110,9 +110,9 @@ module Fusion
     def load_file(rel_path, root_env)
       interp = Fusion::Interpreter.new(root_env)
       abspath = File.expand_path(rel_path)
-      # The top-level program file is read by the runtime, not via an @-reference:
-      # the operation stays "reading file", with the path as `input` (which file).
-      interp.load_file(abspath).force(operation: "reading file", input: interp.display_path(abspath), site: { origin: "code", file: nil })
+      # The top-level program file is loaded by the runtime, not via an @-reference:
+      # the operation is "loading code", with the path as `input` (which file).
+      interp.load_file(abspath).force(operation: "loading code", input: interp.display_path(abspath), site: { origin: "code", file: nil })
     end
 
     # runtime value + runtime value -> runtime value

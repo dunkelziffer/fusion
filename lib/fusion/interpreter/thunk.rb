@@ -19,7 +19,7 @@ module Fusion
       # They build the cycle error when this thunk is already being forced (a
       # non-productive data cycle), and reach the compute block for a read failure.
       # They default to the top-level program load, which has no enclosing reference.
-      def force(operation: "reading file", input: NULL, site: { origin: "code", file: nil })
+      def force(operation: "loading code", input: NULL, site: { origin: "code", file: nil })
         case @state
         when :done then @value
         when :forcing

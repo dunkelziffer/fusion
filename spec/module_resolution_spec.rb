@@ -115,6 +115,16 @@ RSpec.describe "@-resolution" do
         .file_path("ref/shadowload/usesLoad.fsn")
         .out("✅", '"shadowed-load"')
     end
+
+    # loadcycleA and loadcycleB @load each other at data time. The cycle is
+    # reported under the @load that re-entered, echoing its filename argument
+    # (the operation stays "@load" — the resolve/read stages don't leak).
+    it "errors on a cycle reached through @load" do
+      expect_pipe
+        .in("✅", "null")
+        .file_path("loadcycleA.fsn")
+        .out("❌", '{"kind":"reference_error","origin":"builtin","file":"spec/fixtures/loadcycleB.fsn","operation":"@load","status":0,"input":"loadcycleA.fsn","message":"non-productive data cycle"}')
+    end
   end
 
   describe "relative paths" do
@@ -146,6 +156,20 @@ RSpec.describe "@-resolution" do
         .jail("ref")
         .file_path("ref/sub/usesDotDotBuiltin.fsn")
         .out("❌", '{"kind":"reference_error","origin":"code","file":"spec/fixtures/ref/sub/usesDotDotBuiltin.fsn","operation":"@../subtract","status":0,"input":null,"message":"file not found"}')
+    end
+
+    # A path reference to a directory (here a dir literally named "adir.fsn") fails
+    # the read; like @../subtract it stays one operation ("@../adir", input null),
+    # the message being the lowercased, machine-dependent strerror.
+    it "errors when @../adir points at a directory" do
+      expect_pipe
+        .in("✅", "null")
+        .jail("ref")
+        .file_path("ref/sub/usesDotDotDir.fsn")
+        .out("❌", a_string_including(
+          '"kind":"reference_error"', '"origin":"code"', '"file":"spec/fixtures/ref/sub/usesDotDotDir.fsn"', '"operation":"@../adir"', '"status":0', '"input":null',
+          /"message":"[^"]*directory[^"]*"/ # OS strerror text, kept loose
+        ))
     end
   end
 
