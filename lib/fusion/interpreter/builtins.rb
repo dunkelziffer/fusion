@@ -184,8 +184,6 @@ module Fusion
 
       def join(v)
         return v if v.is_a?(ErrorVal)
-        # The "all strings" element constraint isn't a bare pattern, so it is
-        # expressed with the @all predicate over the first element.
         expected = ['[_ ? (xs => {"xs": xs, "f": @String} | @all), _ ? @String]']
         return argument_error("join", v, expected) unless pair?(v)
 
@@ -282,8 +280,8 @@ module Fusion
 
       def to_object(v)
         return v if v.is_a?(ErrorVal)
-        # Each entry must be a [string, _] pair; that element constraint is
-        # expressed with the @all predicate over the array.
+        # Each entry must be a [string, _] pair
+        # TODO: @all should use truthy/falsey instead of true/false. Then, drop ', _ => false'
         expected = ['_ ? (xs => {"xs": xs, "f": ([_ ? @String, _] => true, _ => false)} | @all)']
         unless v.is_a?(Array) && v.all? { |entry| pair?(entry) && entry[0].is_a?(String) }
           return argument_error("toObject", v, expected)
