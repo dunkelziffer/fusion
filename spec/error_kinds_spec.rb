@@ -214,7 +214,7 @@ RSpec.describe "error kinds" do
 
     # A user error (`!expr`) is serialized strictly, just like a plain result: a
     # payload with no JSON form is itself a serialization_error. The error input
-    # is reported as status "error" with its bare (best-effort) payload.
+    # is reported as status "1" with its bare (best-effort) payload.
     it "a user error whose payload is a function" do
       expect_pipe
         .code("(_ => !(y => y))")
@@ -228,7 +228,7 @@ RSpec.describe "error kinds" do
     end
 
     # A structured payload stays valid JSON in `input`: an unserializable value
-    # nested inside it shows up as a placeholder, no stray `!`.
+    # nested inside it shows up as a string placeholder.
     it "a user error whose payload is an object containing a function" do
       expect_pipe
         .code('(_ => !{"a": (y => y)})')
