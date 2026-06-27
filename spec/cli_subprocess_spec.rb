@@ -148,7 +148,7 @@ RSpec.describe "CLI (exe/fusion)" do
       out, err, status = run_cli("-e", "[1, @]")
       expect(out).to eq("")
       expect(err).to eq(
-        %({"kind":"reference_error","origin":"code","file":"<inline>","operation":"forcing a reference","status":0,"input":null,"message":"non-productive data cycle"}\n)
+        %({"kind":"reference_error","origin":"code","file":"<inline>","operation":"@","status":0,"input":null,"message":"non-productive data cycle"}\n)
       )
       expect(status.exitstatus).to eq(1)
     end
@@ -159,7 +159,7 @@ RSpec.describe "CLI (exe/fusion)" do
       out, err, status = run_cli(File.join(FIX, "ref", "sub", "usesParent.fsn"), stdin: "7")
       expect(out).to eq("")
       expect(err).to eq(
-        %({"kind":"reference_error","origin":"code","file":"spec/fixtures/ref/sub/usesParent.fsn","operation":"resolving @../helper","status":0,"input":"../helper","message":"outside the jail"}\n)
+        %({"kind":"reference_error","origin":"code","file":"spec/fixtures/ref/sub/usesParent.fsn","operation":"@../helper","status":0,"input":null,"message":"outside the jail"}\n)
       )
       expect(status.exitstatus).to eq(1)
     end
@@ -176,7 +176,7 @@ RSpec.describe "CLI (exe/fusion)" do
       out, err, status = run_cli("-e", "(x => x | @../helper)", stdin: "7")
       expect(out).to eq("")
       expect(err).to eq(
-        %({"kind":"reference_error","origin":"code","file":"<inline>","operation":"resolving @../helper","status":0,"input":"../helper","message":"outside the jail"}\n)
+        %({"kind":"reference_error","origin":"code","file":"<inline>","operation":"@../helper","status":0,"input":null,"message":"outside the jail"}\n)
       )
       expect(status.exitstatus).to eq(1)
     end
@@ -208,7 +208,7 @@ RSpec.describe "CLI (exe/fusion)" do
         # `@secret` resolves to `tmp/secret.fsn` (exists, but lies outside the jail)
         out, _err, status = run_cli("--repl", "-j", "sub", stdin: "@secret\n", chdir: tmp)
         expect(out).to eq(
-          %(!{"kind":"reference_error","origin":"code","file":"<inline>","operation":"resolving @secret","status":0,"input":"secret","message":"outside the jail"}\n)
+          %(!{"kind":"reference_error","origin":"code","file":"<inline>","operation":"@secret","status":0,"input":null,"message":"outside the jail"}\n)
         )
         expect(status.exitstatus).to eq(0)
       end

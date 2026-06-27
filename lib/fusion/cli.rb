@@ -108,7 +108,11 @@ module Fusion
 
     # relative path -> runtime_value
     def load_file(rel_path, root_env)
-      Fusion::Interpreter.new(root_env).load_file(File.expand_path(rel_path)).force
+      interp = Fusion::Interpreter.new(root_env)
+      abspath = File.expand_path(rel_path)
+      # The top-level program file is read by the runtime, not via an @-reference:
+      # the operation stays "reading file", with the path as `input` (which file).
+      interp.load_file(abspath).force(operation: "reading file", input: interp.display_path(abspath), site: { origin: "code", file: nil })
     end
 
     # runtime value + runtime value -> runtime value

@@ -7,15 +7,19 @@
 module Fusion
   class Interpreter
     class Thunk
-      def initialize(site:, input:, &compute)
+      def initialize(&compute)
         @compute = compute
-        @site = site
-        @input = input
         @state = :unforced # :unforced | :forcing | :done
         @value = nil
       end
 
-      def force
+      # `operation`/`input`/`site` describe the *reference* being forced — the
+      # `@`-reference's own source text (`@foo`, `@../p`, `@@`, `@`, or `@load`),
+      # `null` (or the `@load` argument), and the referring code's `{origin:, file:}`.
+      # They build the cycle error when this thunk is already being forced (a
+      # non-productive data cycle), and reach the compute block for a read failure.
+      # They default to the top-level program load, which has no enclosing reference.
+      def force(operation: "reading file", input: NULL, site: { origin: "code", file: nil })
         case @state
         when :done then @value
         when :forcing
@@ -23,14 +27,14 @@ module Fusion
           # without any intervening function boundary => non-productive data cycle.
           ErrorVal.from_runtime(
             kind: "reference_error",
-            **@site,
-            operation: "forcing a reference",
-            input: @input,
+            **site,
+            operation: operation,
+            input: input,
             message: "non-productive data cycle"
           )
         else
           @state = :forcing
-          @value = @compute.call
+          @value = @compute.call(operation, input, site)
           @state = :done
           @value
         end

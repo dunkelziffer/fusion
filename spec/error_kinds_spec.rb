@@ -37,25 +37,28 @@ RSpec.describe "error kinds" do
     it "unresolved @name" do
       expect_pipe
         .code("(_ => @no_such_module)")
-        .out("❌", '{"kind":"reference_error","origin":"code","file":"<inline>","operation":"resolving @no_such_module","status":0,"input":"no_such_module","message":"unresolved reference"}')
+        .out("❌", '{"kind":"reference_error","origin":"code","file":"<inline>","operation":"@no_such_module","status":0,"input":null,"message":"unresolved reference"}')
     end
 
+    # cyclicA.fsn holds `@cyclicB`, cyclicB.fsn holds `@cyclicA`; the loop closes
+    # at `@cyclicA` written in cyclicB, so that is the `operation` and cyclicB the
+    # `file` — the single reference that re-entered, not the multi-file machinery.
     it "non-productive data cycle" do
       expect_pipe
         .file_path("cyclicA.fsn")
-        .out("❌", '{"kind":"reference_error","origin":"code","file":"spec/fixtures/cyclicA.fsn","operation":"forcing a reference","status":0,"input":"spec/fixtures/cyclicA.fsn","message":"non-productive data cycle"}')
+        .out("❌", '{"kind":"reference_error","origin":"code","file":"spec/fixtures/cyclicB.fsn","operation":"@cyclicA","status":0,"input":null,"message":"non-productive data cycle"}')
     end
 
-    # The `file` (and any path in `input`) is relative to the invocation directory
-    # (`Dir.pwd`), so it reads as the route from where you ran the command to the
-    # offending file. The cycle above reports "spec/fixtures/cyclicA.fsn" because
-    # the suite runs from the project root; run the same program *from* the
-    # fixtures directory and the very same error reports just "cyclicA.fsn".
+    # The `file` is relative to the invocation directory (`Dir.pwd`), so it reads as
+    # the route from where you ran the command to the offending source. The cycle
+    # above reports "spec/fixtures/cyclicB.fsn" because the suite runs from the
+    # project root; run the same program *from* the fixtures directory and the very
+    # same error reports just "cyclicB.fsn".
     it "reports the file path relative to the invocation directory (Dir.pwd)" do
       Dir.chdir(FusionHelpers::FIXTURES) do
         expect_pipe
           .file_path("cyclicA.fsn")
-          .out("❌", '{"kind":"reference_error","origin":"code","file":"cyclicA.fsn","operation":"forcing a reference","status":0,"input":"cyclicA.fsn","message":"non-productive data cycle"}')
+          .out("❌", '{"kind":"reference_error","origin":"code","file":"cyclicB.fsn","operation":"@cyclicA","status":0,"input":null,"message":"non-productive data cycle"}')
       end
     end
 
@@ -63,7 +66,7 @@ RSpec.describe "error kinds" do
       expect_pipe
         .jail("..") # widen past the default (the program's dir) so @../ stays in the jail
         .code("(_ => @../nonexistent)")
-        .out("❌", '{"kind":"reference_error","origin":"code","file":"<inline>","operation":"reading file","status":0,"input":"../nonexistent","message":"file not found"}')
+        .out("❌", '{"kind":"reference_error","origin":"code","file":"<inline>","operation":"@../nonexistent","status":0,"input":null,"message":"file not found"}')
     end
 
     it "missing file via @load" do
@@ -74,11 +77,12 @@ RSpec.describe "error kinds" do
 
     it "a file-system access failure (reading a directory)" do
       # @load of a directory hits Errno::EISDIR, rescued into reference_error.
-      # origin is the builtin; `file` is the inline call site; `input` echoes "ref".
+      # @load is one operation: the read stage doesn't leak — operation stays "@load"
+      # and `input` echoes the argument "ref". The strerror is lowercased + loose.
       expect_pipe
         .code('(_ => "ref" | @load)')
         .out("❌", a_string_including(
-          '"kind":"reference_error"', '"origin":"builtin"', '"file":"<inline>"', '"operation":"reading file"', '"status":0', '"input":"ref"',
+          '"kind":"reference_error"', '"origin":"builtin"', '"file":"<inline>"', '"operation":"@load"', '"status":0', '"input":"ref"',
           /"message":"[^"]*directory[^"]*"/ # OS strerror text, kept loose
         ))
     end

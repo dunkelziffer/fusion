@@ -48,7 +48,7 @@ RSpec.describe "@-resolution" do
     it "errors when there is no enclosing file (an inline program)" do
       expect_pipe
         .code("@@")
-        .out("❌", '{"kind":"reference_error","origin":"code","file":"<inline>","operation":"resolving @@","status":0,"input":null,"message":"no enclosing file"}')
+        .out("❌", '{"kind":"reference_error","origin":"code","file":"<inline>","operation":"@@","status":0,"input":null,"message":"no enclosing file"}')
     end
   end
 
@@ -100,6 +100,15 @@ RSpec.describe "@-resolution" do
         .out("❌", '{"kind":"reference_error","origin":"builtin","file":"spec/fixtures/ref/loader.fsn","operation":"@load","status":0,"input":"nope.fsn","message":"file not found"}')
     end
 
+    # @load is a function taking a filename, not a 0-argument @-reference: a
+    # non-string argument is an argument_error that echoes the value as `input`.
+    it "errors when given a non-string argument" do
+      expect_pipe
+        .in("✅", "5")
+        .code("(n => n | @load)")
+        .out("❌", '{"kind":"argument_error","origin":"builtin","file":"<inline>","operation":"@load","status":0,"input":5,"expected":["_ ? @String"]}')
+    end
+
     it "is shadowable by a sibling load.fsn" do
       expect_pipe
         .in("✅", "null")
@@ -136,7 +145,7 @@ RSpec.describe "@-resolution" do
         .in("✅", "null")
         .jail("ref")
         .file_path("ref/sub/usesDotDotBuiltin.fsn")
-        .out("❌", '{"kind":"reference_error","origin":"code","file":"spec/fixtures/ref/sub/usesDotDotBuiltin.fsn","operation":"reading file","status":0,"input":"../subtract","message":"file not found"}')
+        .out("❌", '{"kind":"reference_error","origin":"code","file":"spec/fixtures/ref/sub/usesDotDotBuiltin.fsn","operation":"@../subtract","status":0,"input":null,"message":"file not found"}')
     end
   end
 
@@ -148,7 +157,7 @@ RSpec.describe "@-resolution" do
       expect_pipe
         .in("✅", "7")
         .file_path("ref/sub/usesParent.fsn")
-        .out("❌", '{"kind":"reference_error","origin":"code","file":"spec/fixtures/ref/sub/usesParent.fsn","operation":"resolving @../helper","status":0,"input":"../helper","message":"outside the jail"}')
+        .out("❌", '{"kind":"reference_error","origin":"code","file":"spec/fixtures/ref/sub/usesParent.fsn","operation":"@../helper","status":0,"input":null,"message":"outside the jail"}')
     end
 
     # @mapValues is a stdlib file that calls its stdlib sibling @map. Both must
@@ -183,7 +192,7 @@ RSpec.describe "@-resolution" do
         .in("✅", "null")
         .jail("ref/localmath")
         .file_path("ref/usesAdd.fsn")
-        .out("❌", '{"kind":"reference_error","origin":"code","file":"spec/fixtures/ref/usesAdd.fsn","operation":"resolving @add","status":0,"input":"add","message":"outside the jail"}')
+        .out("❌", '{"kind":"reference_error","origin":"code","file":"spec/fixtures/ref/usesAdd.fsn","operation":"@add","status":0,"input":null,"message":"outside the jail"}')
     end
   end
 end

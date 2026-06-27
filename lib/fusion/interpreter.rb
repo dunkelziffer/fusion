@@ -109,14 +109,13 @@ module Fusion
     end
 
     # ---- File loading -----------------------------------------------------
-    # `site` and `input` describe the *referring* code, for errors that are about
-    # reaching this file at all (a failed read, a load cycle): `site` is the
-    # referrer's `{origin:, file:}` and `input` echoes the user's own reference.
-    # They default to this file's own identity, for the top-level program (which
-    # has no referrer). A syntax error *inside* the file is attributed to the file.
-    def load_file(abspath, site: file_site(abspath), input: display_path(abspath))
-      @file_cache[abspath] ||= Thunk.new(site: site, input: input) do
-        evaluate_file(abspath, site, input)
+    # The thunk is forced through the `@`-reference that reaches it (see Thunk#force):
+    # its `operation`/`input`/`site` describe that reference and are used only for an
+    # error about reaching this file (a read failure, a load cycle) — never for a
+    # syntax error *inside* the file, which is attributed to the file itself.
+    def load_file(abspath)
+      @file_cache[abspath] ||= Thunk.new do |operation, input, site|
+        evaluate_file(abspath, operation, input, site)
       end
     end
 
@@ -180,9 +179,11 @@ module Fusion
       end
     end
 
-    # `ref_site`/`ref_input` attribute a *read* failure to the referring code (see
-    # load_file). A syntax error in the file's own source is attributed to the file.
-    def evaluate_file(abspath, ref_site, ref_input)
+    # `operation`/`input`/`site` describe the reference that reached this file (see
+    # load_file); a *read* failure reports them unchanged — the failing @-reference
+    # as a single operation. A syntax error in the file's own source is attributed
+    # to the file itself.
+    def evaluate_file(abspath, operation, input, site)
       ast = (@ast_cache[abspath] ||= begin
         src = File.read(abspath)
         Parser.parse_file(src, site: file_site(abspath))
@@ -198,10 +199,11 @@ module Fusion
         eval_expr(ast, env)
       end
     rescue Errno::ENOENT
-      ErrorVal.from_runtime(kind: "reference_error", **ref_site, operation: "reading file", input: ref_input, message: "file not found")
+      ErrorVal.from_runtime(kind: "reference_error", **site, operation: operation, input: input, message: "file not found")
     rescue SystemCallError => err # EISDIR, EACCES, ... — file-system access failures
-      # Keep the strerror ("Is a directory"), drop Ruby's "@ io_fread - <path>" tail (path is in `input`).
-      ErrorVal.from_runtime(kind: "reference_error", **ref_site, operation: "reading file", input: ref_input, message: err.message.split(" @ ").first)
+      # Reduce the strerror to its lowercase core ("is a directory"), dropping
+      # Ruby's "@ io_fread - <path>" tail (the path is the reference's own concern).
+      ErrorVal.from_runtime(kind: "reference_error", **site, operation: operation, input: input, message: err.message.split(" @ ").first.downcase)
     end
 
     # Evaluate a top-level unit that has no file of its own:
@@ -212,22 +214,25 @@ module Fusion
       # `@env`'s bindings (only non-empty in the REPL), `:dir`, and jail.
       unit_env = @env.child
 
-      thunk = Thunk.new(site: code_site(unit_env), input: NULL) { eval_expr(ast, unit_env) }
+      thunk = Thunk.new { |_operation, _input, _site| eval_expr(ast, unit_env) }
       unit_env.set_context(:self, thunk) # for `@` self-recursion
-      thunk.force
+      # A cycle here is closed by a bare `@` re-entry, which forces with its own
+      # `@`/site; this outer force only seeds the unit and never reports the cycle.
+      thunk.force(operation: "@", input: NULL, site: code_site(unit_env))
     end
 
     # Resolve a bare "@name": sibling file > builtin (incl. load, ENV) > stdlib > !.
-    # `site` is the `{origin:, file:}` of the referencing code (for the unresolved case).
-    def resolve_name(name, dir, site)
+    # `site` is the `{origin:, file:}` of the referencing code; `reference` is its
+    # own source text (`"@name"`) — the single `operation` every failure reports.
+    def resolve_name(name, dir, site, reference)
       sibling_file = File.expand_path(name + ".fsn", dir)
       if File.exist?(sibling_file)
-        return jail_error(site, "resolving @#{name}", name) unless within_jail?(sibling_file)
+        return jail_error(site, reference, NULL) unless within_jail?(sibling_file)
 
-        return load_file(sibling_file, site: site, input: name).force
+        return load_file(sibling_file).force(operation: reference, input: NULL, site: site)
       end
 
-      resolve_builtin_or_stdlib(name, dir, site)
+      resolve_builtin_or_stdlib(name, dir, site, reference)
     end
 
     # Resolve "@@": the builtin/stdlib that the referencing file shadows. It is its
@@ -237,14 +242,14 @@ module Fusion
     def resolve_super(env, dir, site)
       file = env.context(:file)
       if file == :__unbound__
-        return ErrorVal.from_runtime(kind: "reference_error", **site, operation: "resolving @@", input: NULL, message: "no enclosing file")
+        return ErrorVal.from_runtime(kind: "reference_error", **site, operation: "@@", input: NULL, message: "no enclosing file")
       end
 
-      resolve_builtin_or_stdlib(File.basename(file, ".fsn"), dir, site)
+      resolve_builtin_or_stdlib(File.basename(file, ".fsn"), dir, site, "@@")
     end
 
     # The non-sibling tail of @name resolution: builtin (incl. load, ENV) > stdlib > !.
-    def resolve_builtin_or_stdlib(name, dir, site)
+    def resolve_builtin_or_stdlib(name, dir, site, reference)
       if name == "ENV"
         return @env_vars.dup
       end
@@ -272,7 +277,7 @@ module Fusion
             next ErrorVal.from_runtime(kind: "reference_error", **site, operation: "@load", input: v, message: "file not found")
           end
 
-          load_file(target, site: site, input: v).force
+          load_file(target).force(operation: "@load", input: v, site: site)
         end)
       end
 
@@ -282,20 +287,20 @@ module Fusion
 
       stdlib_file = File.join(@stdlib_dir, name + ".fsn")
       if File.exist?(stdlib_file)
-        # stdlib keeps its own `{origin: "stdlib"}` site (no path leaked); `input`
-        # echoes the reference name rather than the internal stdlib path.
-        return load_file(stdlib_file, input: name).force
+        # The reference reports the user's source text, not the internal stdlib path.
+        return load_file(stdlib_file).force(operation: reference, input: NULL, site: site)
       end
 
-      ErrorVal.from_runtime(kind: "reference_error", **site, operation: "resolving @#{name}", input: name, message: "unresolved reference")
+      ErrorVal.from_runtime(kind: "reference_error", **site, operation: reference, input: NULL, message: "unresolved reference")
     end
 
     # Resolve a pure path "@dir/a" or "@../a": file only, never builtin/stdlib.
-    def resolve_path(relpath, dir, site)
+    # `reference` is the source text (`"@../a"`), the single `operation` reported.
+    def resolve_path(relpath, dir, site, reference)
       target = File.expand_path(relpath + ".fsn", dir)
-      return jail_error(site, "resolving @#{relpath}", relpath) unless within_jail?(target)
+      return jail_error(site, reference, NULL) unless within_jail?(target)
 
-      load_file(target, site: site, input: relpath).force
+      load_file(target).force(operation: reference, input: NULL, site: site)
     end
 
     # The run's jail (the `:jail` context, an absolute path or nil) confines
@@ -359,13 +364,13 @@ module Fusion
             raise Unreachable, "bare @ evaluated outside a top-level unit"
           end
 
-          self_thunk.force
+          self_thunk.force(operation: "@", input: NULL, site: code_site(env))
         when :super
           resolve_super(env, dir, code_site(env))
         when :name
-          resolve_name(node.path, dir, code_site(env))
+          resolve_name(node.path, dir, code_site(env), "@#{node.path}")
         else # :path
-          resolve_path(node.path, dir, code_site(env))
+          resolve_path(node.path, dir, code_site(env), "@#{node.path}")
         end
       when Expression::ArrLit then eval_array(node, env)
       when Expression::ObjLit then eval_object(node, env)

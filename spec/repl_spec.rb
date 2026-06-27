@@ -21,7 +21,7 @@ RSpec.describe Fusion::CLI::Repl do
   end
 
   let(:self_cycle) do
-    '{"kind":"reference_error","origin":"code","file":"<inline>","operation":"forcing a reference","status":0,"input":null,"message":"non-productive data cycle"}'
+    '{"kind":"reference_error","origin":"code","file":"<inline>","operation":"@","status":0,"input":null,"message":"non-productive data cycle"}'
   end
 
   describe "#complete? — the editing termination check" do
