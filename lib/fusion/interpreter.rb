@@ -117,7 +117,7 @@ module Fusion
       abspath # no relative path exists (e.g. different roots) — keep the absolute
     end
 
-    # The error origin (`{origin:, file?:}`) for code at `abspath`. stdlib is part
+    # The error site (`{origin:, file?:}`) for code at `abspath`. stdlib is part
     # of the core language, so its internal filenames are never exposed; only
     # user `code` carries a `file`.
     def file_site(abspath)
@@ -151,7 +151,7 @@ module Fusion
       else
         env = root_env.child
         env.set_context(:dir, File.dirname(abspath)) # for resolving @-refs
-        env.set_context(:file, abspath) # for error origins
+        env.set_context(:file, abspath) # for error sites
         env.set_context(:self, load_file(abspath)) # for `@` self-recursion
         eval_expr(ast, env)
       end
