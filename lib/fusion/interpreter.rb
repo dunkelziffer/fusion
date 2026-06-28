@@ -307,9 +307,15 @@ module Fusion
       case node
       when Expression::Lit then node.value
       when Expression::ErrLit
+        # An error built by stdlib source is runtime-produced (interpreter-blessed):
+        # it joins the standardized protocol — lenient serialization and an
+        # interpreter-stamped call-site `file`. A user `!expr` (origin code or
+        # `<inline>`) stays a plain user error. The discriminator is where the code
+        # physically lives (code_site), which a user cannot forge from a payload.
+        runtime = code_site(env)[:origin] == "stdlib"
         if node.payload.nil?
           # Bare `!` means `!null`
-          ErrorVal.new(NULL)
+          ErrorVal.new(NULL, runtime: runtime)
         else
           payload = eval_expr(node.payload, env)
 
@@ -317,7 +323,7 @@ module Fusion
             # No nested errors. Propagate inner error.
             payload
           else
-            ErrorVal.new(payload)
+            ErrorVal.new(payload, runtime: runtime)
           end
         end
       when Expression::Ident

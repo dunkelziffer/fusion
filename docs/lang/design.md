@@ -820,13 +820,13 @@ All access goes through `@`:
 - 🔢 ✅ To serialize values without a valid JSON representation, we introduce "lenient serialization". Values without JSON representation get turned into string representations (`"<function>"` and `"<Infinity>"`/`"<-Infinity>"`/`"<NaN>"`).
 - 🧑 ✅ The remaining data structure gets preserved.
 - 🔢 ✅ Runtime errors (`ErrorVal#runtime?`) get serialized leniently by default, so their info isn't obscured by a `serialization_error`.
-- 🤖 ✅ The stdlib doesn't produce runtime errors.
-- 🧑 ✅ However, all stdlib functions use `@sanitize` to mimick the lenient JSON serialization and preserve as much info as possible.
+- 🧑 ✅ A stdlib error (a `!{…}` evaluated in stdlib source) **is** a runtime error, marked at construction by where the code physically lives — sound, because user code can never run under a stdlib origin, so a forged `origin` field can't make a user error runtime. It thus serializes leniently and takes an interpreter-stamped call-site `file`, like a builtin error.
+- 🧑 ✅ So stdlib error payloads carry `input` raw — lenient serialization renders any function/non-finite as a placeholder; no `@sanitize` needed. (`@sanitize` is kept as a standalone stdlib utility.)
 - 🧑 ✅ Ordinary values and user errors are serialized strictly to avoid surprising type conversions. If they fail to serialize, they get turned into a runtime `serialization_error` and will subsequently get serialized leniently.
 
 ### Alternatives
 
-- 🤖 ❌ The standard library could create real "runtime errors" via a dedicated `@raise` primitive. Declined, because it offers little over the `!` prefix and would let any code (not just the stdlib) create runtime errors. The main reason for runtime errors (apart from enforcing a consistent shape) is lenient serialization.
+- 🤖 ❌ The standard library could create real "runtime errors" via a dedicated `@raise` primitive. Declined: it offers little over the `!` prefix and would let *any* code create runtime errors. Instead a stdlib `!{…}` is marked runtime by its construction *location* — the same benefit (lenient serialization, a consistent shape, call-site `file`), confined to stdlib source.
 - 🧑 ❌ Runtime errors also serialize strictly by default. Rejected, because this would turn too many errors into a `serialization_error` and would lose too much information.
 - 🧑 💭 All errors serialize leniently by default. Rejected, because this hides real errors (e.g. `NaN` or a function as a result) behind an automatic type conversion.
 

@@ -8,5 +8,5 @@
     null => false,
     _ => {"f": f, "xs": rest} | @
   ),
-  x => !{"kind": "argument_error", "origin": "stdlib", "operation": "@all", "status": 0, "input": x | @sanitize, "expected": ["{\"f\": _ ? @Function, \"xs\": _ ? @Array}"]}
+  x => !{"kind": "argument_error", "origin": "stdlib", "operation": "@all", "status": 0, "input": x, "expected": ["{\"f\": _ ? @Function, \"xs\": _ ? @Array}"]}
 )

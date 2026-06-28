@@ -96,12 +96,11 @@ RSpec.describe "stdlib error handling" do
     end
   end
 
-  # The error payloads are themselves serialized strictly (they are user errors),
-  # so a function or non-finite number echoed into `input` would otherwise make
-  # the whole error collapse into a serialization_error. Each function sanitizes
-  # the echoed input — mirroring the interpreter's lenient placeholders — so the
-  # intended error survives. See docs/lang/design.md §2.9.
-  describe "unserializable inputs are sanitized in the echoed payload" do
+  # stdlib errors are runtime errors, so they serialize leniently: a function or
+  # non-finite number echoed into `input` is rendered as a placeholder
+  # ("<function>", "<Infinity>", …) rather than collapsing the whole error into a
+  # serialization_error. See docs/lang/design.md §2.9.
+  describe "unserializable inputs render as placeholders in the echoed payload" do
     it "@math/square of a function reports an argument_error, not a serialization_error" do
       expect_pipe
         .in("✅", "null")
@@ -137,7 +136,7 @@ RSpec.describe "stdlib error handling" do
         .out("❌", '{"kind":"argument_error","origin":"stdlib","file":"<inline>","operation":"@map","status":0,"input":"<function>","expected":["{\"f\": _ ? @Function, \"xs\": _ ? @Array}"]}')
     end
 
-    it "sanitizes deeply nested functions and non-finite numbers in the echoed input" do
+    it "renders deeply nested functions and non-finite numbers in the echoed input" do
       expect_pipe
         .in("✅", "null")
         .code('(_ => {"a": [1, (y => y), {"deep": @negate}], "b": [1e400]} | @map)')

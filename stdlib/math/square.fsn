@@ -1,4 +1,4 @@
 (
   n ? @Integer => [n, n] | @multiply,
-  x => !{"kind": "argument_error", "origin": "stdlib", "operation": "@math/square", "status": 0, "input": x | @sanitize, "expected": ["_ ? @Integer"]}
+  x => !{"kind": "argument_error", "origin": "stdlib", "operation": "@math/square", "status": 0, "input": x, "expected": ["_ ? @Integer"]}
 )
