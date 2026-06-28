@@ -13,10 +13,11 @@ no semantic change. This is the single biggest readability win available and was
 always intended. Open question: exact precedence table and how it interleaves with
 `|` and `=>`.
 
-**Exposing the current file/dir** *(only if it earns its place)*. The interpreter
-already tracks the current `:file` and `:dir` as internal context, unreadable from
-a program. We could surface them, e.g. as `@FILE` and `@DIR`. Add only if a
-concrete use case shows real value.
+**Exposing the current call site** *(use case found; needs a sigil)*. The
+interpreter tracks the current `:file`/`:dir`/`:call_site` as internal context,
+unreadable from a program. A concrete use has emerged: letting user code
+hand-build a *standardized* error payload needs access to `:file` and the
+`@sanitize` function to mimick the lenient `input` serialization.
 
 ---
 
