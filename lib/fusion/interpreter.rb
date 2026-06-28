@@ -52,15 +52,8 @@ module Fusion
       @file_cache = {} # abspath -> Thunk
       @ast_cache = {}  # abspath -> AST
       @builtins = {}   # name -> NativeFunc  (consulted by @name, not via env)
-      # The innermost user-code file a built-in is currently running for, so its
-      # error payloads can carry that `file` (set per call in #apply).
-      @active_call_site = "<fusion>"
       Builtins.install(@builtins, self)
     end
-
-    # The call site (innermost user-code file) of the built-in currently running;
-    # read by the built-in error helpers (see interpreter/builtins.rb).
-    attr_reader :active_call_site
 
     # Apply the program to one input behind a safety net: a Ruby-level failure
     # (notably a stack overflow) becomes a payloaded error rather than a raw
@@ -162,23 +155,6 @@ module Fusion
       site[:origin] == "code" ? site[:file] : "<fusion>"
     end
 
-    # A stdlib `!{...}` payload mirrors the standardized error shape but can't name
-    # its own call site, so we fill `file` (slotted after `origin`) here, where the
-    # env is in hand. Plain user errors — no `builtin`/`stdlib` `origin` — are left
-    # untouched, as is a re-raised payload that already carries a `file`.
-    def with_call_site(payload, env)
-      return payload unless payload.is_a?(Hash)
-
-      origin = payload["origin"]
-      return payload unless (origin == "stdlib" || origin == "builtin") && !payload.key?("file")
-
-      file = call_site(env)
-      payload.each_with_object({}) do |(key, value), out|
-        out[key] = value
-        out["file"] = file if key == "origin"
-      end
-    end
-
     # `operation`/`input`/`site` describe the reference that reached this file (see
     # load_file); a *read* failure reports them unchanged — the failing @-reference
     # as a single operation. A syntax error in the file's own source is attributed
@@ -259,9 +235,9 @@ module Fusion
         # loads a VERBATIM filename (no ".fsn" appended) so arbitrary names work.
         d = dir
         return NativeFunc.new("load", lambda do |v|
-          # `@active_call_site` is set by #apply just before this runs: the user
-          # file that wrote `| @load`, which every @load error reports as its `file`.
-          site = { origin: "builtin", file: @active_call_site }
+          # @load errors carry origin "builtin" and no `file`; #apply stamps the
+          # call site (the user file that wrote `| @load`) onto them as `file`.
+          site = { origin: "builtin", file: nil }
 
           unless v.is_a?(String)
             next ErrorVal.from_runtime(kind: "argument_error", **site, operation: "@load", input: v, expected: ["_ ? @String"])
@@ -341,7 +317,7 @@ module Fusion
             # No nested errors. Propagate inner error.
             payload
           else
-            ErrorVal.new(with_call_site(payload, env))
+            ErrorVal.new(payload)
           end
         end
       when Expression::Ident
@@ -509,6 +485,15 @@ module Fusion
     # ("<fusion>") for an apply with no user-code caller (e.g. the CLI applying the
     # whole program directly to a value).
     def apply(f, v, call_site = "<fusion>")
+      result = dispatch_apply(f, v, call_site)
+      # The interpreter owns the call-site `file` of a standardized builtin/stdlib
+      # error (the call site is its knowledge, not the stdlib's): stamp it here, at
+      # the apply that produced the error. An error keeps the file from its
+      # innermost apply, so outer applies leave it untouched (see #with_call_site).
+      result.is_a?(ErrorVal) ? result.with_call_site(call_site) : result
+    end
+
+    def dispatch_apply(f, v, call_site)
       if f.is_a?(ErrorVal)
         # Propagate errors
         return f
@@ -520,9 +505,6 @@ module Fusion
           return v
         end
 
-        # Built-in error helpers read this to stamp the call site as their `file`.
-        @active_call_site = call_site
-
         # Safety net: a builtin that raises a Ruby error (e.g. a domain error)
         # becomes a payloaded error rather than a raw backtrace on stderr.
         begin
@@ -530,7 +512,7 @@ module Fusion
         rescue StandardError => err
           # TODO: move math errors into the builtins. This should become a safety net for unpredicted errors.
           kind = (err.is_a?(FloatDomainError) || err.is_a?(ZeroDivisionError)) ? "math_error" : "internal_error"
-          ErrorVal.from_runtime(kind: kind, origin: "builtin", file: call_site, operation: "@#{f.name}", input: v, message: err.message)
+          ErrorVal.from_runtime(kind: kind, origin: "builtin", operation: "@#{f.name}", input: v, message: err.message)
         end
       elsif f.is_a?(Func)
         # Stdlib code has no user file of its own: errors inside it (and in the
