@@ -14,27 +14,17 @@ module Fusion
         @runtime = runtime
       end
 
-      # Attach the call-site `file` (slotted after `origin`) to a runtime error
-      # that lacks one. The interpreter owns `file` — the call site is its
-      # knowledge, not the error payload's — and stamps it at the `apply` that
-      # produced the error.
-      #
-      # `runtime?` is the soundness gate: a user-built `!{…}` is never runtime, so
-      # it is never stamped — no matter what `origin` it forges. Only *then* do we
-      # read `origin`, to keep stamping to operations that actually have a call
-      # site (`builtin`/`stdlib`); channel/runtime errors (`input`/`output`/
-      # `interpreter`) have none. That read is safe because, past the `runtime?`
-      # gate, `origin` is interpreter-set, not user data.
-      #
-      # A no-op for a user error, or one that already carries a `file`, so it's
-      # safe on every apply result and stamps only once (at the innermost apply;
-      # the call site is constant up a stdlib chain).
+      # Attach the call-site `file` to a runtime error. Idempotent.
       def with_call_site(file)
-        return self unless @runtime && @payload.is_a?(Hash) && !@payload.key?("file")
+        # Only stamp runtime-produced errors. After this check we are sure that the payload wasn't user-constructed.
+        return self unless @runtime
+        raise Unreachable, "Unexpected runtime error payload: #{@payload}" unless @payload.is_a?(Hash)
+        # Don't double stamp. Idempotency.
+        return self if @payload.key?("file")
+        # Only stamp certain errors.
+        return self unless ["builtin", "stdlib"].include?(@payload["origin"])
 
-        origin = @payload["origin"]
-        return self unless origin == "builtin" || origin == "stdlib"
-
+        # Insert "file" after "origin"
         reordered = {}
         @payload.each do |key, value|
           reordered[key] = value
@@ -44,11 +34,9 @@ module Fusion
         self
       end
 
-      # Whether this error was produced by the runtime — the interpreter or the
-      # stdlib (which is interpreter-blessed; see eval of `!` in stdlib code) — as
-      # opposed to a user-constructed `!expr` or an error arriving as input.
+      # Was this error runtime-produced (as opposed to user-constructed via `!expr`)?
       # Runtime errors use lenient serialization (docs/user/reference.md §9.3) and
-      # carry an interpreter-stamped call-site `file`.
+      # get a call-site `file` stamped.
       def runtime?
         @runtime
       end
