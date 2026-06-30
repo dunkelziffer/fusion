@@ -48,7 +48,7 @@ RSpec.describe "@-resolution" do
     it "errors when there is no enclosing file (an inline program)" do
       expect_pipe
         .code("@@")
-        .out("❌", '{"kind":"reference_error","location":"code <inline>","operation":"resolving @@","input":null,"message":"no enclosing file"}')
+        .out("❌", '{"kind":"reference_error","origin":"code","file":"<inline>","operation":"@@","status":0,"input":null,"message":"no enclosing file"}')
     end
   end
 
@@ -65,7 +65,7 @@ RSpec.describe "@-resolution" do
       expect_pipe
         .in("✅", "null")
         .file_path("ref/readenv.fsn")
-        .out("❌", '{"kind":"access_error","location":"code readenv.fsn","operation":".CI","input":[{},"CI"],"message":"missing key"}')
+        .out("❌", '{"kind":"access_error","origin":"code","file":"spec/fixtures/ref/readenv.fsn","operation":".CI","status":0,"input":{},"message":"missing key"}')
     end
 
     it "is shadowable by a sibling ENV.fsn" do
@@ -97,7 +97,16 @@ RSpec.describe "@-resolution" do
       expect_pipe
         .in("✅", '"nope.fsn"')
         .file_path("ref/loader.fsn")
-        .out("❌", a_string_including('"kind":"reference_error"', '"message":"file not found"', "nope.fsn"))
+        .out("❌", '{"kind":"reference_error","origin":"builtin","file":"spec/fixtures/ref/loader.fsn","operation":"@load","status":0,"input":"nope.fsn","message":"file not found"}')
+    end
+
+    # @load is a function taking a filename, not a 0-argument @-reference: a
+    # non-string argument is an argument_error that echoes the value as `input`.
+    it "errors when given a non-string argument" do
+      expect_pipe
+        .in("✅", "5")
+        .code("(n => n | @load)")
+        .out("❌", '{"kind":"argument_error","origin":"builtin","file":"<inline>","operation":"@load","status":0,"input":5,"expected":["_ ? @String"]}')
     end
 
     it "is shadowable by a sibling load.fsn" do
@@ -105,6 +114,31 @@ RSpec.describe "@-resolution" do
         .in("✅", "null")
         .file_path("ref/shadowload/usesLoad.fsn")
         .out("✅", '"shadowed-load"')
+    end
+
+    # loadcycleA and loadcycleB @load each other at data time. The cycle is
+    # reported under the @load that re-entered, echoing its filename argument
+    # (the operation stays "@load" — the resolve/read stages don't leak).
+    it "errors on a cycle reached through @load" do
+      expect_pipe
+        .in("✅", "null")
+        .file_path("loadcycleA.fsn")
+        .out("❌", '{"kind":"reference_error","origin":"builtin","file":"spec/fixtures/loadcycleB.fsn","operation":"@load","status":0,"input":"loadcycleA.fsn","message":"non-productive data cycle"}')
+    end
+
+    # A file's thunk is shared across references, but a read-failure error depends
+    # on the *forcing* reference (its `input`). Loading the same directory twice via
+    # different arguments ("ref/sub/../adir.fsn" then "ref/adir.fsn" — same path)
+    # must report each call's own `input`, not return the first's cached error. The
+    # first load is caught; the array then surfaces the second's error.
+    it "a read-failure error reflects the forcing reference, not a cached earlier one" do
+      expect_pipe
+        .in("✅", "null")
+        .code('(_ => [("ref/sub/../adir.fsn" | @load) | (! => "_"), "ref/adir.fsn" | @load])')
+        .out("❌", a_string_including(
+          '"kind":"reference_error"', '"origin":"builtin"', '"operation":"@load"', '"input":"ref/adir.fsn"',
+          /"message":"[^"]*directory[^"]*"/
+        ))
     end
   end
 
@@ -136,7 +170,38 @@ RSpec.describe "@-resolution" do
         .in("✅", "null")
         .jail("ref")
         .file_path("ref/sub/usesDotDotBuiltin.fsn")
-        .out("❌", a_string_including('"kind":"reference_error"', '"message":"file not found"', "subtract.fsn"))
+        .out("❌", '{"kind":"reference_error","origin":"code","file":"spec/fixtures/ref/sub/usesDotDotBuiltin.fsn","operation":"@../subtract","status":0,"input":null,"message":"file not found"}')
+    end
+
+    # A path reference to a directory (here a dir literally named "adir.fsn") fails
+    # the read; like @../subtract it stays one operation ("@../adir", input null),
+    # the message being the lowercased, machine-dependent strerror.
+    it "errors when @../adir points at a directory" do
+      expect_pipe
+        .in("✅", "null")
+        .jail("ref")
+        .file_path("ref/sub/usesDotDotDir.fsn")
+        .out("❌", a_string_including(
+          '"kind":"reference_error"', '"origin":"code"', '"file":"spec/fixtures/ref/sub/usesDotDotDir.fsn"', '"operation":"@../adir"', '"status":0', '"input":null',
+          /"message":"[^"]*directory[^"]*"/ # OS strerror text, kept loose
+        ))
+    end
+  end
+
+  # @-references nest: forcing a file's thunk runs its body, which may reference
+  # another file and force *its* thunk. When the deepest reference hits a read
+  # failure, the error is built at that innermost force — so it reports the
+  # reference that directly named the missing file, not the enclosing one.
+  # Here readChainOuter @readChainInner, and readChainInner @../readChainMissing
+  # (which does not exist): the error names readChainInner / @../readChainMissing,
+  # never readChainOuter / @readChainInner.
+  describe "nested references" do
+    it "reports the innermost reference that hit the read failure, not the enclosing one" do
+      expect_pipe
+        .in("✅", "null")
+        .jail("ref")
+        .file_path("ref/sub/readChainOuter.fsn")
+        .out("❌", '{"kind":"reference_error","origin":"code","file":"spec/fixtures/ref/sub/readChainInner.fsn","operation":"@../readChainMissing","status":0,"input":null,"message":"file not found"}')
     end
   end
 
@@ -148,7 +213,7 @@ RSpec.describe "@-resolution" do
       expect_pipe
         .in("✅", "7")
         .file_path("ref/sub/usesParent.fsn")
-        .out("❌", '{"kind":"reference_error","location":"code usesParent.fsn","operation":"resolving @../helper","input":"../helper","message":"outside the jail"}')
+        .out("❌", '{"kind":"reference_error","origin":"code","file":"spec/fixtures/ref/sub/usesParent.fsn","operation":"@../helper","status":0,"input":null,"message":"outside the jail"}')
     end
 
     # @mapValues is a stdlib file that calls its stdlib sibling @map. Both must
@@ -164,7 +229,7 @@ RSpec.describe "@-resolution" do
     it "blocks an @load target that escapes the jail, without probing its existence" do
       expect_pipe
         .code('"../nope" | @load')
-        .out("❌", '{"kind":"reference_error","location":"builtin load","operation":"@load","input":"../nope","message":"outside the jail"}')
+        .out("❌", '{"kind":"reference_error","origin":"builtin","file":"<inline>","operation":"@load","status":0,"input":"../nope","message":"outside the jail"}')
     end
 
     it "disables confinement with a jail of *" do
@@ -183,7 +248,7 @@ RSpec.describe "@-resolution" do
         .in("✅", "null")
         .jail("ref/localmath")
         .file_path("ref/usesAdd.fsn")
-        .out("❌", '{"kind":"reference_error","location":"code usesAdd.fsn","operation":"resolving @add","input":"add","message":"outside the jail"}')
+        .out("❌", '{"kind":"reference_error","origin":"code","file":"spec/fixtures/ref/usesAdd.fsn","operation":"@add","status":0,"input":null,"message":"outside the jail"}')
     end
   end
 end

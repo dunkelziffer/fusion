@@ -19,8 +19,8 @@ module Fusion
       VALUE_MARKER        = "#{GREEN}✔ #{RESET}"
       ERROR_MARKER        = "#{RED}✗ #{RESET}"
 
-      # REPL entries report errors with the same location as inline (`-e`) code.
-      LOCATION = "code <inline>"
+      # REPL entries report errors with the same site as inline (`-e`) code.
+      SITE = { origin: "code", file: "<inline>" }.freeze
 
       def initialize(root_env:)
         @root_env = root_env
@@ -62,13 +62,13 @@ module Fusion
       def complete?(buffer)
         return true if buffer.strip.empty?
 
-        ast = Fusion::Parser.parse_repl(buffer, location: LOCATION)
+        ast = Fusion::Parser.parse_repl(buffer, site: SITE)
         ast.is_a?(AST::Expression) || ast.is_a?(AST::Statement::Assignment)
       end
 
       # String (+ Env) -> String
       def handle(buffer, environment)
-        ast = Fusion::Parser.parse_repl(buffer, location: LOCATION)
+        ast = Fusion::Parser.parse_repl(buffer, site: SITE)
         runtime_value = CLI.evaluate(ast, environment)
         wire_pair = Serializer.serialize(runtime_value, lenient: true)
         Encoder.encode(wire_pair, mode: :bang)

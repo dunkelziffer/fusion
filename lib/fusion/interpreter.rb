@@ -18,6 +18,8 @@
 #   object -> Hash (String keys, insertion-ordered as Ruby preserves)
 #   func   -> Func (closure over an Env)
 
+require "pathname"
+
 require_relative "ast"
 require_relative "null"
 require_relative "interpreter/error_val"
@@ -79,60 +81,81 @@ module Fusion
       # An interpreter bug. Allowed to surface.
       raise
     rescue StandardError => err
-      # TODO: change type
-      Interpreter::ErrorVal.internal(
-        kind: "type_error", location: "interpreter", operation: "running the program",
+      Interpreter::ErrorVal.from_runtime(
+        kind: "internal_error", origin: "interpreter", operation: "running the program",
         input: NULL, message: err.message
       )
     rescue SystemExit
       # Let exit/abort through.
       raise
     rescue SystemStackError
-      Interpreter::ErrorVal.internal(
-        kind: "stack_error", location: "interpreter", operation: "running the program",
-        input: NULL, message: "recursion too deep"
+      Interpreter::ErrorVal.from_runtime(
+        kind: "limit_error", origin: "interpreter", operation: "running the program",
+        input: NULL, message: "stack level too deep"
       )
     rescue Exception => err # rubocop:disable Lint/RescueException
       # Final net: any other escaped Ruby error becomes a payloaded error too.
-      # TODO: change type
-      Interpreter::ErrorVal.internal(
-        kind: "type_error", location: "interpreter", operation: "running the program",
+      Interpreter::ErrorVal.from_runtime(
+        kind: "internal_error", origin: "interpreter", operation: "running the program",
         input: NULL, message: err.message
       )
     end
 
     # ---- File loading -----------------------------------------------------
+    # `Thunk` does cycle-detection and result-memoization.
     def load_file(abspath)
-      @file_cache[abspath] ||= Thunk.new(location: file_location(abspath), input: abspath) do
-        evaluate_file(abspath)
-      end
+      @file_cache[abspath] ||= Thunk.new { evaluate_file(abspath) }
     end
 
-    # The error field `location` for code at `abspath`.
-    def file_location(abspath)
+    # A file path for error payloads: relative to the working directory, so a
+    # payload carries no machine-specific absolute prefix (and stays stable when
+    # a whole project is moved together).
+    def display_path(abspath)
+      Pathname.new(abspath).relative_path_from(Dir.pwd).to_s
+    rescue ArgumentError
+      abspath # no relative path exists (e.g. different roots) — keep the absolute
+    end
+
+    # The error site (`{origin:, file?:}`) for code at `abspath`. stdlib is part
+    # of the core language, so its internal filenames are never exposed; only
+    # user `code` carries a `file`.
+    def file_site(abspath)
       if abspath.start_with?(@stdlib_dir + File::SEPARATOR)
-        "stdlib #{File.basename(abspath)}"
+        { origin: "stdlib" }
       else
-        "code #{File.basename(abspath)}"
+        { origin: "code", file: display_path(abspath) }
       end
     end
 
-    # The error field `location` for code being evaluated under `env`.
-    def code_location(env)
+    # The error fields `{origin:, file:}` for code being evaluated under `env`.
+    def code_site(env)
       f = env.context(:file)
       if f == :__unbound__
-        # Inline (`-e`) programs have no file, so they report as "code <inline>".
-        "code <inline>"
+        # Inline (`-e`) programs and REPL entries report an "<inline>" file.
+        { origin: "code", file: "<inline>" }
       else
-        file_location(f)
+        file_site(f)
       end
     end
 
+    # The `file` an error here should carry: the innermost *user-code* file on the
+    # dynamic call chain. When stdlib code runs, it borrows the user call site that
+    # reached it (injected as `:call_site` in #apply); user/inline code is its own
+    # file (derived from `code_site`); above any user code, the runtime: "<fusion>".
+    def call_site(env)
+      injected = env.context(:call_site)
+      return injected unless injected == :__unbound__
+
+      site = code_site(env)
+      site[:origin] == "code" ? site[:file] : "<fusion>"
+    end
+
+    # Compute the file's value. Use only within `Thunk` and raise `Thunk::ReadFailure`
+    # for unreadable files.
     def evaluate_file(abspath)
-      loc = file_location(abspath)
       ast = (@ast_cache[abspath] ||= begin
         src = File.read(abspath)
-        Parser.parse_file(src, location: loc)
+        Parser.parse_file(src, site: file_site(abspath))
       end)
 
       if ast.is_a?(ErrorVal) # a parse error (already a payloaded value)
@@ -140,14 +163,15 @@ module Fusion
       else
         env = root_env.child
         env.set_context(:dir, File.dirname(abspath)) # for resolving @-refs
-        env.set_context(:file, abspath) # for error locations
+        env.set_context(:file, abspath) # for error sites
         env.set_context(:self, load_file(abspath)) # for `@` self-recursion
         eval_expr(ast, env)
       end
     rescue Errno::ENOENT
-      ErrorVal.internal(kind: "reference_error", location: loc, operation: "reading file", input: abspath, message: "file not found")
-    rescue SystemCallError => err # EISDIR, EACCES, ... — file-system access failures
-      ErrorVal.internal(kind: "reference_error", location: loc, operation: "reading file", input: abspath, message: err.message)
+      raise Thunk::ReadFailure, "file not found"
+    rescue SystemCallError => err # EISDIR, EACCES, ... (file-system access failures)
+      # Drop Ruby's "@ io_fread - <path>" tail.
+      raise Thunk::ReadFailure, err.message.split(" @ ").first.downcase
     end
 
     # Evaluate a top-level unit that has no file of its own:
@@ -158,39 +182,40 @@ module Fusion
       # `@env`'s bindings (only non-empty in the REPL), `:dir`, and jail.
       unit_env = @env.child
 
-      thunk = Thunk.new(location: code_location(unit_env), input: NULL) { eval_expr(ast, unit_env) }
+      thunk = Thunk.new { eval_expr(ast, unit_env) }
       unit_env.set_context(:self, thunk) # for `@` self-recursion
       thunk.force
     end
 
     # Resolve a bare "@name": sibling file > builtin (incl. load, ENV) > stdlib > !.
-    # `location` is the "code X" of the referencing file (for the unresolved case).
-    def resolve_name(name, dir, location)
+    # `site` is the `{origin:, file:}` of the referencing code; `reference` is its
+    # own source text (`"@name"`) — the single `operation` every failure reports.
+    def resolve_name(name, dir, site, reference)
       sibling_file = File.expand_path(name + ".fsn", dir)
       if File.exist?(sibling_file)
-        return jail_error(location, "resolving @#{name}", name) unless within_jail?(sibling_file)
+        return jail_error(site, reference, NULL) unless within_jail?(sibling_file)
 
-        return load_file(sibling_file).force
+        return load_file(sibling_file).force(operation: reference, input: NULL, site: site)
       end
 
-      resolve_builtin_or_stdlib(name, dir, location)
+      resolve_builtin_or_stdlib(name, dir, site, reference)
     end
 
     # Resolve "@@": the builtin/stdlib that the referencing file shadows. It is its
     # own name resolved with the sibling step skipped (the sibling is itself), so
     # the file can extend what it overrides. There is no file to take super of in
     # an inline (`-e`) or REPL entry.
-    def resolve_super(env, dir, location)
+    def resolve_super(env, dir, site)
       file = env.context(:file)
       if file == :__unbound__
-        return ErrorVal.internal(kind: "reference_error", location: location, operation: "resolving @@", input: NULL, message: "no enclosing file")
+        return ErrorVal.from_runtime(kind: "reference_error", **site, operation: "@@", input: NULL, message: "no enclosing file")
       end
 
-      resolve_builtin_or_stdlib(File.basename(file, ".fsn"), dir, location)
+      resolve_builtin_or_stdlib(File.basename(file, ".fsn"), dir, site, "@@")
     end
 
     # The non-sibling tail of @name resolution: builtin (incl. load, ENV) > stdlib > !.
-    def resolve_builtin_or_stdlib(name, dir, location)
+    def resolve_builtin_or_stdlib(name, dir, site, reference)
       if name == "ENV"
         return @env_vars.dup
       end
@@ -200,21 +225,25 @@ module Fusion
         # loads a VERBATIM filename (no ".fsn" appended) so arbitrary names work.
         d = dir
         return NativeFunc.new("load", lambda do |v|
+          # @load errors carry origin "builtin" and no `file`; #apply stamps the
+          # call site (the user file that wrote `| @load`) onto them as `file`.
+          site = { origin: "builtin", file: nil }
+
           unless v.is_a?(String)
-            next ErrorVal.internal(kind: "type_error", location: "builtin load", operation: "@load", input: v, message: "expected a string")
+            next ErrorVal.from_runtime(kind: "argument_error", **site, operation: "@load", input: v, expected: ["_ ? @String"])
           end
 
           target = File.expand_path(v, d)
 
           # Check the jail before touching the filesystem, so an out-of-jail
           # path can't be probed for existence.
-          next jail_error("builtin load", "@load", v) unless within_jail?(target)
+          next jail_error(site, "@load", v) unless within_jail?(target)
 
           unless File.exist?(target)
-            next ErrorVal.internal(kind: "reference_error", location: "builtin load", operation: "@load", input: v, message: "file not found")
+            next ErrorVal.from_runtime(kind: "reference_error", **site, operation: "@load", input: v, message: "file not found")
           end
 
-          load_file(target).force
+          load_file(target).force(operation: "@load", input: v, site: site)
         end)
       end
 
@@ -224,18 +253,20 @@ module Fusion
 
       stdlib_file = File.join(@stdlib_dir, name + ".fsn")
       if File.exist?(stdlib_file)
-        return load_file(stdlib_file).force
+        # The reference reports the user's source text, not the internal stdlib path.
+        return load_file(stdlib_file).force(operation: reference, input: NULL, site: site)
       end
 
-      ErrorVal.internal(kind: "reference_error", location: location, operation: "resolving @#{name}", input: name, message: "unresolved reference")
+      ErrorVal.from_runtime(kind: "reference_error", **site, operation: reference, input: NULL, message: "unresolved reference")
     end
 
     # Resolve a pure path "@dir/a" or "@../a": file only, never builtin/stdlib.
-    def resolve_path(relpath, dir, location)
+    # `reference` is the source text (`"@../a"`), the single `operation` reported.
+    def resolve_path(relpath, dir, site, reference)
       target = File.expand_path(relpath + ".fsn", dir)
-      return jail_error(location, "resolving @#{relpath}", relpath) unless within_jail?(target)
+      return jail_error(site, reference, NULL) unless within_jail?(target)
 
-      load_file(target).force
+      load_file(target).force(operation: reference, input: NULL, site: site)
     end
 
     # The run's jail (the `:jail` context, an absolute path or nil) confines
@@ -257,8 +288,8 @@ module Fusion
       abspath == root || abspath.start_with?(root + File::SEPARATOR)
     end
 
-    def jail_error(location, operation, input)
-      ErrorVal.internal(kind: "reference_error", location: location, operation: operation, input: input, message: "outside the jail")
+    def jail_error(site, operation, input)
+      ErrorVal.from_runtime(kind: "reference_error", **site, operation: operation, input: input, message: "outside the jail")
     end
 
     # ---- Expression evaluation -------------------------------------------
@@ -266,9 +297,12 @@ module Fusion
       case node
       when Expression::Lit then node.value
       when Expression::ErrLit
+        # Mark errors from within the stdlib as runtime-produced.
+        runtime = code_site(env)[:origin] == "stdlib"
+
         if node.payload.nil?
           # Bare `!` means `!null`
-          ErrorVal.new(NULL)
+          ErrorVal.new(NULL, runtime: runtime)
         else
           payload = eval_expr(node.payload, env)
 
@@ -276,14 +310,14 @@ module Fusion
             # No nested errors. Propagate inner error.
             payload
           else
-            ErrorVal.new(payload)
+            ErrorVal.new(payload, runtime: runtime)
           end
         end
       when Expression::Ident
         value = env.lookup(node.name)
 
         if value == :__unbound__
-          ErrorVal.internal(kind: "binding_error", location: code_location(env), operation: "reading identifier #{node.name}", input: node.name, message: "unbound identifier")
+          ErrorVal.from_runtime(kind: "binding_error", **code_site(env), operation: "reading identifier #{node.name}", input: node.name, message: "unbound identifier")
         else
           value
         end
@@ -299,13 +333,13 @@ module Fusion
             raise Unreachable, "bare @ evaluated outside a top-level unit"
           end
 
-          self_thunk.force
+          self_thunk.force(operation: "@", input: NULL, site: code_site(env))
         when :super
-          resolve_super(env, dir, code_location(env))
+          resolve_super(env, dir, code_site(env))
         when :name
-          resolve_name(node.path, dir, code_location(env))
+          resolve_name(node.path, dir, code_site(env), "@#{node.path}")
         else # :path
-          resolve_path(node.path, dir, code_location(env))
+          resolve_path(node.path, dir, code_site(env), "@#{node.path}")
         end
       when Expression::ArrLit then eval_array(node, env)
       when Expression::ObjLit then eval_object(node, env)
@@ -339,7 +373,7 @@ module Fusion
           if value.is_a?(Array)
             out.concat(value)
           else
-            return ErrorVal.internal(kind: "type_error", location: code_location(env), operation: "[...] array spread", input: value, message: "expected an array")
+            return ErrorVal.from_runtime(kind: "argument_error", **code_site(env), operation: "[...] array spread", input: value, expected: ["_ ? @Array"])
           end
         else
           raise Unreachable, "Unknown array item #{item.class}"
@@ -367,7 +401,7 @@ module Fusion
           if value.is_a?(Hash)
             out.merge!(value)
           else
-            return ErrorVal.internal(kind: "type_error", location: code_location(env), operation: "{...} object spread", input: value, message: "expected an object")
+            return ErrorVal.from_runtime(kind: "argument_error", **code_site(env), operation: "{...} object spread", input: value, expected: ["_ ? @Object"])
           end
         else
           raise Unreachable, "Unknown object pair #{pair.class}"
@@ -380,7 +414,7 @@ module Fusion
     def eval_pipe(node, env)
       value = eval_expr(node.left, env)
       function = eval_expr(node.right, env)
-      apply(function, value, code_location(env))
+      apply(function, value, call_site(env))
     end
 
     def eval_member(node, env)
@@ -391,13 +425,13 @@ module Fusion
         return obj
       end
 
-      loc = code_location(env)
+      site = code_site(env)
       unless obj.is_a?(Hash)
-        return ErrorVal.internal(kind: "type_error", location: loc, operation: ".#{node.key}", input: [obj, node.key], message: "expected an object")
+        return ErrorVal.from_runtime(kind: "argument_error", **site, operation: ".#{node.key}", input: obj, expected: ["_ ? @Object"])
       end
 
       unless obj.key?(node.key)
-        return ErrorVal.internal(kind: "access_error", location: loc, operation: ".#{node.key}", input: [obj, node.key], message: "missing key")
+        return ErrorVal.from_runtime(kind: "access_error", **site, operation: ".#{node.key}", input: obj, message: "missing key")
       end
 
       obj[node.key]
@@ -418,30 +452,41 @@ module Fusion
         return idx
       end
 
-      loc = code_location(env)
+      site = code_site(env)
       if obj.is_a?(Array) && idx.is_a?(Integer)
         i = idx >= 0 ? idx : obj.length + idx
         if i >= 0 && i < obj.length
           obj[i]
         else
-          ErrorVal.internal(kind: "access_error", location: loc, operation: "[#{idx}]", input: [obj, idx], message: "index out of range")
+          ErrorVal.from_runtime(kind: "access_error", **site, operation: "[]", input: [obj, idx], message: "index out of range")
         end
       elsif obj.is_a?(Hash) && idx.is_a?(String)
         if obj.key?(idx)
           obj[idx]
         else
-          ErrorVal.internal(kind: "access_error", location: loc, operation: "[#{idx.inspect}]", input: [obj, idx], message: "missing key")
+          ErrorVal.from_runtime(kind: "access_error", **site, operation: "[]", input: [obj, idx], message: "missing key")
         end
       else
-        ErrorVal.internal(kind: "type_error", location: loc, operation: "[index]", input: [obj, idx], message: "bad index type")
+        ErrorVal.from_runtime(kind: "argument_error", **site, operation: "[]", input: [obj, idx], expected: ["[_ ? @Array, _ ? @Integer]", "[_ ? @Object, _ ? @String]"])
       end
     end
 
     # ---- Application & matching ------------------------------------------
-    # `location` is the "code X" where the `|` lives, used if `f` is not a
-    # function. It defaults to "interpreter" for apply calls with no code context
-    # (e.g. the CLI applying the whole program).
-    def apply(f, v, location = "interpreter")
+    # `call_site` is the innermost user-code file the application runs for (see
+    # #call_site): a built-in/stdlib error reports it as its `file`, and a stdlib
+    # function passes it on to the operations it calls. It defaults to the runtime
+    # ("<fusion>") for an apply with no user-code caller (e.g. the CLI applying the
+    # whole program directly to a value).
+    def apply(f, v, call_site = "<fusion>")
+      result = dispatch_apply(f, v, call_site)
+      # The interpreter owns the call-site `file` of a standardized builtin/stdlib
+      # error (the call site is its knowledge, not the stdlib's): stamp it here, at
+      # the apply that produced the error. An error keeps the file from its
+      # innermost apply, so outer applies leave it untouched (see #with_call_site).
+      result.is_a?(ErrorVal) ? result.with_call_site(call_site) : result
+    end
+
+    def dispatch_apply(f, v, call_site)
       if f.is_a?(ErrorVal)
         # Propagate errors
         return f
@@ -458,20 +503,27 @@ module Fusion
         begin
           f.fn.call(v)
         rescue StandardError => err
-          kind = (err.is_a?(FloatDomainError) || err.is_a?(ZeroDivisionError)) ? "math_error" : "type_error"
-          ErrorVal.internal(kind: kind, location: "builtin #{f.name}", operation: f.name, input: v, message: err.message)
+          # TODO: move math errors into the builtins. This should become a safety net for unpredicted errors.
+          kind = (err.is_a?(FloatDomainError) || err.is_a?(ZeroDivisionError)) ? "math_error" : "internal_error"
+          ErrorVal.from_runtime(kind: kind, origin: "builtin", operation: "@#{f.name}", input: v, message: err.message)
         end
       elsif f.is_a?(Func)
+        # Stdlib code has no user file of its own: errors inside it (and in the
+        # built-ins it calls) report the user `call_site` that reached it. User and
+        # inline functions are their own call site (derived lexically from their env).
+        body_call_site = (code_site(f.env)[:origin] == "stdlib") ? call_site : nil
+
         f.clauses.each do |clause|
           # Bindings are inserted directly into a fresh child env as the pattern
           # matches; a duplicate binder (e.g. `[a, a]`) trips Env#bind, which we
           # convert to a binding_error here. A failed/abandoned clause just drops
           # its env, so partial bindings never leak.
           clause_env = f.env.child
+          clause_env.set_context(:call_site, body_call_site) if body_call_site
           m = begin
             match(clause.pattern, v, clause_env)
           rescue Env::DuplicateBinding => e
-            return ErrorVal.internal(kind: "binding_error", location: code_location(clause_env), operation: "binding identifier #{e.name}", input: e.name, message: "identifier already bound")
+            return ErrorVal.from_runtime(kind: "binding_error", **code_site(clause_env), operation: "binding identifier #{e.name}", input: e.name, message: "identifier already bound")
           end
 
           if m.is_a?(ErrorVal)
@@ -491,7 +543,7 @@ module Fusion
         # lenient default is `null`.
         v.is_a?(ErrorVal) ? v : NULL
       else
-        ErrorVal.internal(kind: "type_error", location: location, operation: "|", input: [v, f], message: "applied a non-function")
+        ErrorVal.from_runtime(kind: "argument_error", origin: "code", file: call_site, operation: "|", input: [v, f], expected: ["[_, _ ? @Function]"])
       end
     end
 
@@ -503,9 +555,9 @@ module Fusion
     def apply_predicate(pred_expr, value, env)
       if pred_expr.is_a?(Expression::Pipe)
         upstream = apply_predicate(pred_expr.left, value, env)
-        apply(eval_expr(pred_expr.right, env), upstream, code_location(env))
+        apply(eval_expr(pred_expr.right, env), upstream, call_site(env))
       else
-        apply(eval_expr(pred_expr, env), value, code_location(env))
+        apply(eval_expr(pred_expr, env), value, call_site(env))
       end
     end
 

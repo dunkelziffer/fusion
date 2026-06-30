@@ -60,12 +60,16 @@ module Fusion
 
       # Hidden interpreter context:
       # - `:dir`:  the directory @-references resolve against (a path String).
-      # - `:file`: the current file's absolute path, used for error locations (a
-      #            String; absent for inline/REPL code, which reports as "code <inline>").
+      # - `:file`: the current file's absolute path, used for error origins (a
+      #            String; absent for inline/REPL code, which reports as origin
+      #            "code" with file "<inline>").
       # - `:self`: the current top-level unit's own Thunk, used for recursion via a bare `@`.
       # - `:jail`: the run's jail root confining @-resolution (an absolute path
       #            String, or nil for unconfined). Set once on the root and, unlike
       #            the others, never overridden by a descendant.
+      # - `:call_site`: the innermost user-code `file` a stdlib body borrows for its
+      #            errors (a String). Set on a stdlib function's clause env in
+      #            Interpreter#apply; user/inline code derives its own and omits it.
       def set_context(key, value)
         @context[key] = value
         self

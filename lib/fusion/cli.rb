@@ -99,7 +99,7 @@ module Fusion
 
     # String (treated as inline source) -> runtime value
     def load_source(inline_source, root_env)
-      ast = Fusion::Parser.parse_file(inline_source, location: "code <inline>")
+      ast = Fusion::Parser.parse_file(inline_source, site: { origin: "code", file: "<inline>" })
       return ast if ast.is_a?(Fusion::Interpreter::ErrorVal) # a parse error
 
       inline_env = root_env.child.set_context(:dir, Dir.pwd)
@@ -108,7 +108,11 @@ module Fusion
 
     # relative path -> runtime_value
     def load_file(rel_path, root_env)
-      Fusion::Interpreter.new(root_env).load_file(File.expand_path(rel_path)).force
+      interp = Fusion::Interpreter.new(root_env)
+      abspath = File.expand_path(rel_path)
+      # The top-level program file is loaded by the runtime, not via an @-reference:
+      # the operation is "loading code", with the path as `input` (which file).
+      interp.load_file(abspath).force(operation: "loading code", input: interp.display_path(abspath), site: { origin: "code", file: nil })
     end
 
     # runtime value + runtime value -> runtime value

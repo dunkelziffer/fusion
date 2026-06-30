@@ -334,9 +334,10 @@ particular built-ins:
 If a `?` predicate evaluates to an error (the predicate function itself errored,
 or it was a non-function error value), that error becomes the function's return
 value immediately. Subsequent clauses are **not** tried — predicate-errors are
-treated as program failures, not as "no match." This is the key reason to make
-your predicates *total* (end with `_ => false`): a predicate that can crash will
-short-circuit your whole function.
+treated as program failures, not as "no match." This is the key reason to keep a
+`?` predicate from raising: a predicate that can crash will short-circuit your
+whole function. A non-matching input is not a crash — it falls through to `null`
+(falsey) — so a predicate needs no `_ => false` catch-all to be safe here.
 
 ### 6.5 The standardized error payload
 
@@ -354,46 +355,48 @@ There are two origins of error values, and they differ in payload:
 #### Payload shape
 
 ```json
-{"kind": "type_error", "location": "builtin add", "operation": "add", "input": [1, "x"], "message": "expected numbers"}
+{"kind": "argument_error", "origin": "builtin", "operation": "@add", "status": 0, "input": [1, "x"], "expected": ["[_ ? @Number, _ ? @Number]"]}
 ```
 
 | Field       | Required | Meaning                                                                                                                    |
 | ----------- | -------- | -------------------------------------------------------------------------------------------------------------------------- |
-| `kind`      | yes      | The error category, from the closed set below.                                                                             |
-| `location`  | yes      | Where the failing operation lives, from the closed set below.                                                              |
-| `operation` | yes      | A short description of the operation that failed, e.g. `"\|"`, `".name"`, `"[2]"`, `"add"`, `"reading file"`, `"parsing"`. |
-| `input`     | yes      | The operand(s) the operation received — often the offending value; for member/index access it is `[object, key]`.          |
-| `message`   | no       | Extra human-readable detail, e.g. `"expected an object"`.                                                                  |
+| `kind`      | yes      | The error category. Possible values are defined below.                                                                     |
+| `origin`    | yes      | Where the failing operation is *defined*. Possible values are defined below.                                               |
+| `file`      | no       | The **innermost user-code file** on the call chain. `builtin`/`stdlib` frames are skipped. The path is **relative to** `Dir.pwd`. Contains `"<inline>"` for errors in the CLI `-e` option or the REPL. Contains `"<fusion>"` for an error above all user code (e.g. `stdin` present, but `code` is not a function). Present for `builtin`/`stdlib`/`code` origins; absent for a channel/runtime origin (`input`/`output`/`interpreter`). |
+| `operation` | yes      | The operation that failed. All `@`-references are named by their **source text**. A syntactic operation uses its form (`"\|"`, `".name"`, `"[]"`, `"parsing code"`, `"parsing JSON"`). Loading the top-level program file uses `"loading code"`. |
+| `status`    | yes      | `0` or `1`. Whether the operation received an ordinary value (`0`) or an error value (`1`)                                 |
+| `input`     | yes      | The operation's input. A 0-argument operation (every `@`-reference except `@load`) carries `null`.                         |
+| `expected`  | no       | The acceptable inputs as a list of Fusion **patterns**. The input matched none of them.                                    |
+| `message`   | no       | Extra human-readable detail, e.g. `"division by zero"`. Absent whenever `expected` is present.                             |
 
-#### `kind` — the closed set
+#### Possible values for `kind`
 
 | `kind`                | Raised when                                                                                                    |
 | --------------------- | -------------------------------------------------------------------------------------------------------------- |
-| `syntax_error`        | source code, or the JSON input, fails to parse.                                                                |
-| `reference_error`     | an `@`-reference cannot be resolved: unknown name, file not found, a file-system failure, a non-productive data cycle, a target outside the jail (§9.2), no enclosing file (§9.2). |
-| `type_error`          | a value has the wrong type for an operation (expected X / a type mismatch); also applying a non-function, spreading a non-array/object, member access on a non-object, or a wrong-typed index. |
-| `argument_error`      | a built-in receives the wrong number/shape of arguments (e.g. not a pair), or an `array`/`object`-mode input envelope has the wrong shape (§9.4). Its `message` states the expected shape as a Fusion pattern where possible (the pair-built-ins report `expected [_, _]`). |
+| `syntax_error`        | source code or the JSON input fails to parse.                                                                  |
+| `reference_error`     | an `@`-reference cannot be resolved: unknown name, file not found, a file-system failure, a non-productive data cycle, a target outside the jail (§9.2), no enclosing file for `@@` (§9.2). |
+| `argument_error`      | a value has the wrong shape or type for an operation: a built-in given the wrong number/shape of arguments (e.g. not a pair) or a wrong-typed value, applying a non-function, spreading a non-array/object, member access on a non-object, a wrong-typed index, or an `array`/`object`-mode input envelope of the wrong shape (§9.4). Its `expected` lists the acceptable inputs as patterns. |
 | `binding_error`       | reading an unbound identifier, or binding the same name twice in one clause.                                   |
-| `access_error`        | a missing object key or an out-of-range array index — and nothing else (a non-object member access or a wrong-typed index is a `type_error`). |
+| `access_error`        | a missing object key or an out-of-range array index.                                                           |
 | `math_error`          | division or modulo by zero, or a non-finite number.                                                            |
 | `conversion_error`    | a value cannot be converted (`@toString` of an unconvertible type, `@parseNumber` of a non-numeric string).    |
-| `stack_error`         | recursion too deep (a stack overflow).                                                                         |
-| `serialization_error` | a result, or a user error's payload, has no JSON form — see §9.3.                                              |
+| `limit_error`         | a runtime resource limit was exceeded. `"stack level too deep"`.                                               |
+| `internal_error`      | an interpreter BUG. Please open an issue.                                                                      |
+| `serialization_error` | a result/error value has no JSON form. It contains functions or non-finite numbers. See §9.                    |
 
-#### `location` — the closed set
+#### Possible values for `origin`
 
-| `location`      | Meaning                                                           |
-| --------------- | ----------------------------------------------------------------- |
-| `builtin X`     | the built-in named X, e.g. `builtin divide`.                      |
-| `stdlib X`      | the standard-library file X.                                      |
-| `code X`        | the user source file X (basename).                                |
-| `code <inline>` | an inline `-e` program or a REPL statement.                       |
-| `input`         | the input channel (stdin or the CLI-argument).                    |
-| `output`        | the output channel (the serialized result).                       |
-| `interpreter`   | the interpreter itself, e.g. a stack overflow.                    |
+| `origin`      | Meaning                                                                  |
+| ------------- | ------------------------------------------------------------------------ |
+| `builtin`     | a built-in operation (named by its `@`-reference in `operation`).        |
+| `stdlib`      | a standard-library function (named by its `@`-reference in `operation`). |
+| `code`        | user source core (a file or an inline expression (`-e`/REPL).            |
+| `input`       | the input channel (stdin). Usually syntax errors.                        |
+| `output`      | the output channel. Usually serialization errors.                        |
+| `interpreter` | the interpreter itself, e.g. a stack overflow.                           |
 
 `input` and `output` name the data channels; they **never** refer to the program
-source, which always reports as `code X`.
+source, which always reports as `code`.
 
 User errors don't have to adhere to this standard.
 
@@ -605,7 +608,7 @@ the result instead.
   `@ENV`, and pull in `@`-references, then print the value with no pipeline
   input. (Under `-!` the input is an error value instead; empty input then has no
   payload to mark, which is a usage error — see §9.4.)
-- Non-JSON input yields a `syntax_error` at `location: "input"` (§6.5).
+- Non-JSON input yields a `syntax_error` at `origin: "input"` (§6.5).
 - **If the final result is an error**, the interpreter prints **nothing** to
   standard output, prints the error's **payload** (as JSON) to standard error, and
   exits with status `1`. Otherwise the result is printed to standard output and the
@@ -659,7 +662,7 @@ flags:
   for an error. Output is always on stdout, exit code always `0`.
 
 A malformed `array`/`object` input envelope (any other shape; the array tag must
-be exactly the integer `0` or `1`) is an `argument_error` at `location: "input"`.
+be exactly the integer `0` or `1`) is an `argument_error` at `origin: "input"`.
 Like any input failure it flows into the program as an error and is catchable.
 
 Mode support per use case (defaults in bold):
@@ -728,7 +731,7 @@ relative to the working directory.
 - A bound function can call itself through its own name
   (`fact = (0 => 1, n => [n, [n,1] | @subtract | fact] | @multiply)`), because
   the name is looked up at application time.
-- Entries report errors at `location: "code <inline>"`, like `-e` programs.
+- Entries report errors at `origin: "code"` with `file: "<inline>"`, like `-e` programs.
 
 **Input editing.** An entry is submitted only once it parses as a complete
 statement or expression; until then the session opens a new line so the entry

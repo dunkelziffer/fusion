@@ -9,32 +9,54 @@ module Fusion
     class ErrorVal
       attr_reader :payload
 
-      def initialize(payload)
+      def initialize(payload, runtime: false)
         @payload = payload
-        @internal = false
+        @runtime = runtime
       end
 
-      # Whether this is an interpreter-produced error (vs. a user-constructed
-      # `!expr`). Governs serialization — see docs/user/reference.md §9.3.
-      def internal_error?
-        @internal
+      # Attach the call-site `file` to a runtime error. Idempotent.
+      def with_call_site(file)
+        # Only stamp runtime-produced errors. After this check we are sure that the payload wasn't user-constructed.
+        return self unless @runtime
+        raise Unreachable, "Unexpected runtime error payload: #{@payload}" unless @payload.is_a?(Hash)
+        # Don't double stamp. Idempotency.
+        return self if @payload.key?("file")
+        # Only stamp certain errors.
+        return self unless ["builtin", "stdlib"].include?(@payload["origin"])
+
+        # Insert "file" after "origin"
+        reordered = {}
+        @payload.each do |key, value|
+          reordered[key] = value
+          reordered["file"] = file if key == "origin"
+        end
+        @payload = reordered
+        self
       end
 
-      # Build an interpreter-produced error with the standardized payload shape
+      # Was this error runtime-produced (as opposed to user-constructed via `!expr`)?
+      # Runtime errors use lenient serialization (docs/user/reference.md §9.3) and
+      # get a call-site `file` stamped.
+      def runtime?
+        @runtime
+      end
+
+      # Build a runtime-produced error with the standardized payload shape
       # documented in docs/user/reference.md §6.5.
-      def self.internal(kind:, location:, operation:, input:, message: nil)
-        error = new(
-          "kind" => kind,
-          "location" => location,
-          "operation" => operation,
-          "input" => input,
-          **(message ? { "message" => message } : {})
-        )
+      def self.from_runtime(kind:, origin:, operation:, input:, file: nil, expected: nil, message: nil)
+        raise Unreachable, "an error with `expected` must not also carry a `message`" if expected && message
 
-        # Mark as "@internal" to activate lenient serialization.
-        error.instance_variable_set(:@internal, true)
+        received_error = input.is_a?(ErrorVal)
 
-        error
+        payload = { "kind" => kind, "origin" => origin }
+        payload["file"] = file if file
+        payload["operation"] = operation
+        payload["status"] = received_error ? 1 : 0
+        payload["input"] = received_error ? input.payload : input
+        payload["expected"] = expected if expected
+        payload["message"] = message if message
+
+        new(payload, runtime: true)
       end
 
       def inspect

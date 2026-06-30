@@ -13,7 +13,10 @@ RSpec.describe "object syntax" do
       it "rejects #{why}" do
         expect_pipe
           .code(src)
-          .out("❌", a_string_including('"kind":"syntax_error"', '"location":"code <inline>"'))
+          .out("❌", a_string_including(
+            '"kind":"syntax_error"', '"origin":"code"', '"file":"<inline>"', '"operation":"parsing code"', '"status":0', %("input":#{src.to_json}),
+            '"message":'
+          ))
       end
     end
 
@@ -33,7 +36,10 @@ RSpec.describe "object syntax" do
       it "rejects #{why}" do
         expect_pipe
           .code(src)
-          .out("❌", a_string_including('"kind":"syntax_error"', '"location":"code <inline>"'))
+          .out("❌", a_string_including(
+            '"kind":"syntax_error"', '"origin":"code"', '"file":"<inline>"', '"operation":"parsing code"', '"status":0', %("input":#{src.to_json}),
+            '"message":'
+          ))
       end
     end
 

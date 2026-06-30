@@ -14,22 +14,23 @@ module Fusion
       def serialize(runtime_value, lenient: false)
         message = catch(:unserializable) do
           if runtime_value.is_a?(Interpreter::ErrorVal)
-            data = convert(runtime_value.payload, lenient: lenient || runtime_value.internal_error?).to_json
+            error = runtime_value
+            data = convert(error.payload, lenient: lenient || error.runtime?).to_json
             return WirePair.new(status: 1, data: data)
           else
             return WirePair.new(status: 0, data: convert(runtime_value, lenient: lenient).to_json)
           end
         end
 
-        internal_error = Interpreter::ErrorVal.internal(
+        runtime_error = Interpreter::ErrorVal.from_runtime(
           kind: "serialization_error",
-          location: "output",
+          origin: "output",
           operation: "serializing result",
           input: runtime_value,
           message: message
         )
 
-        serialize(internal_error, lenient: true)
+        serialize(runtime_error, lenient: true)
       end
 
       private

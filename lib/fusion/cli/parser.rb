@@ -14,10 +14,10 @@ module Fusion
         value = convert(JSON.parse(wire_pair.data))
         wire_pair.status == 1 ? Interpreter::ErrorVal.new(value) : value
       rescue JSON::ParserError
-        Interpreter::ErrorVal.internal(
+        Interpreter::ErrorVal.from_runtime(
           kind: "syntax_error",
-          location: "input",
-          operation: "parsing input as JSON",
+          origin: "input",
+          operation: "parsing JSON",
           input: wire_pair.data,
           message: "input is not valid JSON"
         )

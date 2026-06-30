@@ -51,38 +51,32 @@ module Fusion
 
       # --- arithmetic ---
 
+      NUMBER_PAIR = ["[_ ? @Number, _ ? @Number]"].freeze
+
       def add(v)
         return v if v.is_a?(ErrorVal)
-        return error("argument_error", "add", v, "expected [_, _]") unless pair?(v)
-        return error("type_error", "add", v, "expected numbers") unless numeric?(v[0])
-        return error("type_error", "add", v, "expected numbers") unless numeric?(v[1])
+        return argument_error("add", v, NUMBER_PAIR) unless pair?(v) && numeric?(v[0]) && numeric?(v[1])
 
         v[0] + v[1]
       end
 
       def subtract(v)
         return v if v.is_a?(ErrorVal)
-        return error("argument_error", "subtract", v, "expected [_, _]") unless pair?(v)
-        return error("type_error", "subtract", v, "expected numbers") unless numeric?(v[0])
-        return error("type_error", "subtract", v, "expected numbers") unless numeric?(v[1])
+        return argument_error("subtract", v, NUMBER_PAIR) unless pair?(v) && numeric?(v[0]) && numeric?(v[1])
 
         v[0] - v[1]
       end
 
       def multiply(v)
         return v if v.is_a?(ErrorVal)
-        return error("argument_error", "multiply", v, "expected [_, _]") unless pair?(v)
-        return error("type_error", "multiply", v, "expected numbers") unless numeric?(v[0])
-        return error("type_error", "multiply", v, "expected numbers") unless numeric?(v[1])
+        return argument_error("multiply", v, NUMBER_PAIR) unless pair?(v) && numeric?(v[0]) && numeric?(v[1])
 
         v[0] * v[1]
       end
 
       def divide(v)
         return v if v.is_a?(ErrorVal)
-        return error("argument_error", "divide", v, "expected [_, _]") unless pair?(v)
-        return error("type_error", "divide", v, "expected numbers") unless numeric?(v[0])
-        return error("type_error", "divide", v, "expected numbers") unless numeric?(v[1])
+        return argument_error("divide", v, NUMBER_PAIR) unless pair?(v) && numeric?(v[0]) && numeric?(v[1])
         return error("math_error", "divide", v, "division by zero") if v[1] == 0
 
         a, b = v
@@ -95,9 +89,7 @@ module Fusion
 
       def mod(v)
         return v if v.is_a?(ErrorVal)
-        return error("argument_error", "mod", v, "expected [_, _]") unless pair?(v)
-        return error("type_error", "mod", v, "expected numbers") unless numeric?(v[0])
-        return error("type_error", "mod", v, "expected numbers") unless numeric?(v[1])
+        return argument_error("mod", v, NUMBER_PAIR) unless pair?(v) && numeric?(v[0]) && numeric?(v[1])
         return error("math_error", "mod", v, "modulo by zero") if v[1] == 0
 
         v[0] % v[1]
@@ -105,14 +97,14 @@ module Fusion
 
       def negate(v)
         return v if v.is_a?(ErrorVal)
-        return error("type_error", "negate", v, "expected a number") unless numeric?(v)
+        return argument_error("negate", v, ["_ ? @Number"]) unless numeric?(v)
 
         -v
       end
 
       def floor(v)
         return v if v.is_a?(ErrorVal)
-        return error("type_error", "floor", v, "expected a number") unless numeric?(v)
+        return argument_error("floor", v, ["_ ? @Number"]) unless numeric?(v)
         return error("math_error", "floor", v, "not a finite number") if non_finite?(v)
 
         v.floor
@@ -122,14 +114,15 @@ module Fusion
 
       def equals(v)
         return v if v.is_a?(ErrorVal)
-        return error("argument_error", "equals", v, "expected [_, _]") unless pair?(v)
+        return argument_error("equals", v, ["[_, _]"]) unless pair?(v)
 
         @interp.deep_equal?(v[0], v[1])
       end
 
       def less_than(v)
         return v if v.is_a?(ErrorVal)
-        return error("argument_error", "lessThan", v, "expected [_, _]") unless pair?(v)
+        expected = ["[_ ? @Number, _ ? @Number]", "[_ ? @String, _ ? @String]"]
+        return argument_error("lessThan", v, expected) unless pair?(v)
 
         a, b = v
         if numeric?(a) && numeric?(b)
@@ -137,7 +130,7 @@ module Fusion
         elsif a.is_a?(String) && b.is_a?(String)
           a < b
         else
-          error("type_error", "lessThan", v, "expected two numbers or two strings")
+          argument_error("lessThan", v, expected)
         end
       end
 
@@ -148,14 +141,14 @@ module Fusion
       # boolean. They share the interpreter's `truthy?`, the same test `?` guards use.
       def and_(v)
         return v if v.is_a?(ErrorVal)
-        return error("argument_error", "and", v, "expected [_, _]") unless pair?(v)
+        return argument_error("and", v, ["[_, _]"]) unless pair?(v)
 
         @interp.truthy?(v[0]) && @interp.truthy?(v[1])
       end
 
       def or_(v)
         return v if v.is_a?(ErrorVal)
-        return error("argument_error", "or", v, "expected [_, _]") unless pair?(v)
+        return argument_error("or", v, ["[_, _]"]) unless pair?(v)
 
         @interp.truthy?(v[0]) || @interp.truthy?(v[1])
       end
@@ -170,33 +163,33 @@ module Fusion
 
       def length(v)
         return v if v.is_a?(ErrorVal)
-        return error("type_error", "length", v, "expected a string, array, or object") unless v.is_a?(String) || v.is_a?(Array) || v.is_a?(Hash)
+        return argument_error("length", v, ["_ ? @String", "_ ? @Array", "_ ? @Object"]) unless v.is_a?(String) || v.is_a?(Array) || v.is_a?(Hash)
 
         v.length
       end
 
       def concat(v)
         return v if v.is_a?(ErrorVal)
-        return error("argument_error", "concat", v, "expected [_, _]") unless pair?(v)
-        return error("type_error", "concat", v, "expected strings") unless v[0].is_a?(String) && v[1].is_a?(String)
+        return argument_error("concat", v, ["[_ ? @String, _ ? @String]"]) unless pair?(v) && v[0].is_a?(String) && v[1].is_a?(String)
 
         v[0] + v[1]
       end
 
       def chars(v)
         return v if v.is_a?(ErrorVal)
-        return error("type_error", "chars", v, "expected a string") unless v.is_a?(String)
+        return argument_error("chars", v, ["_ ? @String"]) unless v.is_a?(String)
 
         v.chars
       end
 
       def join(v)
         return v if v.is_a?(ErrorVal)
-        return error("argument_error", "join", v, "expected [_, _]") unless pair?(v)
+        expected = ['[_ ? (xs => {"xs": xs, "f": @String} | @all), _ ? @String]']
+        return argument_error("join", v, expected) unless pair?(v)
 
         array, separator = v
         unless array.is_a?(Array) && separator.is_a?(String) && array.all? { |item| item.is_a?(String) }
-          return error("type_error", "join", v, "expected [array-of-strings, separator-string]")
+          return argument_error("join", v, expected)
         end
 
         array.join(separator)
@@ -217,7 +210,7 @@ module Fusion
 
       def parse_number(v)
         return v if v.is_a?(ErrorVal)
-        return error("type_error", "parseNumber", v, "expected a string") unless v.is_a?(String)
+        return argument_error("parseNumber", v, ["_ ? @String"]) unless v.is_a?(String)
 
         case v
         when /\A-?\d+\z/ then v.to_i
@@ -230,14 +223,14 @@ module Fusion
 
       def keys(v)
         return v if v.is_a?(ErrorVal)
-        return error("type_error", "keys", v, "expected an object") unless v.is_a?(Hash)
+        return argument_error("keys", v, ["_ ? @Object"]) unless v.is_a?(Hash)
 
         v.keys
       end
 
       def values(v)
         return v if v.is_a?(ErrorVal)
-        return error("type_error", "values", v, "expected an object") unless v.is_a?(Hash)
+        return argument_error("values", v, ["_ ? @Object"]) unless v.is_a?(Hash)
 
         v.values
       end
@@ -246,7 +239,8 @@ module Fusion
       # object (string key) — mirroring the `[]` operator (reference §8).
       def get(v)
         return v if v.is_a?(ErrorVal)
-        return error("argument_error", "get", v, "expected [_, _]") unless pair?(v)
+        expected = ["[_ ? @Array, _ ? @Integer]", "[_ ? @Object, _ ? @String]"]
+        return argument_error("get", v, expected) unless pair?(v)
 
         container, key = v
         if container.is_a?(Array) && key.is_a?(Integer)
@@ -259,7 +253,7 @@ module Fusion
 
           error("access_error", "get", v, "missing key")
         else
-          error("type_error", "get", v, "bad index type")
+          argument_error("get", v, expected)
         end
       end
 
@@ -268,7 +262,8 @@ module Fusion
       # mirrors `@get` (array by integer index, object by string key).
       def set(v)
         return v if v.is_a?(ErrorVal)
-        return error("argument_error", "set", v, "expected [_, _, _]") unless v.is_a?(Array) && v.length == 3
+        expected = ["[_ ? @Array, _ ? @Integer, _]", "[_ ? @Object, _ ? @String, _]"]
+        return argument_error("set", v, expected) unless v.is_a?(Array) && v.length == 3
 
         container, key, value = v
         if container.is_a?(Array) && key.is_a?(Integer)
@@ -279,15 +274,16 @@ module Fusion
         elsif container.is_a?(Hash) && key.is_a?(String)
           container.merge(key => value)
         else
-          error("type_error", "set", v, "bad index type")
+          argument_error("set", v, expected)
         end
       end
 
       def to_object(v)
         return v if v.is_a?(ErrorVal)
-        return error("type_error", "toObject", v, "expected an array") unless v.is_a?(Array)
-        unless v.all? { |entry| pair?(entry) && entry[0].is_a?(String) }
-          return error("type_error", "toObject", v, "expected [string, value] entries")
+        # Each entry must be a [string, _] pair.
+        expected = ['_ ? (xs => {"xs": xs, "f": ([_ ? @String, _] => true)} | @all)']
+        unless v.is_a?(Array) && v.all? { |entry| pair?(entry) && entry[0].is_a?(String) }
+          return argument_error("toObject", v, expected)
         end
 
         v.to_h
@@ -341,15 +337,18 @@ module Fusion
         v.is_a?(Float) && !v.finite?
       end
 
-      # Build a standardized interpreter error (see docs/user/reference.md §6.5).
+      # Build a standardized interpreter error carrying a human-readable
+      # `message` (see docs/user/reference.md §6.5). Use this for failures that
+      # aren't an input-shape mismatch (math, conversion, access). `operation`
+      # is the builtin's own `@`-reference (`@#{name}`).
       def error(kind, name, v, message)
-        ErrorVal.internal(
-          kind: kind,
-          location: "builtin #{name}",
-          operation: name,
-          input: v,
-          message: message
-        )
+        ErrorVal.from_runtime(kind: kind, origin: "builtin", operation: "@#{name}", input: v, message: message)
+      end
+
+      # Build an `argument_error` describing the acceptable inputs as a list of
+      # Fusion patterns. The input was unacceptable iff it matches none of them.
+      def argument_error(name, v, expected)
+        ErrorVal.from_runtime(kind: "argument_error", origin: "builtin", operation: "@#{name}", input: v, expected: expected)
       end
     end
   end

@@ -101,11 +101,11 @@ Future work and open questions are tracked separately in our [Roadmap](./roadmap
 
 ---
 
-## 1.4 Member/index access failures yield `!`
+## 1.4 Member/index access failures yield an error
 
 ### Decisions
 
-- 🤖 ✅ `x.key` on a missing key or non-object, and `x[i]` out of range or on a wrong type, yield `!` (not `null`).
+- 🤖 ✅ `x.key` on a missing key or non-object, and `x[i]` out of range or on a wrong type, yield an error (instead of `null`).
 
 ### Why the implementer decided this
 
@@ -162,7 +162,7 @@ Future work and open questions are tracked separately in our [Roadmap](./roadmap
 
 ### Decisions
 
-- 🧑 ✅ Patterns and results are mirror images using the same names — values captured by a pattern are re-inserted in the result.
+- 🧑 ✅ Patterns and results are mirror images using the same names. Values captured by a pattern are re-inserted in the result.
 - 🤖 ✅ A bare (unquoted) identifier is the binder/hole: it binds in a pattern and reads in an expression (Claude's choice to use JSON's one unused syntactic slot, rather than a sigil).
 
 ### Alternatives
@@ -274,7 +274,7 @@ Future work and open questions are tracked separately in our [Roadmap](./roadmap
 - 🧑 ✅ Introduce a distinct error mode `!`, separate from `null`.
 - 🧑 ✅ `null` = legitimate absence; `!` = failure.
 - 🧑 ✅ A function is made *strict* by ending with `_ => !` (error on no match) and is otherwise *lenient* (returns `null` on no match).
-- 🧑 ✅ Total predicates end with `_ => false`.
+- 🧑 ⏪ Total predicates end with `_ => false`. Obsoleted by §2.12. Predicates no longer need a `_ => false` clause, because `null` became equivalent to `false`.
 - 🤖 ✅ Built-in operations return `!` on bad input; built-in predicates return `false`.
 - 🧑 ✅ The form of `!` (always carrying a payload) is fixed by 2.8.
 - 🤖 ✅ `!` matches **only** error patterns (not `_`, not a binder).
@@ -373,12 +373,10 @@ Future work and open questions are tracked separately in our [Roadmap](./roadmap
 
 ### Decisions
 
-- 🧑 ✅ Every error payload produced by "the runtime" (the interpreter or a built-in function) has the **same shape**. This shape is enforced by constructing "internal errors" via `ErrorVal.internal`. The full schema is documented in [reference §6.5](../user/reference.md#65-the-standardized-error-payload).
-- 🤖 ✅ The stdlib is "ordinary unpriviledged Fusion code" and doesn't produce internal errors.
-- 🧑 ✅ However, all stdlib functions mirror the built-in error shape.
-- 🔢 ✅ During function application we differentiate between:
-  - `argument_error`: bad *input shape* (e.g. the wrong number of inputs). Constraints that could be expressed as a pattern without `?`.
-  - `type_error`: unsupported *input type* (e.g. string instead of number) or constraints between multiple inputs. Usually would require a `?` to express as a pattern.
+- 🧑 ✅ Every error payload produced by "the runtime" (the interpreter or a built-in function) has the **same shape**. This shape is enforced by constructing "runtime errors" via `ErrorVal.from_runtime`. The full schema is documented in [reference §6.5](../user/reference.md#65-the-standardized-error-payload).
+- 🤖 ⏪ The stdlib is "ordinary unpriviledged Fusion code". It didn't produce runtime errors. Reverted by §2.13. The stdlib now constructs regular `!expr` user errors, but they get marked as runtime errors afterwards.
+- 🧑 ✅ All stdlib functions mirror the built-in error shape.
+- 🔢 ⏪ During function application we differentiated `argument_error` (bad input *shape*, expressible as a pattern without `?`) from `type_error` (bad input *type*). Reverted in §2.13. Both errors got unified into a single `argument_error`.
 - 🧑 ✅ Member/index access reserves `access_error` for exactly `missing key` and `index out of range`:
   - Accessing a member of a non-object or indexing with a wrong-typed key is a `type_error` instead.
   - File-system access failures ("missing file", "directory instead of file", "permission denied") are a `reference_error` instead.
@@ -464,6 +462,50 @@ Future work and open questions are tracked separately in our [Roadmap](./roadmap
 ### Cons
 
 - If you really wanted "strict booleans", you'd now need to build them yourselves.
+
+---
+
+## 2.13 Refining the error payload
+
+Refines §2.9: same general shape, more orthogonal fields, field values easier to match on, field values contain smarter contents
+
+### Decisions
+
+- 🧑 ✅ The error payload fields are now: `kind`, `origin`, `file` (opt), `operation`, `status`, `input`, `expected` (opt), `message` (opt).
+- 🧑 ✅ Split `location` into `origin` (where the operation is *defined*) and an optional `file` (the **innermost user-code file** on the call chain).
+- 🧑 ✅ `file` is `Dir.pwd`-relative, so it reads as the route from the location where `fusion` was called to the offending source code.
+- 🧑 ✅ Split `status` out from `input`. `status` is `0` (a value) or `1` (an error). On `1`, `input` carries the error's bare payload, so `input` is always valid JSON.
+- 🧑 ✅ `operation` now contains the failing operation's own **`@`-reference** (`@`, `@@`, `@add`, `@math/square`, `@../mod`, , `@load`) or for Built-in *syntax* its own form (`|`, `.key`, `[]`, `parsing code`). Loading the top-level program file is `loading code` (not an `@`-reference).
+- 🧑 ✅ An `@`-reference takes no argument, so its `input` is `null` and its `status` is always `0`. `@load` is the exception: it's a function taking a filename.
+- 🧑 ✅ For *access errors* the "key" appears only once: `.name` carries the static key in `operation` and the object alone in `input`; `[]` is generic in `operation` with `input` = `[collection, key]` (the key is a dynamic value, and `[]` will later desugar to `@get`).
+- 🧑 ✅ A failure to read a file (missing file, directory given, access denied) is reported as `"operation": <the literal @-reference>`, `"input": null`, `"file": <the referring call site>`.
+- 🧑 ✅ `type_error` is merged into `argument_error`. The distinction between *wrong shape* and *wrong type* didn't fit Fusion's runtime type system.
+- 🧑 ✅ `expected` lists the acceptable inputs as Fusion patterns (the input matched none); an error with `expected` never also carries a `message`.
+- 🧑 ✅ `internal_error` is the new catch-all for an unexpected host/interpreter failure. It's a Ruby error the engine caught rather than letting it crash the process (`origin` `interpreter` or `builtin`). It's an interpreter bug.
+- 🧑 ✅ A runtime resource limit being exceeded is a separate `limit_error` (currently a stack overflow, `"stack level too deep"`): the runtime gave up because a space/time budget ran out — not an engine defect. The general name (vs `stack_error`) lets future runtime resource limits share the kind.
+- 🧑 ✅ stdlib functions preemptively handle all *argument* errors. They appear atomic. No input should be able to trigger e.g. an error in a `|` operation. *Argument* errors refer to the stdlib function itself (`origin: "stdlib"`, `operation` = its `@`-reference).
+- 🧑 ✅ stdlib functions are *transparent* for *inner errors*. They can't catch every possible error from inner operations, so an inner error bubbles through unchanged. The purest example is `@map`, which knows nothing about the given `f`: an error from `f` originates from `f` and simply bubbles through `map`.
+- 🧑 ✅ stdlib higher-order functions (`@all`/`@map`/`@mapValues`) guard `f ? @Function` in every clause — a non-function `f` errors even on an empty collection — and `expected` shows the guard.
+- 🧑 ✅ `@all` short-circuits: the first falsey item yields `false`, the rest go untested.
+
+### Alternatives
+
+- 🔢 ⏪ A variable `location` string embedding the file/builtin name, with the error marker living inside `input` — split into the fixed `origin` + `file`, and the `status` field.
+- 🔢 ❌ Over-approximating `expected` patterns for `@join`/`@toObject` (e.g. `[_ ? @Array, _ ? @String]`) — they would match inputs that still fail, breaking "matches ⇒ acceptable"; `@all` keeps them exact.
+- 🔢 ❌ `operation` = the *literal source text* of the `|`'s right-hand side. Not implementable: the text isn't available where the error is born; stamping it at `apply` would relabel inner errors bubbling *through* a function (violating §2.9 transparency); and an indirect RHS like `f` is uninformative. The producer's own `@`-reference gives the same result for a direct call and stays correct otherwise.
+- 🧑 ❌ Drop `conversion_error` and have a failed conversion (e.g. `@parseNumber` of `"abc"`) return `null` (a "Maybe", as Ruby's `to_i` does). Rejected: the error payload carries more information, `| (! => null)` recovers the lenient form in one token, and forcing a catch keeps errors local — which matters with no backtraces. (A `null` would slip downstream and surface far from its cause.)
+- 🧑 ❌ Base the payload path on the jail / program directory instead of `Dir.pwd`. Rejected: `Dir.pwd` gives a path usable straight from your shell; for an installed/shebang tool invoked from elsewhere, a jail-relative path would describe the program's internal layout, which you'd then have to rebase onto your own location.
+
+### Pros
+
+- `input` is always valid JSON as the `status` now lives in its own field
+- `expected` documents the acceptable inputs as patterns a caller can reuse.
+- `origin` is directly dispatchable as the variable filename now lives in its own `file` field.
+- The roles of `file` and `operation` have been clarified and are much more helpful now.
+
+### Cons
+
+- A few `expected` patterns must reference the `@all` stdlib helper, so they aren't purely structural.
 
 ---
 
@@ -738,7 +780,7 @@ All access goes through `@`:
 ### Cons
 
 - No streaming; whole input must be buffered and parsed.
-- 🩹 A bare `!` with nonzero exit gives little diagnostic detail. Mitigated for internal errors by more detailed error payloads in 2.9.
+- 🩹 A bare `!` with nonzero exit gives little diagnostic detail. Mitigated for runtime errors by more detailed error payloads in 2.9.
 
 ---
 
@@ -768,21 +810,21 @@ All access goes through `@`:
 
 ---
 
-## 4.3 Internal errors and lenient JSON serialization
+## 4.3 Runtime errors and lenient JSON serialization
 
 ### Decisions
 
 - 🔢 ✅ To serialize values without a valid JSON representation, we introduce "lenient serialization". Values without JSON representation get turned into string representations (`"<function>"` and `"<Infinity>"`/`"<-Infinity>"`/`"<NaN>"`).
 - 🧑 ✅ The remaining data structure gets preserved.
-- 🔢 ✅ Internal errors (`ErrorVal.internal_error?`) get serialized leniently by default, so their info isn't obscured by a `serialization_error`.
-- 🤖 ✅ The stdlib doesn't produce internal errors.
-- 🧑 ✅ However, all stdlib functions use `@sanitize` to mimick the lenient JSON serialization and preserve as much info as possible.
-- 🧑 ✅ Ordinary values and user errors are serialized strictly to avoid surprising type conversions. If they fail to serialize, they get turned into an internal `serialization_error` and will subsequently get serialized leniently.
+- 🔢 ✅ Runtime errors (`ErrorVal#runtime?`) get serialized leniently by default, so their info isn't obscured by a `serialization_error`.
+- 🤖 ⏪ The stdlib doesn't produce runtime errors. Reverted in §2.13. stdlib errors now get marked as runtime errors.
+- 🧑 ⏪ All stdlib functions use `@sanitize` to mimick the lenient JSON serialization and preserve as much info as possible. Obsoleted by §2.13. However, `@sanitize` is kept as a utility.
+- 🧑 ✅ Ordinary values and user errors are serialized strictly to avoid surprising type conversions. If they fail to serialize, they get turned into a runtime `serialization_error` and will subsequently get serialized leniently.
 
 ### Alternatives
 
-- 🤖 ❌ The standard library could create real "internal errors" via a dedicated `@raise` primitive. Declined, because it offers little over the `!` prefix and would let any code (not just the stdlib) create internal errors. The main reason for internal errors (apart from enforcing a consistent shape) is lenient serialization.
-- 🧑 ❌ Internal errors also serialize strictly by default. Rejected, because this would turn too many errors into a `serialization_error` and would lose too much information.
+- 🤖 ❌ The standard library could create real "runtime errors" via a dedicated `@raise` primitive. Declined: it offers little over the `!` prefix and would let *any* code create runtime errors. Instead a stdlib `!{…}` is marked runtime by its construction *location* — the same benefit (lenient serialization, a consistent shape, call-site `file`), confined to stdlib source.
+- 🧑 ❌ Runtime errors also serialize strictly by default. Rejected, because this would turn too many errors into a `serialization_error` and would lose too much information.
 - 🧑 💭 All errors serialize leniently by default. Rejected, because this hides real errors (e.g. `NaN` or a function as a result) behind an automatic type conversion.
 
 ---

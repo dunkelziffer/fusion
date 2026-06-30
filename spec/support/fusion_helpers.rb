@@ -7,15 +7,20 @@
 # small chainable builder:
 #
 #   expect_pipe
+#     .env(CI: "1")              # supplies variables visible to @ENV, optional
 #     .in("✅", "1")             # input: exit-code marker + JSON value
-#     .file_path("test.fsn")     # program: a fixture file …
-#     .out("❌", "42")           # … or .code("(x => …)") for inline source
+#     .file_path("test.fsn")     # program: a fixture file or .code("(x => …)") for inline source
+#     .out("❌", "42")           # output: exit-code marker + JSON value, runs the pipe and asserts the result.
 #
-# `.out(marker, payload)` runs the pipe and asserts the result; a matcher object
-# (e.g. a_string_including(...)) is allowed in the payload slot. A program that
-# fails to parse is not an exception — it is a payloaded syntax_error, asserted
-# with `.out("❌", ...)` like any other failure. `.env(CI: "1")` supplies
-# variables visible to @ENV.
+# The payload slot takes the exact JSON string where it is stable. When parts of
+# that string are machine-dependent, use the `a_string_including`-matcher.
+# That matcher supports string AND `Regexp`. Use a string for all stable key-value
+# pairs. Use a `Regexp` matcher for variable key-value pairs. If the value of a
+# key-value pair is allowed to be an arbitrary string, only assert the key via
+# '"key":'.
+#
+# A program that fails to parse is not an exception. It is a payloaded syntax_error,
+# asserted with `.out("❌", ...)` like any other failure.
 #
 # Both input and output are (marker, payload) pairs mirroring the CLI (see
 # exe/fusion): "✅" for exit 0 (a value), "❌" for exit 1 (an error payload).
@@ -112,7 +117,7 @@ module FusionHelpers
       if @file_path
         interp.load_file(File.join(FIXTURES, @file_path)).force
       else
-        ast = Fusion::Parser.parse_file(@code, location: "code <inline>")
+        ast = Fusion::Parser.parse_file(@code, site: { origin: "code", file: "<inline>" })
         return ast if ast.is_a?(Fusion::Interpreter::ErrorVal) # a parse error
         interp.evaluate_unit(ast)
       end

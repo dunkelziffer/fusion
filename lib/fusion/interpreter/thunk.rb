@@ -7,32 +7,45 @@
 module Fusion
   class Interpreter
     class Thunk
-      def initialize(location:, input:, &compute)
+      # We use a custom Ruby error to transmit read failures between `Interpreter.evaluate_file`
+      # (which runs in the @compute block) and the Thunk to enforce their connection.
+      # If `Interpreter.evaluate_file` were to be used outside of a Thunk, the Ruby error would
+      # bubble and trigger an `internal_error` later on.
+      class ReadFailure < StandardError; end
+
+      def initialize(&compute)
         @compute = compute
-        @location = location
-        @input = input
         @state = :unforced # :unforced | :forcing | :done
-        @value = nil
+        @value = nil # memoized result: runtime value/error | ReadFailure
       end
 
-      def force
-        case @state
-        when :done then @value
+      # `operation`/`input`/`site` describe the @-reference forcing this thunk.
+      # They are NOT passed to `@compute`, because they differ when evaluating the same
+      # Thunk for different @-references. They MUST NOT become part or the memoized value.
+      def force(operation: "loading code", input: NULL, site: { origin: "code", file: nil })
+        result = case @state
+        when :done
+          @value
         when :forcing
-          # We are already evaluating this unit and were asked for it again
-          # without any intervening function boundary => non-productive data cycle.
-          ErrorVal.internal(
-            kind: "reference_error",
-            location: @location,
-            operation: "forcing a reference",
-            input: @input,
-            message: "non-productive data cycle"
-          )
-        else
+          # Re-entering while still computing results in a non-productive data cycle. Not memoized.
+          ErrorVal.from_runtime(kind: "reference_error", **site, operation: operation, input: input, message: "non-productive data cycle")
+        when :unforced
           @state = :forcing
-          @value = @compute.call
+          begin
+            @value = @compute.call
+          rescue ReadFailure => failure
+            # Memoize the Ruby error itself. Turn it into a Fusion runtime error below.
+            @value = failure
+          end
           @state = :done
           @value
+        end
+
+        case result
+        when ReadFailure
+          ErrorVal.from_runtime(kind: "reference_error", **site, operation: operation, input: input, message: result.message)
+        else
+          result
         end
       end
     end
