@@ -21,12 +21,13 @@ The subtlety: a unit's *value* is independent of the reference that forced it, b
 **read failure** is not — a missing file reached as `@a` from one place and `@../a`
 from another must report each reference's own `operation`/`input`/`site`. So the
 closure can't bake those in (it would memoize the *first* reference's error and hand
-it to every later one). Instead the closure stays argument-free and produces a
-*deferred* read failure (`ErrorVal.read_failure`) whose reference fields are
-placeholders; `force` — which does know the reference — completes a fresh copy of it
-per call (`#with_reference`). So the thunk still memoizes once, and caches nothing
-reference-specific. (A parse or evaluation error *is* part of the file's value and is
-memoized and returned as-is.)
+it to every later one). Instead, when the unit's own source can't be read the closure
+*raises* `Thunk::ReadFailure` (carrying only the message, no reference). `force`
+catches it, memoizes the message, and — since it alone knows the reference — builds a
+fresh `reference_error` from it per call. So the thunk still memoizes once, caches
+nothing reference-specific, and an uncompleted read failure never exists as a value.
+(A parse or evaluation error *is* part of the file's value and is memoized and
+returned as-is.)
 
 A bare `@` means "the value of the current unit", resolved by forcing that unit's
 own thunk.

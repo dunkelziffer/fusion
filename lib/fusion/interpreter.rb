@@ -102,10 +102,7 @@ module Fusion
     end
 
     # ---- File loading -----------------------------------------------------
-    # The thunk memoizes the file's value (the same for every `@`-reference to it).
-    # A read failure becomes a *deferred* error (ErrorVal.read_failure), which
-    # Thunk#force completes for whichever reference forced it — so the cache holds
-    # nothing reference-specific.
+    # `Thunk` does cycle-detection and result-memoization.
     def load_file(abspath)
       @file_cache[abspath] ||= Thunk.new { evaluate_file(abspath) }
     end
@@ -153,9 +150,8 @@ module Fusion
       site[:origin] == "code" ? site[:file] : "<fusion>"
     end
 
-    # Compute the file's value, independent of any forcing reference. A read failure
-    # becomes a *deferred* read failure that Thunk#force completes for the reference;
-    # a syntax error in the file's own source is attributed to the file itself.
+    # Compute the file's value. Use only within `Thunk` and raise `Thunk::ReadFailure`
+    # for unreadable files.
     def evaluate_file(abspath)
       ast = (@ast_cache[abspath] ||= begin
         src = File.read(abspath)
@@ -172,11 +168,10 @@ module Fusion
         eval_expr(ast, env)
       end
     rescue Errno::ENOENT
-      ErrorVal.read_failure("file not found")
-    rescue SystemCallError => err # EISDIR, EACCES, ... — file-system access failures
-      # Reduce the strerror to its lowercase core ("is a directory"), dropping
-      # Ruby's "@ io_fread - <path>" tail (the path is the reference's own concern).
-      ErrorVal.read_failure(err.message.split(" @ ").first.downcase)
+      raise Thunk::ReadFailure, "file not found"
+    rescue SystemCallError => err # EISDIR, EACCES, ... (file-system access failures)
+      # Drop Ruby's "@ io_fread - <path>" tail.
+      raise Thunk::ReadFailure, err.message.split(" @ ").first.downcase
     end
 
     # Evaluate a top-level unit that has no file of its own:

@@ -190,8 +190,8 @@ RSpec.describe "@-resolution" do
 
   # @-references nest: forcing a file's thunk runs its body, which may reference
   # another file and force *its* thunk. When the deepest reference hits a read
-  # failure, the deferred error is completed at that innermost force — so it reports
-  # the reference that directly named the missing file, not the enclosing one.
+  # failure, the error is built at that innermost force — so it reports the
+  # reference that directly named the missing file, not the enclosing one.
   # Here readChainOuter @readChainInner, and readChainInner @../readChainMissing
   # (which does not exist): the error names readChainInner / @../readChainMissing,
   # never readChainOuter / @readChainInner.
