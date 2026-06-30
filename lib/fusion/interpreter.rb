@@ -131,7 +131,7 @@ module Fusion
     def code_site(env)
       f = env.context(:file)
       if f == :__unbound__
-        # Inline (`-e`) programs and REPL entries report a "<inline>" file.
+        # Inline (`-e`) programs and REPL entries report an "<inline>" file.
         { origin: "code", file: "<inline>" }
       else
         file_site(f)
