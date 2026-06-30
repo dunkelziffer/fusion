@@ -125,6 +125,21 @@ RSpec.describe "@-resolution" do
         .file_path("loadcycleA.fsn")
         .out("❌", '{"kind":"reference_error","origin":"builtin","file":"spec/fixtures/loadcycleB.fsn","operation":"@load","status":0,"input":"loadcycleA.fsn","message":"non-productive data cycle"}')
     end
+
+    # A file's thunk is shared across references, but a read-failure error depends
+    # on the *forcing* reference (its `input`). Loading the same directory twice via
+    # different arguments ("ref/sub/../adir.fsn" then "ref/adir.fsn" — same path)
+    # must report each call's own `input`, not return the first's cached error. The
+    # first load is caught; the array then surfaces the second's error.
+    it "a read-failure error reflects the forcing reference, not a cached earlier one" do
+      expect_pipe
+        .in("✅", "null")
+        .code('(_ => [("ref/sub/../adir.fsn" | @load) | (! => "_"), "ref/adir.fsn" | @load])')
+        .out("❌", a_string_including(
+          '"kind":"reference_error"', '"origin":"builtin"', '"operation":"@load"', '"input":"ref/adir.fsn"',
+          /"message":"[^"]*directory[^"]*"/
+        ))
+    end
   end
 
   describe "relative paths" do

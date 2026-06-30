@@ -10,11 +10,23 @@ single expression whose value is computed lazily and at most once. That is a `Th
 (`lib/fusion/interpreter/thunk.rb`): a small state machine over a compute closure.
 
 - `:unforced` → on the first `force`, it runs the closure, stores the result, and
-  becomes `:done`.
+  becomes `:done`. The closure takes **no arguments**, so the stored result is the
+  same for every reference.
 - `:done` → returns the stored value. **This is the memoization.** It lives on the
   thunk object itself, not in any lookup table.
 - `:forcing` → re-entered while still computing ⇒ a non-productive data cycle,
   reported as a `reference_error` at the point the cycle closes.
+
+The subtlety: a unit's *value* is independent of the reference that forced it, but a
+**read failure** is not — a missing file reached as `@a` from one place and `@../a`
+from another must report each reference's own `operation`/`input`/`site`. So the
+closure can't bake those in (it would memoize the *first* reference's error and hand
+it to every later one). Instead the closure stays argument-free and produces a
+*deferred* read failure (`ErrorVal.read_failure`) whose reference fields are
+placeholders; `force` — which does know the reference — completes a fresh copy of it
+per call (`#with_reference`). So the thunk still memoizes once, and caches nothing
+reference-specific. (A parse or evaluation error *is* part of the file's value and is
+memoized and returned as-is.)
 
 A bare `@` means "the value of the current unit", resolved by forcing that unit's
 own thunk.

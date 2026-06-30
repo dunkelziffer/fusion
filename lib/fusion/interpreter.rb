@@ -102,14 +102,12 @@ module Fusion
     end
 
     # ---- File loading -----------------------------------------------------
-    # The thunk is forced through the `@`-reference that reaches it (see Thunk#force):
-    # its `operation`/`input`/`site` describe that reference and are used only for an
-    # error about reaching this file (a read failure, a load cycle) — never for a
-    # syntax error *inside* the file, which is attributed to the file itself.
+    # The thunk memoizes the file's value (the same for every `@`-reference to it).
+    # A read failure becomes a *deferred* error (ErrorVal.read_failure), which
+    # Thunk#force completes for whichever reference forced it — so the cache holds
+    # nothing reference-specific.
     def load_file(abspath)
-      @file_cache[abspath] ||= Thunk.new do |operation, input, site|
-        evaluate_file(abspath, operation, input, site)
-      end
+      @file_cache[abspath] ||= Thunk.new { evaluate_file(abspath) }
     end
 
     # A file path for error payloads: relative to the working directory, so a
@@ -155,11 +153,10 @@ module Fusion
       site[:origin] == "code" ? site[:file] : "<fusion>"
     end
 
-    # `operation`/`input`/`site` describe the reference that reached this file (see
-    # load_file); a *read* failure reports them unchanged — the failing @-reference
-    # as a single operation. A syntax error in the file's own source is attributed
-    # to the file itself.
-    def evaluate_file(abspath, operation, input, site)
+    # Compute the file's value, independent of any forcing reference. A read failure
+    # becomes a *deferred* read failure that Thunk#force completes for the reference;
+    # a syntax error in the file's own source is attributed to the file itself.
+    def evaluate_file(abspath)
       ast = (@ast_cache[abspath] ||= begin
         src = File.read(abspath)
         Parser.parse_file(src, site: file_site(abspath))
@@ -175,11 +172,11 @@ module Fusion
         eval_expr(ast, env)
       end
     rescue Errno::ENOENT
-      ErrorVal.from_runtime(kind: "reference_error", **site, operation: operation, input: input, message: "file not found")
+      ErrorVal.read_failure("file not found")
     rescue SystemCallError => err # EISDIR, EACCES, ... — file-system access failures
       # Reduce the strerror to its lowercase core ("is a directory"), dropping
       # Ruby's "@ io_fread - <path>" tail (the path is the reference's own concern).
-      ErrorVal.from_runtime(kind: "reference_error", **site, operation: operation, input: input, message: err.message.split(" @ ").first.downcase)
+      ErrorVal.read_failure(err.message.split(" @ ").first.downcase)
     end
 
     # Evaluate a top-level unit that has no file of its own:
@@ -190,11 +187,9 @@ module Fusion
       # `@env`'s bindings (only non-empty in the REPL), `:dir`, and jail.
       unit_env = @env.child
 
-      thunk = Thunk.new { |_operation, _input, _site| eval_expr(ast, unit_env) }
+      thunk = Thunk.new { eval_expr(ast, unit_env) }
       unit_env.set_context(:self, thunk) # for `@` self-recursion
-      # A cycle here is closed by a bare `@` re-entry, which forces with its own
-      # `@`/site; this outer force only seeds the unit and never reports the cycle.
-      thunk.force(operation: "@", input: NULL, site: code_site(unit_env))
+      thunk.force
     end
 
     # Resolve a bare "@name": sibling file > builtin (incl. load, ENV) > stdlib > !.
