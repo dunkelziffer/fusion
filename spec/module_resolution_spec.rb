@@ -188,6 +188,23 @@ RSpec.describe "@-resolution" do
     end
   end
 
+  # @-references nest: forcing a file's thunk runs its body, which may reference
+  # another file and force *its* thunk. When the deepest reference hits a read
+  # failure, the deferred error is completed at that innermost force — so it reports
+  # the reference that directly named the missing file, not the enclosing one.
+  # Here readChainOuter @readChainInner, and readChainInner @../readChainMissing
+  # (which does not exist): the error names readChainInner / @../readChainMissing,
+  # never readChainOuter / @readChainInner.
+  describe "nested references" do
+    it "reports the innermost reference that hit the read failure, not the enclosing one" do
+      expect_pipe
+        .in("✅", "null")
+        .jail("ref")
+        .file_path("ref/sub/readChainOuter.fsn")
+        .out("❌", '{"kind":"reference_error","origin":"code","file":"spec/fixtures/ref/sub/readChainInner.fsn","operation":"@../readChainMissing","status":0,"input":null,"message":"file not found"}')
+    end
+  end
+
   # The jail confines file-backed @-resolution to a directory subtree. It governs
   # the program only — stdin is plain JSON and never holds an @-reference. The
   # default jail (here and in the CLI) is the program's own directory.
