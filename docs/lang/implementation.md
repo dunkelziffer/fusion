@@ -23,11 +23,16 @@ from another must report each reference's own `operation`/`input`/`site`. So the
 closure can't bake those in (it would memoize the *first* reference's error and hand
 it to every later one). Instead, when the unit's own source can't be read the closure
 *raises* `Thunk::ReadFailure` (carrying only the message, no reference). `force`
-catches it, memoizes the message, and — since it alone knows the reference — builds a
-fresh `reference_error` from it per call. So the thunk still memoizes once, caches
-nothing reference-specific, and an uncompleted read failure never exists as a value.
-(A parse or evaluation error *is* part of the file's value and is memoized and
-returned as-is.)
+catches it and stores the `ReadFailure` itself as the memoized `@value`; then — since
+it alone knows the reference — it builds a fresh `reference_error` from that stored
+failure per call. So the thunk still memoizes once (the read happens once) and caches
+nothing reference-specific. (A parse or evaluation error *is* part of the file's value
+and is memoized and returned as-is.)
+
+Raising — rather than returning a half-built error value — does two things. A read
+failure can never *be* a value, so an uncompleted one can never leak into the value
+space. And it couples `evaluate_file` to the Thunk: run outside one, the `ReadFailure`
+bubbles up and becomes an `internal_error`, instead of silently yielding a placeholder.
 
 A bare `@` means "the value of the current unit", resolved by forcing that unit's
 own thunk.

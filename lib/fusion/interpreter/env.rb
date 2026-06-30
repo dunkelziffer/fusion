@@ -67,6 +67,9 @@ module Fusion
       # - `:jail`: the run's jail root confining @-resolution (an absolute path
       #            String, or nil for unconfined). Set once on the root and, unlike
       #            the others, never overridden by a descendant.
+      # - `:call_site`: the innermost user-code `file` a stdlib body borrows for its
+      #            errors (a String). Set on a stdlib function's clause env in
+      #            Interpreter#apply; user/inline code derives its own and omits it.
       def set_context(key, value)
         @context[key] = value
         self
