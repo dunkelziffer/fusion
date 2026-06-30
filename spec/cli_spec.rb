@@ -163,6 +163,17 @@ RSpec.describe Fusion::CLI do
       result = described_class.load_file("spec/fixtures/ref/data.config.fsn", described_class.root_environment)
       expect(described_class.serialize(result).data).to eq('{"setting":"on"}')
     end
+
+    # The top-level program is loaded by the runtime itself, not via an @-reference,
+    # so a read failure here reports the runtime's own operation — "loading code" —
+    # with the path it was asked to load as `input` (and no `file`: no code referred
+    # to it). This is the one place that operation surfaces.
+    it "reports an unreadable program as a 'loading code' reference_error naming the path" do
+      result = described_class.load_file("spec/fixtures/does_not_exist.fsn", described_class.root_environment)
+      expect(described_class.serialize(result).data).to eq(
+        '{"kind":"reference_error","origin":"code","operation":"loading code","status":0,"input":"spec/fixtures/does_not_exist.fsn","message":"file not found"}'
+      )
+    end
   end
 
   # A function is applied in its *own* closure. The environment passed to #apply
