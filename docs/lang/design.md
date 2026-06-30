@@ -467,45 +467,41 @@ Future work and open questions are tracked separately in our [Roadmap](./roadmap
 
 ## 2.13 Refining the error payload
 
-Refines §2.9: same shape, but with orthogonal fields and a single input-error kind.
+Refines §2.9: same general shape, more orthogonal fields, field values easier to match on, field values contain smarter contents
 
 ### Decisions
 
-- 🧑 ✅ Payload fields, in order: `kind`, `origin`, `file?`, `operation`, `status`, `input`, `expected?`, `message?`.
-- 🧑 ✅ `origin` (one of `builtin`, `stdlib`, `code`, `input`, `output`, `interpreter`) is where the operation is *defined*. The optional `file` is the **innermost user-code file** on the call chain — builtin/stdlib frames are skipped through to the nearest user code, so a builtin failing inside `@map` reports *your* file, not the stdlib's. `"<inline>"` for inline `-e`/REPL, `"<fusion>"` above all user code; present for `builtin`/`stdlib`/`code`, absent for `input`/`output`/`interpreter`.
-- 🧑 ✅ `file` is interpreter-owned — Fusion code never writes it. `#apply` stamps the call site onto any standardized builtin/stdlib error lacking a `file`, at the apply that produced it (innermost apply wins, so no flag). The call site is an Env context `:call_site`: stdlib frames inherit the caller's, user/inline frames are their own.
-- 🧑 ✅ `operation` is the failing operation's own **`@`-reference**: a builtin/stdlib function (`@add`, `@math/square`) — the expression that retrieves it, so `[failed_fn, @ref] | @equals` holds — or any `@`-reference *resolution* named by its source text (`@foo`, `@../mod`, `@@`, `@`, `@load`). An `@`-reference is **one** operation: its resolve/read/cycle stages never leak into `operation`. Built-in *syntax* names its form instead (`|`, `.key`, `[]`, `parsing code`); loading the top-level program file (not an `@`-reference) is `loading code`.
-- 🧑 ✅ An `@`-reference takes no argument, so its `input` is `null` (`@load` is the exception — a function taking the filename, which it echoes). A cycle is reported under the reference that re-entered the loop.
-- 🧑 ✅ The key appears once, in either `operation` or `input`: `.name` carries the static key in `operation` and the object alone in `input`; `[]` is generic in `operation` with `input` = `[collection, key]` (the key is a dynamic value, and `[]` will later desugar to `@get`).
-- 🧑 ✅ `file` is `Dir.pwd`-relative so it reads as the route from where you are to the offending source — directly usable, free of any machine-specific absolute prefix.
-- 🧑 ✅ A failure to *reach* a file (missing file, load cycle) is reported under the triggering `@`-reference (the cycle uses the re-entering one), `input` `null`, `file` the referring call site — never the resolved path. A Ruby `Errno` message is reduced to its **lowercase** strerror (`"is a directory"`), dropping the `@ syscall - path` tail.
-- 🧑 ✅ `status` is `0` (received a value) or `1` (received an error), split out of `input`; on `1`, `input` carries the error's bare payload, so `input` is always valid JSON.
+- 🧑 ✅ The error payload fields are now: `kind`, `origin`, `file` (opt), `operation`, `status`, `input`, `expected` (opt), `message` (opt).
+- 🧑 ✅ Split `location` into `origin` (where the operation is *defined*) and an optional `file` (the **innermost user-code file** on the call chain).
+- 🧑 ✅ `file` is `Dir.pwd`-relative, so it reads as the route from the location where `fusion` was called to the offending source code.
+- 🧑 ✅ Split `status` out from `input`. `status` is `0` (a value) or `1` (an error). On `1`, `input` carries the error's bare payload, so `input` is always valid JSON.
+- 🧑 ✅ `operation` now contains the failing operation's own **`@`-reference** (`@`, `@@`, `@add`, `@math/square`, `@../mod`, , `@load`) or for Built-in *syntax* its own form (`|`, `.key`, `[]`, `parsing code`). Loading the top-level program file is `loading code` (not an `@`-reference).
+- 🧑 ✅ An `@`-reference takes no argument, so its `input` is `null` and its `status` is always `0`. `@load` is the exception: it's a function taking a filename.
+- 🧑 ✅ For *access errors* the "key" appears only once: `.name` carries the static key in `operation` and the object alone in `input`; `[]` is generic in `operation` with `input` = `[collection, key]` (the key is a dynamic value, and `[]` will later desugar to `@get`).
+- 🧑 ✅ A failure to read a file (missing file, directory given, access denied) is reported as `"operation": <the literal @-reference>`, `"input": null`, `"file": <the referring call site>`.
+- 🧑 ✅ `type_error` is merged into `argument_error`. The distinction between *wrong shape* and *wrong type* didn't fit Fusion's runtime type system.
 - 🧑 ✅ `expected` lists the acceptable inputs as Fusion patterns (the input matched none); an error with `expected` never also carries a `message`.
-- 🧑 ✅ `type_error` is merged into `argument_error`: any wrong input shape *or* type is one `argument_error`, with `expected` subsuming the old split (so a non-object member access or a wrong-typed index is now an `argument_error`).
-- 🧑 ✅ A constraint no bare pattern can express (e.g. "every element is a string") uses the `@all` stdlib predicate inside the pattern, e.g. `[_ ? (xs => {"xs": xs, "f": @String} | @all), _ ? @String]`.
+- 🧑 ✅ `internal_error` is the new catch-all for an unexpected host/interpreter failure. It's a Ruby error the engine caught rather than letting it crash the process (`origin` `interpreter` or `builtin`). It's an interpreter bug.
+- 🧑 ✅ A runtime resource limit being exceeded is a separate `limit_error` (currently a stack overflow, `"stack level too deep"`): the runtime gave up because a space/time budget ran out — not an engine defect. The general name (vs `stack_error`) lets future runtime resource limits share the kind.
+- 🧑 ✅ stdlib functions preemptively handle all *argument* errors. They appear atomic. No input should be able to trigger e.g. an error in a `|` operation. *Argument* errors refer to the stdlib function itself (`origin: "stdlib"`, `operation` = its `@`-reference).
+- 🧑 ✅ stdlib functions are *transparent* for *inner errors*. They can't catch every possible error from inner operations, so an inner error bubbles through unchanged. The purest example is `@map`, which knows nothing about the given `f`: an error from `f` originates from `f` and simply bubbles through `map`.
 - 🧑 ✅ stdlib higher-order functions (`@all`/`@map`/`@mapValues`) guard `f ? @Function` in every clause — a non-function `f` errors even on an empty collection — and `expected` shows the guard.
 - 🧑 ✅ `@all` short-circuits: the first falsey item yields `false`, the rest go untested.
-- 🧑 ✅ `internal_error` (new) is the catch-all for an unexpected host/interpreter failure — a Ruby error the engine caught rather than letting it crash the process (`origin` `interpreter` or `builtin`).
-- 🧑 ✅ A runtime resource limit being exceeded is a separate `limit_error` (currently a stack overflow, `"stack level too deep"`): the runtime gave up because a space/time budget ran out — not an engine defect. The general name (vs `stack_error`) lets future runtime resource limits share the kind.
-
-- 🧑 ✅ stdlib functions preemptively handle all *argument* errors: for those they appear atomic, and the error refers to the stdlib function itself (`origin: "stdlib"`, `operation` = its `@`-reference).
-- 🧑 ✅ stdlib functions are *transparent* for inner errors — they can't catch every possible error from inner operations, so an inner error bubbles through unchanged. The purest example is `@map`, which knows nothing about the given `f`: an error from `f` originates from `f` and simply bubbles through `map`.
 
 ### Alternatives
 
 - 🔢 ⏪ A variable `location` string embedding the file/builtin name, with the error marker living inside `input` — split into the fixed `origin` + `file`, and the `status` field.
-- 🔢 ⏪ Named this field `location` — renamed to `origin`, a better fit for a coarse "which subsystem" tag now that the filename lives in `file`.
-- 🔢 ❌ `status` as the strings `"value"`/`"error"` — chose the integers `0`/`1` to mirror the wire status codes.
 - 🔢 ❌ Over-approximating `expected` patterns for `@join`/`@toObject` (e.g. `[_ ? @Array, _ ? @String]`) — they would match inputs that still fail, breaking "matches ⇒ acceptable"; `@all` keeps them exact.
 - 🔢 ❌ `operation` = the *literal source text* of the `|`'s right-hand side. Not implementable: the text isn't available where the error is born; stamping it at `apply` would relabel inner errors bubbling *through* a function (violating §2.9 transparency); and an indirect RHS like `f` is uninformative. The producer's own `@`-reference gives the same result for a direct call and stays correct otherwise.
-- 🧑 ❌ Drop `conversion_error` and have a failed conversion (e.g. `@parseNumber` of `"abc"`) return `null` (a "Maybe", as Ruby's `Integer(s, exception: false)` does). Rejected: the error payload carries more information, `| (! => null)` recovers the lenient form in one token, and forcing a catch keeps errors local — which matters with no backtraces. (A `null` would slip downstream and surface far from its cause.)
+- 🧑 ❌ Drop `conversion_error` and have a failed conversion (e.g. `@parseNumber` of `"abc"`) return `null` (a "Maybe", as Ruby's `to_i` does). Rejected: the error payload carries more information, `| (! => null)` recovers the lenient form in one token, and forcing a catch keeps errors local — which matters with no backtraces. (A `null` would slip downstream and surface far from its cause.)
 - 🧑 ❌ Base the payload path on the jail / program directory instead of `Dir.pwd`. Rejected: `Dir.pwd` gives a path usable straight from your shell; for an installed/shebang tool invoked from elsewhere, a jail-relative path would describe the program's internal layout, which you'd then have to rebase onto your own location.
-- 🧑 ❌ Other names for the two new kinds — `runtime_error`/`crash`/`fault`/`exception` for the catch-all (chose `internal_error`: every error is technically a runtime error, so that name said nothing); `stack_error`/`exhaustion_error`/`physical_error`/`resource_error` for the resource limit (chose `limit_error`, framing it as "the runtime gave up").
 
 ### Pros
 
-- `input` is always valid JSON; `expected` documents the acceptable inputs as patterns a caller can reuse.
-- A fixed six-value `origin` is directly dispatchable; the filename lives in its own `file` field.
+- `input` is always valid JSON as the `status` now lives in its own field
+- `expected` documents the acceptable inputs as patterns a caller can reuse.
+- `origin` is directly dispatchable as the variable filename now lives in its own `file` field.
+- The roles of `file` and `operation` have been clarified and are much more helpful now.
 
 ### Cons
 
