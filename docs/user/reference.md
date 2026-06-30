@@ -360,41 +360,39 @@ There are two origins of error values, and they differ in payload:
 
 | Field       | Required | Meaning                                                                                                                    |
 | ----------- | -------- | -------------------------------------------------------------------------------------------------------------------------- |
-| `kind`      | yes      | The error category, from the closed set below.                                                                             |
-| `origin`    | yes      | Where the failing operation is *defined*, from the closed set of six below.                                                |
-| `file`      | no       | The **innermost user-code file** on the call chain when `operation` failed — builtin/stdlib frames are skipped through to the nearest code you wrote. A path **relative to the directory you ran the command from** (`Dir.pwd`), or `"<inline>"` (inline `-e`/REPL), or `"<fusion>"` (an error above all user code, e.g. the program applied directly to a value). Present for `builtin`/`stdlib`/`code` origins; absent for a channel/runtime origin (`input`/`output`/`interpreter`). |
-| `operation` | yes      | The operation that failed. An `@`-reference — a built-in (`"@add"`), a stdlib function (`"@math/square"`), `@load`, or a bare resolution (`"@foo"`, `"@../mod"`, `"@@"`, `"@"`) — is named by its **source text**, as a *single* operation: its resolve/read/cycle stages never leak in. A syntactic operation uses its form (`"\|"`, `".name"`, `"[]"`, `"parsing code"`, `"parsing JSON"`); loading the top-level program file uses `"loading code"`. |
-| `status`    | yes      | `0` or `1` — whether the operation received an ordinary value (`0`) or an error value (`1`), mirroring the wire status codes. When `1`, `input` holds that error's bare payload (so `input` is always plain JSON). |
-| `input`     | yes      | The operand(s) the operation received — often the offending value. For `.name` it is the object alone (the key is in `operation`); for `[]` it is `[collection, key]` (the key is a dynamic value). A 0-argument operation — every `@`-reference except `@load` (which takes a filename) — carries `null`. |
-| `expected`  | no       | The acceptable inputs as a list of Fusion **patterns**; the input matched none of them (e.g. `["[_ ? @Number, _ ? @Number]"]`). Mutually exclusive with `message`. |
-| `message`   | no       | Extra human-readable detail, e.g. `"division by zero"`. Absent whenever `expected` is present.                            |
+| `kind`      | yes      | The error category. Possible values are defined below.                                                                     |
+| `origin`    | yes      | Where the failing operation is *defined*. Possible values are defined below.                                               |
+| `file`      | no       | The **innermost user-code file** on the call chain. `builtin`/`stdlib` frames are skipped. The path is **relative to** `Dir.pwd`. Contains `"<inline>"` for errors in the CLI `-e` option or the REPL. Contains `"<fusion>"` for an error above all user code (e.g. `stdin` present, but `code` is not a function). Present for `builtin`/`stdlib`/`code` origins; absent for a channel/runtime origin (`input`/`output`/`interpreter`). |
+| `operation` | yes      | The operation that failed. All `@`-references are named by their **source text**. A syntactic operation uses its form (`"\|"`, `".name"`, `"[]"`, `"parsing code"`, `"parsing JSON"`). Loading the top-level program file uses `"loading code"`. |
+| `status`    | yes      | `0` or `1`. Whether the operation received an ordinary value (`0`) or an error value (`1`)                                 |
+| `input`     | yes      | The operation's input. A 0-argument operation (every `@`-reference except `@load`) carries `null`.                         |
+| `expected`  | no       | The acceptable inputs as a list of Fusion **patterns**. The input matched none of them.                                    |
+| `message`   | no       | Extra human-readable detail, e.g. `"division by zero"`. Absent whenever `expected` is present.                             |
 
-The `file` is written **relative to the directory you ran the command from**, so it reads as the route to the code nearest the failure. A failure to *reach* a referenced file (a missing file, or a cyclic reference) is reported against the **referring** code under that same `@`-reference as `operation`, with `input` `null` (a cycle names the reference that re-entered the loop). A `@load` failure instead reports `"@load"` with the filename as `input`. The resolved path never appears.
-
-#### `kind` — the closed set
+#### Possible values for `kind`
 
 | `kind`                | Raised when                                                                                                    |
 | --------------------- | -------------------------------------------------------------------------------------------------------------- |
-| `syntax_error`        | source code, or the JSON input, fails to parse.                                                                |
-| `reference_error`     | an `@`-reference cannot be resolved: unknown name, file not found, a file-system failure, a non-productive data cycle, a target outside the jail (§9.2), no enclosing file (§9.2). |
+| `syntax_error`        | source code or the JSON input fails to parse.                                                                  |
+| `reference_error`     | an `@`-reference cannot be resolved: unknown name, file not found, a file-system failure, a non-productive data cycle, a target outside the jail (§9.2), no enclosing file for `@@` (§9.2). |
 | `argument_error`      | a value has the wrong shape or type for an operation: a built-in given the wrong number/shape of arguments (e.g. not a pair) or a wrong-typed value, applying a non-function, spreading a non-array/object, member access on a non-object, a wrong-typed index, or an `array`/`object`-mode input envelope of the wrong shape (§9.4). Its `expected` lists the acceptable inputs as patterns. |
 | `binding_error`       | reading an unbound identifier, or binding the same name twice in one clause.                                   |
-| `access_error`        | a missing object key or an out-of-range array index — and nothing else (a non-object member access or a wrong-typed index is an `argument_error`). |
+| `access_error`        | a missing object key or an out-of-range array index.                                                           |
 | `math_error`          | division or modulo by zero, or a non-finite number.                                                            |
 | `conversion_error`    | a value cannot be converted (`@toString` of an unconvertible type, `@parseNumber` of a non-numeric string).    |
-| `limit_error`         | a runtime resource limit was exceeded — currently a stack overflow (`"stack level too deep"`).                                                       |
-| `internal_error`      | an unexpected host/interpreter failure: a Ruby error the engine caught rather than letting it crash the process. Should not happen in correct programs. |
-| `serialization_error` | a result, or a user error's payload, has no JSON form — see §9.3.                                              |
+| `limit_error`         | a runtime resource limit was exceeded. `"stack level too deep"`.                                               |
+| `internal_error`      | an interpreter BUG. Please open an issue.                                                                      |
+| `serialization_error` | a result/error value has no JSON form. It contains functions or non-finite numbers. See §9.                    |
 
-#### `origin` — the closed set of six
+#### Possible values for `origin`
 
 | `origin`      | Meaning                                                                  |
 | ------------- | ------------------------------------------------------------------------ |
 | `builtin`     | a built-in operation (named by its `@`-reference in `operation`).        |
 | `stdlib`      | a standard-library function (named by its `@`-reference in `operation`). |
-| `code`        | user source — a file or inline `-e`/REPL.                                |
-| `input`       | the input channel (stdin or the CLI-argument).                           |
-| `output`      | the output channel (the serialized result).                              |
+| `code`        | user source core (a file or an inline expression (`-e`/REPL).            |
+| `input`       | the input channel (stdin). Usually syntax errors.                        |
+| `output`      | the output channel. Usually serialization errors.                        |
 | `interpreter` | the interpreter itself, e.g. a stack overflow.                           |
 
 `input` and `output` name the data channels; they **never** refer to the program
