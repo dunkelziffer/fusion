@@ -15,9 +15,8 @@ always intended. Open question: exact precedence table and how it interleaves wi
 
 **Exposing the current call site** *(use case found; needs a sigil)*. The
 interpreter tracks the current `:file`/`:dir`/`:call_site` as internal context,
-unreadable from a program. A concrete use has emerged: letting user code
-hand-build a *standardized* error payload needs access to `:file` and the
-`@sanitize` function to mimick the lenient `input` serialization.
+unreadable from a program. User code should be able to mimick our *standardized*
+error payloads. It needs access to `:file` for that.
 
 ---
 
