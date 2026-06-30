@@ -1,10 +1,5 @@
 # frozen_string_literal: true
 
-# The stdlib is ordinary Fusion code, so it cannot forge runtime errors.
-# Instead each stdlib function signals bad input with a user error (`!`) whose
-# payload mirrors the builtin error shape (docs/user/reference.md §6.5) with
-# `origin` "stdlib", no `file` field and the function's own @-reference as
-# `operation`.
 RSpec.describe "stdlib error handling" do
   describe "@math/square" do
     it "squares an integer" do
@@ -96,10 +91,7 @@ RSpec.describe "stdlib error handling" do
     end
   end
 
-  # stdlib errors are runtime errors, so they serialize leniently: a function or
-  # non-finite number echoed into `input` is rendered as a placeholder
-  # ("<function>", "<Infinity>", …) rather than collapsing the whole error into a
-  # serialization_error. See docs/lang/design.md §2.9.
+  # "stdlib" errors are runtime errors, so they serialize leniently
   describe "unserializable inputs render as placeholders in the echoed payload" do
     it "@math/square of a function reports an argument_error, not a serialization_error" do
       expect_pipe
@@ -144,10 +136,8 @@ RSpec.describe "stdlib error handling" do
     end
   end
 
-  # An error from the supplied `f` bubbles through @map unchanged; its `file` is
-  # the innermost *user* file, which @map's stdlib frame is transparent to. So a
-  # bare-builtin `f` and a user-function `f` both report the user's own source
-  # (here "<inline>"), never @map's stdlib internals.
+  # An error from the supplied `f` bubbles through @map unchanged. Its `file` is
+  # the innermost *user* file. `@map`s stdlib frame is transparent.
   describe "an error from f reports the innermost user file, through @map" do
     it "attributes a bare-builtin f's error to the user call site" do
       expect_pipe
