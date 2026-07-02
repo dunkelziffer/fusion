@@ -1,5 +1,5 @@
 (
   0 => [],
-  n ? (m ? @Integer => [-1, m] | @OP.compare | (-1 => true, _ => false)) => [...([n, 1] | @subtract | @), [n, 1] | @subtract],
-  x => !{"kind": "argument_error", "origin": "stdlib", "operation": "@range", "status": 0, "input": x, "expected": ["_ ? (m ? @Integer => [-1, m] | @OP.compare | (-1 => true, _ => false))"]}
+  n ? (m ? @Integer => [m, -1] | @OP.compare | (1 => true)) => [...([n, 1] | @subtract | @), [n, 1] | @subtract],
+  x => !{"kind": "argument_error", "origin": "stdlib", "operation": "@range", "status": 0, "input": x, "expected": ["_ ? (m ? @Integer => [m, -1] | @OP.compare | (1 => true))"]}
 )
