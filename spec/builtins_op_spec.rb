@@ -127,6 +127,7 @@ RSpec.describe "@OP builtin" do
     end
   end
 
+  # @OP.invert always yields a float (never an integer), for consistency.
   describe "@OP.invert" do
     it "returns a float reciprocal" do
       expect_pipe
@@ -135,18 +136,18 @@ RSpec.describe "@OP builtin" do
         .out("✅", "0.5")
     end
 
-    it "returns an integer when x divides 1 exactly" do
+    it "is a float even when x is a unit (1)" do
       expect_pipe
         .in("✅", "1")
         .code("(v => v | @OP.invert)")
-        .out("✅", "1")
+        .out("✅", "1.0")
     end
 
-    it "inverts a negative unit to an integer" do
+    it "is a float for a negative unit (-1)" do
       expect_pipe
         .in("✅", "-1")
         .code("(v => v | @OP.invert)")
-        .out("✅", "-1")
+        .out("✅", "-1.0")
     end
 
     it "inverts a float" do
@@ -175,6 +176,96 @@ RSpec.describe "@OP builtin" do
         .in("✅", '"x"')
         .code("(v => v | @OP.invert)")
         .out("❌", '{"kind":"argument_error","origin":"builtin","file":"<inline>","operation":"@OP.invert","status":0,"input":"x","expected":["_ ? @Number"]}')
+    end
+  end
+
+  # @OP.quotient and @OP.modulo are integer division: a pair of integers only,
+  # erroring on any non-integer. Ruby's `/` and `%` agree in sign (q*b + r == a).
+  describe "@OP.quotient" do
+    it "divides two integers, truncating toward negative infinity" do
+      expect_pipe
+        .in("✅", "[7,2]")
+        .code("(v => v | @OP.quotient)")
+        .out("✅", "3")
+    end
+
+    it "floors a negative quotient (matching @OP.modulo's sign)" do
+      expect_pipe
+        .in("✅", "[-7,2]")
+        .code("(v => v | @OP.quotient)")
+        .out("✅", "-4")
+    end
+
+    it "is exact when it divides evenly" do
+      expect_pipe
+        .in("✅", "[6,3]")
+        .code("(v => v | @OP.quotient)")
+        .out("✅", "2")
+    end
+
+    it "errors with math_error on division by zero" do
+      expect_pipe
+        .in("✅", "[7,0]")
+        .code("(v => v | @OP.quotient)")
+        .out("❌", '{"kind":"math_error","origin":"builtin","file":"<inline>","operation":"@OP.quotient","status":0,"input":[7,0],"message":"division by zero"}')
+    end
+
+    it "errors on a float operand (integers only)" do
+      expect_pipe
+        .in("✅", "[7.0,2]")
+        .code("(v => v | @OP.quotient)")
+        .out("❌", '{"kind":"argument_error","origin":"builtin","file":"<inline>","operation":"@OP.quotient","status":0,"input":[7.0,2],"expected":["[_ ? @Integer, _ ? @Integer]"]}')
+    end
+
+    it "errors on a non-pair" do
+      expect_pipe
+        .in("✅", "[7,2,1]")
+        .code("(v => v | @OP.quotient)")
+        .out("❌", '{"kind":"argument_error","origin":"builtin","file":"<inline>","operation":"@OP.quotient","status":0,"input":[7,2,1],"expected":["[_ ? @Integer, _ ? @Integer]"]}')
+    end
+  end
+
+  describe "@OP.modulo" do
+    it "takes a remainder of two integers" do
+      expect_pipe
+        .in("✅", "[7,3]")
+        .code("(v => v | @OP.modulo)")
+        .out("✅", "1")
+    end
+
+    it "follows the sign of the divisor (Ruby modulo)" do
+      expect_pipe
+        .in("✅", "[-7,3]")
+        .code("(v => v | @OP.modulo)")
+        .out("✅", "2")
+    end
+
+    it "is zero when evenly divisible" do
+      expect_pipe
+        .in("✅", "[8,4]")
+        .code("(v => v | @OP.modulo)")
+        .out("✅", "0")
+    end
+
+    it "errors with math_error on modulo by zero" do
+      expect_pipe
+        .in("✅", "[7,0]")
+        .code("(v => v | @OP.modulo)")
+        .out("❌", '{"kind":"math_error","origin":"builtin","file":"<inline>","operation":"@OP.modulo","status":0,"input":[7,0],"message":"modulo by zero"}')
+    end
+
+    it "errors on a float operand (integers only)" do
+      expect_pipe
+        .in("✅", "[7.5,2]")
+        .code("(v => v | @OP.modulo)")
+        .out("❌", '{"kind":"argument_error","origin":"builtin","file":"<inline>","operation":"@OP.modulo","status":0,"input":[7.5,2],"expected":["[_ ? @Integer, _ ? @Integer]"]}')
+    end
+
+    it "errors on a non-array" do
+      expect_pipe
+        .in("✅", "5")
+        .code("(v => v | @OP.modulo)")
+        .out("❌", '{"kind":"argument_error","origin":"builtin","file":"<inline>","operation":"@OP.modulo","status":0,"input":5,"expected":["[_ ? @Integer, _ ? @Integer]"]}')
     end
   end
 

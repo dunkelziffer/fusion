@@ -118,11 +118,11 @@ RSpec.describe "builtins" do
   end
 
   describe "@divide" do
-    it "returns an integer when evenly divisible" do
+    it "returns a float even when evenly divisible" do
       expect_pipe
         .in("✅", "[6,3]")
         .code("(p => p | @divide)")
-        .out("✅", "2")
+        .out("✅", "2.0")
     end
 
     it "returns a float otherwise" do

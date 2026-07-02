@@ -23,7 +23,7 @@ module Fusion
         define.call("lessThan", method(:less_than))
         define.call("and", method(:and_))
         define.call("or", method(:or_))
-        define.call("not", method(:op_not))
+        define.call("not", method(:not_))
         define.call("length", method(:length))
         define.call("concat", method(:concat))
         define.call("chars", method(:chars))
@@ -52,15 +52,17 @@ module Fusion
         # step). Reached as `@OP.and`, `@OP.sum`, … — a member access on this
         # builtin object, whose values are native functions.
         table["OP"] = {
-          "sum"     => NativeFunc.new("OP.sum", method(:op_sum)),
-          "product" => NativeFunc.new("OP.product", method(:op_product)),
-          "negate"  => NativeFunc.new("OP.negate", method(:op_negate)),
-          "invert"  => NativeFunc.new("OP.invert", method(:op_invert)),
-          "equal"   => NativeFunc.new("OP.equal", method(:op_equal)),
-          "compare" => NativeFunc.new("OP.compare", method(:op_compare)),
-          "and"     => NativeFunc.new("OP.and", method(:op_and)),
-          "or"      => NativeFunc.new("OP.or", method(:op_or)),
-          "not"     => NativeFunc.new("OP.not", method(:op_not)),
+          "sum"      => NativeFunc.new("OP.sum", method(:op_sum)),
+          "product"  => NativeFunc.new("OP.product", method(:op_product)),
+          "negate"   => NativeFunc.new("OP.negate", method(:op_negate)),
+          "invert"   => NativeFunc.new("OP.invert", method(:op_invert)),
+          "quotient" => NativeFunc.new("OP.quotient", method(:op_quotient)),
+          "modulo"   => NativeFunc.new("OP.modulo", method(:op_modulo)),
+          "equal"    => NativeFunc.new("OP.equal", method(:op_equal)),
+          "compare"  => NativeFunc.new("OP.compare", method(:op_compare)),
+          "and"      => NativeFunc.new("OP.and", method(:op_and)),
+          "or"       => NativeFunc.new("OP.or", method(:op_or)),
+          "not"      => NativeFunc.new("OP.not", method(:op_not)),
         }
       end
 
@@ -78,11 +80,12 @@ module Fusion
         op_sum(v)
       end
 
+      # `subtract` is `@OP.sum` with the second operand negated.
       def subtract(v)
         return v if v.is_a?(ErrorVal)
         return argument_error("subtract", v, NUMBER_PAIR) unless pair?(v) && numeric?(v[0]) && numeric?(v[1])
 
-        v[0] - v[1]
+        op_sum([v[0], op_negate(v[1])])
       end
 
       # `multiply` is `@OP.product` restricted to a numeric pair.
@@ -93,17 +96,15 @@ module Fusion
         op_product(v)
       end
 
+      # `divide` always yields a float (`a * @OP.invert(b)` in spirit, computed
+      # directly to avoid double-rounding). Integer division is `@OP.quotient`;
+      # the remainder is `@OP.modulo`.
       def divide(v)
         return v if v.is_a?(ErrorVal)
         return argument_error("divide", v, NUMBER_PAIR) unless pair?(v) && numeric?(v[0]) && numeric?(v[1])
         return error("math_error", "divide", v, "division by zero") if v[1] == 0
 
-        a, b = v
-        if a.is_a?(Integer) && b.is_a?(Integer) && (a % b).zero?
-          a / b
-        else
-          a.to_f / b
-        end
+        v[0].to_f / v[1]
       end
 
       def mod(v)
@@ -157,8 +158,8 @@ module Fusion
 
       # `and`/`or`/`not` judge truthiness (Ruby-style: `false` and `null` are
       # falsey, everything else truthy), not strict booleans, and always return a
-      # boolean. `and`/`or` are the pair cases of `@OP.and`/`@OP.or`; `not` is
-      # `@OP.not` verbatim (registered directly, no wrapper).
+      # boolean. `and`/`or` are the pair cases of `@OP.and`/`@OP.or`; `not` is a
+      # distinct wrapper around `@OP.not`.
       def and_(v)
         return v if v.is_a?(ErrorVal)
         return argument_error("and", v, ["[_, _]"]) unless pair?(v)
@@ -171,6 +172,10 @@ module Fusion
         return argument_error("or", v, ["[_, _]"]) unless pair?(v)
 
         op_or(v)
+      end
+
+      def not_(v)
+        op_not(v)
       end
 
       # --- OP: the operations that will gain infix syntax sugar ---
@@ -201,14 +206,33 @@ module Fusion
         -v
       end
 
-      # The unary reciprocal 1/x, mirroring `@divide`: an integer result when x
-      # divides 1 exactly (x is 1 or -1), a float otherwise; 0 is a math_error.
+      # The unary reciprocal 1/x, always a float; 0 is a math_error.
       def op_invert(v)
         return v if v.is_a?(ErrorVal)
         return argument_error("OP.invert", v, ["_ ? @Number"]) unless numeric?(v)
         return error("math_error", "OP.invert", v, "division by zero") if v == 0
 
-        v.is_a?(Integer) && (1 % v).zero? ? 1 / v : 1.0 / v
+        1.0 / v
+      end
+
+      INTEGER_PAIR = ["[_ ? @Integer, _ ? @Integer]"].freeze
+
+      # Integer division and its remainder — integers only (`@divide` handles the
+      # float case). Ruby's `/` and `%` agree in sign, so `q*b + r == a` holds.
+      def op_quotient(v)
+        return v if v.is_a?(ErrorVal)
+        return argument_error("OP.quotient", v, INTEGER_PAIR) unless pair?(v) && integer?(v[0]) && integer?(v[1])
+        return error("math_error", "OP.quotient", v, "division by zero") if v[1] == 0
+
+        v[0] / v[1]
+      end
+
+      def op_modulo(v)
+        return v if v.is_a?(ErrorVal)
+        return argument_error("OP.modulo", v, INTEGER_PAIR) unless pair?(v) && integer?(v[0]) && integer?(v[1])
+        return error("math_error", "OP.modulo", v, "modulo by zero") if v[1] == 0
+
+        v[0] % v[1]
       end
 
       # Deep, exact equality across the whole array: true iff every element

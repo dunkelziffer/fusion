@@ -79,7 +79,7 @@ RSpec.describe "stdlib error handling" do
     it "errors when xs is present but not an array" do
       expect_pipe
         .in("✅", "null")
-        .code('(_ => {"f": @negate, "xs": "nope"} | @map)')
+        .code('(_ => {"f": @OP.negate, "xs": "nope"} | @map)')
         .out("❌", '{"kind":"argument_error","origin":"stdlib","file":"<inline>","operation":"@map","status":0,"input":{"f":"<function>","xs":"nope"},"expected":["{\"f\": _ ? @Function, \"xs\": _ ? @Array}"]}')
     end
 
@@ -117,7 +117,7 @@ RSpec.describe "stdlib error handling" do
     it "@map of a {f} missing xs echoes the function placeholder" do
       expect_pipe
         .in("✅", "null")
-        .code('(_ => {"f": @negate} | @map)')
+        .code('(_ => {"f": @OP.negate} | @map)')
         .out("❌", '{"kind":"argument_error","origin":"stdlib","file":"<inline>","operation":"@map","status":0,"input":{"f":"<function>"},"expected":["{\"f\": _ ? @Function, \"xs\": _ ? @Array}"]}')
     end
 
@@ -131,7 +131,7 @@ RSpec.describe "stdlib error handling" do
     it "renders deeply nested functions and non-finite numbers in the echoed input" do
       expect_pipe
         .in("✅", "null")
-        .code('(_ => {"a": [1, (y => y), {"deep": @negate}], "b": [1e400]} | @map)')
+        .code('(_ => {"a": [1, (y => y), {"deep": @OP.negate}], "b": [1e400]} | @map)')
         .out("❌", '{"kind":"argument_error","origin":"stdlib","file":"<inline>","operation":"@map","status":0,"input":{"a":[1,"<function>",{"deep":"<function>"}],"b":["<Infinity>"]},"expected":["{\"f\": _ ? @Function, \"xs\": _ ? @Array}"]}')
     end
   end
@@ -142,15 +142,15 @@ RSpec.describe "stdlib error handling" do
     it "attributes a bare-builtin f's error to the user call site" do
       expect_pipe
         .in("✅", '[["a","b"]]')
-        .code('(xs => {"f": @add, "xs": xs} | @map)')
-        .out("❌", '{"kind":"argument_error","origin":"builtin","file":"<inline>","operation":"@add","status":0,"input":["a","b"],"expected":["[_ ? @Number, _ ? @Number]"]}')
+        .code('(xs => {"f": @OP.sum, "xs": xs} | @map)')
+        .out("❌", '{"kind":"argument_error","origin":"builtin","file":"<inline>","operation":"@OP.sum","status":0,"input":["a","b"],"expected":["_ ? (xs => {\"xs\": xs, \"f\": @Number} | @all)"]}')
     end
 
     it "attributes a user-function f's error to the user call site too" do
       expect_pipe
         .in("✅", "[1]")
-        .code('(xs => {"f": (n => [n, "x"] | @add), "xs": xs} | @map)')
-        .out("❌", '{"kind":"argument_error","origin":"builtin","file":"<inline>","operation":"@add","status":0,"input":[1,"x"],"expected":["[_ ? @Number, _ ? @Number]"]}')
+        .code('(xs => {"f": (n => [n, "x"] | @OP.sum), "xs": xs} | @map)')
+        .out("❌", '{"kind":"argument_error","origin":"builtin","file":"<inline>","operation":"@OP.sum","status":0,"input":[1,"x"],"expected":["_ ? (xs => {\"xs\": xs, \"f\": @Number} | @all)"]}')
     end
   end
 
@@ -158,7 +158,7 @@ RSpec.describe "stdlib error handling" do
     it "applies a function to each value, keeping the keys" do
       expect_pipe
         .in("✅", '{"a":1,"b":2,"c":3}')
-        .code('(o => {"f": (n => [n, 2] | @multiply), "object": o} | @mapValues)')
+        .code('(o => {"f": (n => [n, 2] | @OP.product), "object": o} | @mapValues)')
         .out("✅", '{"a":2,"b":4,"c":6}')
     end
 
@@ -233,7 +233,7 @@ RSpec.describe "stdlib error handling" do
     it "stops at the first falsey item without testing the rest" do
       expect_pipe
         .in("✅", "[false, true]")
-        .code('(xs => {"f": (false => false, _ => [1, "x"] | @lessThan), "xs": xs} | @all)')
+        .code('(xs => {"f": (false => false, _ => [1, "x"] | @OP.compare), "xs": xs} | @all)')
         .out("✅", "false")
     end
   end

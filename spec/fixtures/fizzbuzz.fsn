@@ -1,7 +1,7 @@
 (n ? @Integer =>
-  [ [[n, 15] | @mod, 0] | @equals,
-    [[n, 3]  | @mod, 0] | @equals,
-    [[n, 5]  | @mod, 0] | @equals ] | (
+  [ [[n, 15] | @mod, 0] | @OP.equal,
+    [[n, 3]  | @mod, 0] | @OP.equal,
+    [[n, 5]  | @mod, 0] | @OP.equal ] | (
     [true, _, _] => "FizzBuzz",
     [_, true, _] => "Fizz",
     [_, _, true] => "Buzz",

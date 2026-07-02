@@ -97,7 +97,7 @@ RSpec.describe "example programs" do
       expect_pipe
         .in("✅", "[10,2]")
         .file_path("safeDivide.fsn")
-        .out("✅", "5")
+        .out("✅", "5.0")
     end
 
     it "returns an error on division by zero" do

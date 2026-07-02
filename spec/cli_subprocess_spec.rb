@@ -59,13 +59,13 @@ RSpec.describe "CLI (exe/fusion)" do
     end
 
     it "defaults to the pipe use case once any argument is given" do
-      out, _err, status = run_cli("-e", "(n => [n, 1] | @add)", stdin: "5")
+      out, _err, status = run_cli("-e", "(n => [n, 1] | @OP.sum)", stdin: "5")
       expect(out).to eq("6\n")
       expect(status.exitstatus).to eq(0)
     end
 
     it "runs the pipe use case under an explicit --pipe" do
-      out, _err, status = run_cli("--pipe", "-e", "(n => [n, 1] | @add)", stdin: "5")
+      out, _err, status = run_cli("--pipe", "-e", "(n => [n, 1] | @OP.sum)", stdin: "5")
       expect(out).to eq("6\n")
       expect(status.exitstatus).to eq(0)
     end
@@ -79,7 +79,7 @@ RSpec.describe "CLI (exe/fusion)" do
     end
 
     it "accepts --execute as the long form of -e" do
-      out, _err, status = run_cli("--execute", "(n => [n, 1] | @add)", stdin: "5")
+      out, _err, status = run_cli("--execute", "(n => [n, 1] | @OP.sum)", stdin: "5")
       expect(out).to eq("6\n")
       expect(status.exitstatus).to eq(0)
     end
@@ -99,14 +99,14 @@ RSpec.describe "CLI (exe/fusion)" do
 
   describe "the pipe use case with no input" do
     it "emits the program's own value when stdin is empty" do
-      out, err, status = run_cli("-e", "[1, [2, 3] | @add]")
+      out, err, status = run_cli("-e", "[1, [2, 3] | @OP.sum]")
       expect(out).to eq("[1,5]\n")
       expect(err).to eq("")
       expect(status.exitstatus).to eq(0)
     end
 
     it "still pipes stdin through the program when input is present" do
-      out, _err, status = run_cli("-e", "(n => [n, 1] | @add)", stdin: "5")
+      out, _err, status = run_cli("-e", "(n => [n, 1] | @OP.sum)", stdin: "5")
       expect(out).to eq("6\n")
       expect(status.exitstatus).to eq(0)
     end
@@ -136,7 +136,7 @@ RSpec.describe "CLI (exe/fusion)" do
     end
 
     it "yields the unit's own function value (a serialization_error) when no stdin applies it" do
-      out, err, status = run_cli("-e", "(0 => 1, n => [n, [n,1] | @subtract | @] | @multiply)")
+      out, err, status = run_cli("-e", "(0 => 1, n => [n, [n,1] | @subtract | @] | @OP.product)")
       expect(out).to eq("")
       expect(err).to eq(
         %({"kind":"serialization_error","origin":"output","operation":"serializing result","status":0,"input":"<function>","message":"cannot serialize a function"}\n)
@@ -519,7 +519,7 @@ RSpec.describe "CLI (exe/fusion)" do
 
     it "keeps a per-record error in-band and continues the stream" do
       out, err, status = run_cli("--stream", "-e", "(p => p | @divide)", stdin: "[0,[4,2]]\n[0,[1,0]]\n[0,[9,3]]\n")
-      expect(out).to eq("[0,2]\n[1,#{division_by_zero}]\n[0,3]\n")
+      expect(out).to eq("[0,2.0]\n[1,#{division_by_zero}]\n[0,3.0]\n")
       expect(err).to eq("")
       expect(status.exitstatus).to eq(0)
     end
@@ -544,7 +544,7 @@ RSpec.describe "CLI (exe/fusion)" do
 
     it "combines --input array with --output object" do
       out, _err, status = run_cli(
-        "--stream", "--input", "array", "--output", "object", "-e", "(!payload => payload, n => [n, 2] | @multiply)",
+        "--stream", "--input", "array", "--output", "object", "-e", "(!payload => payload, n => [n, 2] | @OP.product)",
         stdin: %([0,5]\n[1,"boom"]\n)
       )
       expect(out).to eq(%({"value":10}\n{"value":"boom"}\n))
@@ -579,7 +579,7 @@ RSpec.describe "CLI (exe/fusion)" do
   # results form a clean stdout stream, and the interactive UI lands on stderr.
   describe "--repl" do
     it "evaluates statements over one session, printing clean results to stdout" do
-      out, _err, status = run_cli("--repl", stdin: "x = 5\ny = [x, 1] | @add\n")
+      out, _err, status = run_cli("--repl", stdin: "x = 5\ny = [x, 1] | @OP.sum\n")
       expect(out).to eq("5\n6\n")
       expect(status.exitstatus).to eq(0)
     end

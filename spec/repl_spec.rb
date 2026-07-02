@@ -59,11 +59,11 @@ RSpec.describe Fusion::CLI::Repl do
     end
 
     it "renders a function leniently" do
-      expect(repl.handle("(n => [n, 2] | @multiply)", environment)).to eq('"<function>"')
+      expect(repl.handle("(n => [n, 2] | @OP.product)", environment)).to eq('"<function>"')
     end
 
     it "renders an @-using function leniently — the @ is deferred until it is applied" do
-      expect(repl.handle("(0 => 1, n => [n, [n, 1] | @subtract | @] | @multiply)", environment)).to eq('"<function>"')
+      expect(repl.handle("(0 => 1, n => [n, [n, 1] | @subtract | @] | @OP.product)", environment)).to eq('"<function>"')
     end
 
     it "resolves a bare @ to the entry's own value (forcing it in data position is a self-data-cycle)" do
@@ -74,7 +74,7 @@ RSpec.describe Fusion::CLI::Repl do
   describe "#handle (statements)" do
     it "evaluates, renders, and binds the identifier for later entries" do
       expect(repl.handle("x = 5", environment)).to eq("5")
-      expect(repl.handle("[x, 1] | @add", environment)).to eq("6")
+      expect(repl.handle("[x, 1] | @OP.sum", environment)).to eq("6")
     end
 
     it "allows rebinding a name" do
@@ -84,12 +84,12 @@ RSpec.describe Fusion::CLI::Repl do
     end
 
     it "supports recursion through the bound name" do
-      repl.handle("fact = (0 => 1, n => [n, [n, 1] | @subtract | fact] | @multiply)", environment)
+      repl.handle("fact = (0 => 1, n => [n, [n, 1] | @subtract | fact] | @OP.product)", environment)
       expect(repl.handle("5 | fact", environment)).to eq("120")
     end
 
     it "supports recursion through a bare @ (the entry's own value)" do
-      repl.handle("fact = (0 => 1, n => [n, [n, 1] | @subtract | @] | @multiply)", environment)
+      repl.handle("fact = (0 => 1, n => [n, [n, 1] | @subtract | @] | @OP.product)", environment)
       expect(repl.handle("5 | fact", environment)).to eq("120")
     end
 

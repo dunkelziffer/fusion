@@ -163,8 +163,8 @@ RSpec.describe "error kinds" do
     it "a builtin given the wrong shape of arguments (not a pair)" do
       expect_pipe
         .in("✅", "[1,2,3]")
-        .code("(p => p | @add)")
-        .out("❌", '{"kind":"argument_error","origin":"builtin","file":"<inline>","operation":"@add","status":0,"input":[1,2,3],"expected":["[_ ? @Number, _ ? @Number]"]}')
+        .code("(p => p | @OP.compare)")
+        .out("❌", '{"kind":"argument_error","origin":"builtin","file":"<inline>","operation":"@OP.compare","status":0,"input":[1,2,3],"expected":["[_ ? @Number, _ ? @Number]","[_ ? @String, _ ? @String]"]}')
     end
   end
 
@@ -201,13 +201,13 @@ RSpec.describe "error kinds" do
 
     it "a non-finite number result (overflow to Infinity has no JSON form)" do
       expect_pipe
-        .code("(_ => [1e308, 10] | @multiply)")
+        .code("(_ => [1e308, 10] | @OP.product)")
         .out("❌", '{"kind":"serialization_error","origin":"output","operation":"serializing result","status":0,"input":"<Infinity>","message":"cannot serialize a non-finite number"}')
     end
 
     it "a -Infinity result" do
       expect_pipe
-        .code("(_ => [1e400, -1] | @multiply)")
+        .code("(_ => [1e400, -1] | @OP.product)")
         .out("❌", '{"kind":"serialization_error","origin":"output","operation":"serializing result","status":0,"input":"<-Infinity>","message":"cannot serialize a non-finite number"}')
     end
 
@@ -259,8 +259,8 @@ RSpec.describe "error kinds" do
 
     it "renders a function nested in input as \"<function>\"" do
       expect_pipe
-        .code("(_ => [(y => y), 1] | @add)")
-        .out("❌", '{"kind":"argument_error","origin":"builtin","file":"<inline>","operation":"@add","status":0,"input":["<function>",1],"expected":["[_ ? @Number, _ ? @Number]"]}')
+        .code("(_ => [(y => y), 1] | @OP.sum)")
+        .out("❌", '{"kind":"argument_error","origin":"builtin","file":"<inline>","operation":"@OP.sum","status":0,"input":["<function>",1],"expected":["_ ? (xs => {\"xs\": xs, \"f\": @Number} | @all)"]}')
     end
 
     it "renders a non-finite number in input as \"<Infinity>\"" do

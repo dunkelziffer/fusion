@@ -37,8 +37,8 @@ RSpec.describe "the error `file` (innermost user-code call site)" do
     it "a builtin piped directly" do
       expect_pipe
         .in("✅", '["a","b"]')
-        .code("(p => p | @add)")
-        .out("❌", '{"kind":"argument_error","origin":"builtin","file":"<inline>","operation":"@add","status":0,"input":["a","b"],"expected":["[_ ? @Number, _ ? @Number]"]}')
+        .code("(p => p | @OP.sum)")
+        .out("❌", '{"kind":"argument_error","origin":"builtin","file":"<inline>","operation":"@OP.sum","status":0,"input":["a","b"],"expected":["_ ? (xs => {\"xs\": xs, \"f\": @Number} | @all)"]}')
     end
 
     it "a stdlib function piped directly" do
@@ -65,8 +65,8 @@ RSpec.describe "the error `file` (innermost user-code call site)" do
     it "a builtin reached through @map" do
       expect_pipe
         .in("✅", '[["a","b"]]')
-        .code('(xs => {"f": @add, "xs": xs} | @map)')
-        .out("❌", '{"kind":"argument_error","origin":"builtin","file":"<inline>","operation":"@add","status":0,"input":["a","b"],"expected":["[_ ? @Number, _ ? @Number]"]}')
+        .code('(xs => {"f": @OP.sum, "xs": xs} | @map)')
+        .out("❌", '{"kind":"argument_error","origin":"builtin","file":"<inline>","operation":"@OP.sum","status":0,"input":["a","b"],"expected":["_ ? (xs => {\"xs\": xs, \"f\": @Number} | @all)"]}')
     end
 
     it "a stdlib function reached through @map" do
@@ -84,7 +84,7 @@ RSpec.describe "the error `file` (innermost user-code call site)" do
       expect_pipe
         .in("✅", '["a","b"]')
         .file_path("callsite/builtin.fsn")
-        .out("❌", '{"kind":"argument_error","origin":"builtin","file":"spec/fixtures/callsite/builtin.fsn","operation":"@add","status":0,"input":["a","b"],"expected":["[_ ? @Number, _ ? @Number]"]}')
+        .out("❌", '{"kind":"argument_error","origin":"builtin","file":"spec/fixtures/callsite/builtin.fsn","operation":"@OP.sum","status":0,"input":["a","b"],"expected":["_ ? (xs => {\"xs\": xs, \"f\": @Number} | @all)"]}')
     end
 
     it "a stdlib function piped directly" do
@@ -105,7 +105,7 @@ RSpec.describe "the error `file` (innermost user-code call site)" do
       expect_pipe
         .in("✅", '[["a","b"]]')
         .file_path("callsite/nested.fsn")
-        .out("❌", '{"kind":"argument_error","origin":"builtin","file":"spec/fixtures/callsite/nested.fsn","operation":"@add","status":0,"input":["a","b"],"expected":["[_ ? @Number, _ ? @Number]"]}')
+        .out("❌", '{"kind":"argument_error","origin":"builtin","file":"spec/fixtures/callsite/nested.fsn","operation":"@OP.sum","status":0,"input":["a","b"],"expected":["_ ? (xs => {\"xs\": xs, \"f\": @Number} | @all)"]}')
     end
   end
 end

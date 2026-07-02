@@ -129,7 +129,7 @@ RSpec.describe "payloaded errors" do
     it "preserves the payload through an unrelated function" do
       expect_pipe
         .in("✅", "5")
-        .code('(x => ([x,0] | @divide) | (n => [n, 1] | @add))')
+        .code('(x => ([x,0] | @divide) | (n => [n, 1] | @OP.sum))')
         .out("❌", '{"kind":"math_error","origin":"builtin","file":"<inline>","operation":"@divide","status":0,"input":[5,0],"message":"division by zero"}')
     end
 
@@ -163,10 +163,10 @@ RSpec.describe "payloaded errors" do
         .out("❌", "42")
     end
 
-    it "propagates an error through @equals (a literal [!42,!42] short-circuits)" do
+    it "propagates an error through @OP.equal (a literal [!42,!42] short-circuits)" do
       expect_pipe
         .in("✅", "null")
-        .code("(_ => [!42, !42] | @equals)")
+        .code("(_ => [!42, !42] | @OP.equal)")
         .out("❌", "42")
     end
 

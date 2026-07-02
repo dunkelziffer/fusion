@@ -222,7 +222,7 @@ RSpec.describe "@-resolution" do
     it "keeps the stdlib and its internal sibling references reachable despite a tight jail" do
       expect_pipe
         .jail("ref/localmath")
-        .code('(_ => {"f": (v => [v, 10] | @add), "object": {"a": 1, "b": 2}} | @mapValues)')
+        .code('(_ => {"f": (v => [v, 10] | @OP.sum), "object": {"a": 1, "b": 2}} | @mapValues)')
         .out("✅", '{"a":11,"b":12}')
     end
 
