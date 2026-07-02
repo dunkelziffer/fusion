@@ -1,4 +1,4 @@
 (
   [] => [],
-  [first, ...rest] => [[first, first] | @add, ...rest | @]
+  [first, ...rest] => [[first, first] | @OP.sum, ...rest | @]
 )

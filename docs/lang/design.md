@@ -1004,3 +1004,9 @@ TODO: Under `-!` the input is the error payload, so empty stdin is a usage error
 
 - No way to annotate a single token mid-line; an explanatory comment must occupy its own line above the code.
 - A breaking change from the earlier `//` / `/* */` syntax (acceptable at this Alpha stage).
+
+---
+
+## 5.5 `@OP`: grouping the operations that will get infix sugar
+
+TODO (summarize at session end).

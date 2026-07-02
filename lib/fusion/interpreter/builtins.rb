@@ -23,7 +23,7 @@ module Fusion
         define.call("lessThan", method(:less_than))
         define.call("and", method(:and_))
         define.call("or", method(:or_))
-        define.call("not", method(:not_))
+        define.call("not", method(:op_not))
         define.call("length", method(:length))
         define.call("concat", method(:concat))
         define.call("chars", method(:chars))
@@ -47,17 +47,35 @@ module Fusion
         define.call("Null", method(:null?))
         define.call("Function", method(:function?))
         define.call("NonFinite", method(:non_finite?))
+
+        # `OP` bundles the operations slated for infix syntax sugar (a later
+        # step). Reached as `@OP.and`, `@OP.sum`, … — a member access on this
+        # builtin object, whose values are native functions.
+        table["OP"] = {
+          "sum"     => NativeFunc.new("OP.sum", method(:op_sum)),
+          "product" => NativeFunc.new("OP.product", method(:op_product)),
+          "negate"  => NativeFunc.new("OP.negate", method(:op_negate)),
+          "invert"  => NativeFunc.new("OP.invert", method(:op_invert)),
+          "equal"   => NativeFunc.new("OP.equal", method(:op_equal)),
+          "compare" => NativeFunc.new("OP.compare", method(:op_compare)),
+          "and"     => NativeFunc.new("OP.and", method(:op_and)),
+          "or"      => NativeFunc.new("OP.or", method(:op_or)),
+          "not"     => NativeFunc.new("OP.not", method(:op_not)),
+        }
       end
 
       # --- arithmetic ---
 
       NUMBER_PAIR = ["[_ ? @Number, _ ? @Number]"].freeze
+      NUMBER_ARRAY = ['_ ? (xs => {"xs": xs, "f": @Number} | @all)'].freeze
 
+      # `add` is `@OP.sum` restricted to a numeric pair; it keeps its own shape
+      # check so its `expected` stays the binary `[Number, Number]`.
       def add(v)
         return v if v.is_a?(ErrorVal)
         return argument_error("add", v, NUMBER_PAIR) unless pair?(v) && numeric?(v[0]) && numeric?(v[1])
 
-        v[0] + v[1]
+        op_sum(v)
       end
 
       def subtract(v)
@@ -67,11 +85,12 @@ module Fusion
         v[0] - v[1]
       end
 
+      # `multiply` is `@OP.product` restricted to a numeric pair.
       def multiply(v)
         return v if v.is_a?(ErrorVal)
         return argument_error("multiply", v, NUMBER_PAIR) unless pair?(v) && numeric?(v[0]) && numeric?(v[1])
 
-        v[0] * v[1]
+        op_product(v)
       end
 
       def divide(v)
@@ -99,7 +118,7 @@ module Fusion
         return v if v.is_a?(ErrorVal)
         return argument_error("negate", v, ["_ ? @Number"]) unless numeric?(v)
 
-        -v
+        op_negate(v)
       end
 
       def floor(v)
@@ -112,23 +131,23 @@ module Fusion
 
       # --- comparison ---
 
+      # `equals` is `@OP.equal` restricted to a pair (deep, exact).
       def equals(v)
         return v if v.is_a?(ErrorVal)
         return argument_error("equals", v, ["[_, _]"]) unless pair?(v)
 
-        @interp.deep_equal?(v[0], v[1])
+        op_equal(v)
       end
 
+      # `lessThan` is the strictly-less case of `@OP.compare` on a pair.
       def less_than(v)
         return v if v.is_a?(ErrorVal)
         expected = ["[_ ? @Number, _ ? @Number]", "[_ ? @String, _ ? @String]"]
         return argument_error("lessThan", v, expected) unless pair?(v)
 
         a, b = v
-        if numeric?(a) && numeric?(b)
-          a < b
-        elsif a.is_a?(String) && b.is_a?(String)
-          a < b
+        if (numeric?(a) && numeric?(b)) || (a.is_a?(String) && b.is_a?(String))
+          op_compare(v) == -1
         else
           argument_error("lessThan", v, expected)
         end
@@ -138,22 +157,103 @@ module Fusion
 
       # `and`/`or`/`not` judge truthiness (Ruby-style: `false` and `null` are
       # falsey, everything else truthy), not strict booleans, and always return a
-      # boolean. They share the interpreter's `truthy?`, the same test `?` guards use.
+      # boolean. `and`/`or` are the pair cases of `@OP.and`/`@OP.or`; `not` is
+      # `@OP.not` verbatim (registered directly, no wrapper).
       def and_(v)
         return v if v.is_a?(ErrorVal)
         return argument_error("and", v, ["[_, _]"]) unless pair?(v)
 
-        @interp.truthy?(v[0]) && @interp.truthy?(v[1])
+        op_and(v)
       end
 
       def or_(v)
         return v if v.is_a?(ErrorVal)
         return argument_error("or", v, ["[_, _]"]) unless pair?(v)
 
-        @interp.truthy?(v[0]) || @interp.truthy?(v[1])
+        op_or(v)
       end
 
-      def not_(v)
+      # --- OP: the operations that will gain infix syntax sugar ---
+      #
+      # Reached as `@OP.sum`, `@OP.and`, … (a member access on the `OP` builtin
+      # object). The arithmetic, boolean, and equality members take an array of
+      # ANY length; the unary ones take a single value. `compare` returns
+      # -1 / 0 / 1. The binary built-ins above derive from these.
+
+      def op_sum(v)
+        return v if v.is_a?(ErrorVal)
+        return argument_error("OP.sum", v, NUMBER_ARRAY) unless v.is_a?(Array) && v.all? { |x| numeric?(x) }
+
+        v.sum(0)
+      end
+
+      def op_product(v)
+        return v if v.is_a?(ErrorVal)
+        return argument_error("OP.product", v, NUMBER_ARRAY) unless v.is_a?(Array) && v.all? { |x| numeric?(x) }
+
+        v.reduce(1, :*)
+      end
+
+      def op_negate(v)
+        return v if v.is_a?(ErrorVal)
+        return argument_error("OP.negate", v, ["_ ? @Number"]) unless numeric?(v)
+
+        -v
+      end
+
+      # The unary reciprocal 1/x, mirroring `@divide`: an integer result when x
+      # divides 1 exactly (x is 1 or -1), a float otherwise; 0 is a math_error.
+      def op_invert(v)
+        return v if v.is_a?(ErrorVal)
+        return argument_error("OP.invert", v, ["_ ? @Number"]) unless numeric?(v)
+        return error("math_error", "OP.invert", v, "division by zero") if v == 0
+
+        v.is_a?(Integer) && (1 % v).zero? ? 1 / v : 1.0 / v
+      end
+
+      # Deep, exact equality across the whole array: true iff every element
+      # equals the first (so 0 and 1 elements are vacuously equal). Any types.
+      def op_equal(v)
+        return v if v.is_a?(ErrorVal)
+        return argument_error("OP.equal", v, ["_ ? @Array"]) unless v.is_a?(Array)
+
+        v.all? { |x| @interp.deep_equal?(v[0], x) }
+      end
+
+      # Order two numbers or two strings: -1, 0, or 1 (no deep equality). Built on
+      # `<` rather than `<=>` so a NaN operand yields 0 (unordered), never Ruby's
+      # `nil` — NaN is a reachable value (`Infinity - Infinity`).
+      def op_compare(v)
+        return v if v.is_a?(ErrorVal)
+        expected = ["[_ ? @Number, _ ? @Number]", "[_ ? @String, _ ? @String]"]
+        return argument_error("OP.compare", v, expected) unless pair?(v)
+
+        a, b = v
+        unless (numeric?(a) && numeric?(b)) || (a.is_a?(String) && b.is_a?(String))
+          return argument_error("OP.compare", v, expected)
+        end
+
+        if a < b then -1
+        elsif b < a then 1
+        else 0
+        end
+      end
+
+      def op_and(v)
+        return v if v.is_a?(ErrorVal)
+        return argument_error("OP.and", v, ["_ ? @Array"]) unless v.is_a?(Array)
+
+        v.all? { |x| @interp.truthy?(x) }
+      end
+
+      def op_or(v)
+        return v if v.is_a?(ErrorVal)
+        return argument_error("OP.or", v, ["_ ? @Array"]) unless v.is_a?(Array)
+
+        v.any? { |x| @interp.truthy?(x) }
+      end
+
+      def op_not(v)
         return v if v.is_a?(ErrorVal)
 
         !@interp.truthy?(v)
