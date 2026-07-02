@@ -4,6 +4,6 @@
   s ? @String => s | @chars | @,
   []  => "palindrome",
   [_] => "palindrome",
-  [_, ...rest, _] ? @ends | @equals => rest | @,
+  [_, ...rest, _] ? @ends | @OP.equal => rest | @,
   _   => "not a palindrome"
 )

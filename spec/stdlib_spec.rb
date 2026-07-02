@@ -43,14 +43,14 @@ RSpec.describe "stdlib error handling" do
       expect_pipe
         .in("✅", '"hi"')
         .code("(x => x | @range)")
-        .out("❌", '{"kind":"argument_error","origin":"stdlib","file":"<inline>","operation":"@range","status":0,"input":"hi","expected":["_ ? (m ? @Integer => [-1, m] | @lessThan)"]}')
+        .out("❌", '{"kind":"argument_error","origin":"stdlib","file":"<inline>","operation":"@range","status":0,"input":"hi","expected":["_ ? (m ? @Integer => [-1, m] | @OP.compare | (-1 => true, _ => false))"]}')
     end
 
     it "errors on a negative integer (rather than recursing forever)" do
       expect_pipe
         .in("✅", "-1")
         .code("(x => x | @range)")
-        .out("❌", '{"kind":"argument_error","origin":"stdlib","file":"<inline>","operation":"@range","status":0,"input":-1,"expected":["_ ? (m ? @Integer => [-1, m] | @lessThan)"]}')
+        .out("❌", '{"kind":"argument_error","origin":"stdlib","file":"<inline>","operation":"@range","status":0,"input":-1,"expected":["_ ? (m ? @Integer => [-1, m] | @OP.compare | (-1 => true, _ => false))"]}')
     end
   end
 
@@ -111,7 +111,7 @@ RSpec.describe "stdlib error handling" do
       expect_pipe
         .in("✅", "null")
         .code("(_ => 1e400 | @range)")
-        .out("❌", '{"kind":"argument_error","origin":"stdlib","file":"<inline>","operation":"@range","status":0,"input":"<Infinity>","expected":["_ ? (m ? @Integer => [-1, m] | @lessThan)"]}')
+        .out("❌", '{"kind":"argument_error","origin":"stdlib","file":"<inline>","operation":"@range","status":0,"input":"<Infinity>","expected":["_ ? (m ? @Integer => [-1, m] | @OP.compare | (-1 => true, _ => false))"]}')
     end
 
     it "@map of a {f} missing xs echoes the function placeholder" do
