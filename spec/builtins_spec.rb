@@ -161,43 +161,6 @@ RSpec.describe "builtins" do
     end
   end
 
-  describe "@mod" do
-    it "takes a modulus" do
-      expect_pipe
-        .in("✅", "[7,3]")
-        .code("(p => p | @mod)")
-        .out("✅", "1")
-    end
-
-    it "is zero when evenly divisible" do
-      expect_pipe
-        .in("✅", "[8,4]")
-        .code("(p => p | @mod)")
-        .out("✅", "0")
-    end
-
-    it "errors with math_error on modulo by zero" do
-      expect_pipe
-        .in("✅", "[7,0]")
-        .code("(p => p | @mod)")
-        .out("❌", '{"kind":"math_error","origin":"builtin","file":"<inline>","operation":"@mod","status":0,"input":[7,0],"message":"modulo by zero"}')
-    end
-
-    it "errors with argument_error on a non-pair" do
-      expect_pipe
-        .in("✅", "7")
-        .code("(p => p | @mod)")
-        .out("❌", '{"kind":"argument_error","origin":"builtin","file":"<inline>","operation":"@mod","status":0,"input":7,"expected":["[_ ? @Number, _ ? @Number]"]}')
-    end
-
-    it "errors on a non-numeric pair" do
-      expect_pipe
-        .in("✅", '["a","b"]')
-        .code("(p => p | @mod)")
-        .out("❌", '{"kind":"argument_error","origin":"builtin","file":"<inline>","operation":"@mod","status":0,"input":["a","b"],"expected":["[_ ? @Number, _ ? @Number]"]}')
-    end
-  end
-
   describe "@negate" do
     it "negates a positive" do
       expect_pipe
@@ -258,84 +221,174 @@ RSpec.describe "builtins" do
     end
   end
 
-  describe "@equals" do
+  describe "@eq" do
     it "is true for equal integers" do
       expect_pipe
         .in("✅", "[1,1]")
-        .code("(p => p | @equals)")
+        .code("(p => p | @eq)")
         .out("✅", "true")
     end
 
     it "is false for different integers" do
       expect_pipe
         .in("✅", "[1,2]")
-        .code("(p => p | @equals)")
+        .code("(p => p | @eq)")
         .out("✅", "false")
     end
 
     it "does not coerce a number to a string" do
       expect_pipe
         .in("✅", '[1,"1"]')
-        .code("(p => p | @equals)")
+        .code("(p => p | @eq)")
         .out("✅", "false")
     end
 
     it "treats an integer and the equal float as distinct (exact)" do
       expect_pipe
         .in("✅", "[1,1.0]")
-        .code("(p => p | @equals)")
+        .code("(p => p | @eq)")
         .out("✅", "false")
     end
 
     it "compares structurally (deep)" do
       expect_pipe
         .in("✅", "[[1,[2]],[1,[2]]]")
-        .code("(p => p | @equals)")
+        .code("(p => p | @eq)")
         .out("✅", "true")
     end
 
     it "errors with argument_error on a non-pair" do
       expect_pipe
         .in("✅", "[1,2,3]")
-        .code("(p => p | @equals)")
-        .out("❌", '{"kind":"argument_error","origin":"builtin","file":"<inline>","operation":"@equals","status":0,"input":[1,2,3],"expected":["[_, _]"]}')
+        .code("(p => p | @eq)")
+        .out("❌", '{"kind":"argument_error","origin":"builtin","file":"<inline>","operation":"@eq","status":0,"input":[1,2,3],"expected":["[_, _]"]}')
     end
   end
 
-  describe "@lessThan" do
+  describe "@lt" do
     it "compares two numbers" do
       expect_pipe
         .in("✅", "[1,2]")
-        .code("(p => p | @lessThan)")
+        .code("(p => p | @lt)")
         .out("✅", "true")
     end
 
     it "is false when not strictly less" do
       expect_pipe
         .in("✅", "[1,1]")
-        .code("(p => p | @lessThan)")
+        .code("(p => p | @lt)")
         .out("✅", "false")
     end
 
     it "compares two strings lexicographically" do
       expect_pipe
         .in("✅", '["a","b"]')
-        .code("(p => p | @lessThan)")
+        .code("(p => p | @lt)")
         .out("✅", "true")
     end
 
     it "errors on mixed types" do
       expect_pipe
         .in("✅", '[1,"a"]')
-        .code("(p => p | @lessThan)")
-        .out("❌", '{"kind":"argument_error","origin":"builtin","file":"<inline>","operation":"@lessThan","status":0,"input":[1,"a"],"expected":["[_ ? @Number, _ ? @Number]","[_ ? @String, _ ? @String]"]}')
+        .code("(p => p | @lt)")
+        .out("❌", '{"kind":"argument_error","origin":"builtin","file":"<inline>","operation":"@lt","status":0,"input":[1,"a"],"expected":["[_ ? @Number, _ ? @Number]","[_ ? @String, _ ? @String]"]}')
     end
 
     it "errors with argument_error on a non-pair" do
       expect_pipe
         .in("✅", "[1]")
-        .code("(p => p | @lessThan)")
-        .out("❌", '{"kind":"argument_error","origin":"builtin","file":"<inline>","operation":"@lessThan","status":0,"input":[1],"expected":["[_ ? @Number, _ ? @Number]","[_ ? @String, _ ? @String]"]}')
+        .code("(p => p | @lt)")
+        .out("❌", '{"kind":"argument_error","origin":"builtin","file":"<inline>","operation":"@lt","status":0,"input":[1],"expected":["[_ ? @Number, _ ? @Number]","[_ ? @String, _ ? @String]"]}')
+    end
+  end
+
+  describe "@gt" do
+    it "is true when the first is strictly greater" do
+      expect_pipe
+        .in("✅", "[3,1]")
+        .code("(p => p | @gt)")
+        .out("✅", "true")
+    end
+
+    it "is false when equal" do
+      expect_pipe
+        .in("✅", "[1,1]")
+        .code("(p => p | @gt)")
+        .out("✅", "false")
+    end
+
+    it "compares two strings lexicographically" do
+      expect_pipe
+        .in("✅", '["b","a"]')
+        .code("(p => p | @gt)")
+        .out("✅", "true")
+    end
+
+    it "errors on mixed types" do
+      expect_pipe
+        .in("✅", '[1,"a"]')
+        .code("(p => p | @gt)")
+        .out("❌", '{"kind":"argument_error","origin":"builtin","file":"<inline>","operation":"@gt","status":0,"input":[1,"a"],"expected":["[_ ? @Number, _ ? @Number]","[_ ? @String, _ ? @String]"]}')
+    end
+  end
+
+  describe "@lte" do
+    it "is true when strictly less" do
+      expect_pipe
+        .in("✅", "[1,2]")
+        .code("(p => p | @lte)")
+        .out("✅", "true")
+    end
+
+    it "is true when equal" do
+      expect_pipe
+        .in("✅", "[1,1]")
+        .code("(p => p | @lte)")
+        .out("✅", "true")
+    end
+
+    it "is false when strictly greater" do
+      expect_pipe
+        .in("✅", "[2,1]")
+        .code("(p => p | @lte)")
+        .out("✅", "false")
+    end
+
+    it "errors with argument_error on a non-pair" do
+      expect_pipe
+        .in("✅", "[1]")
+        .code("(p => p | @lte)")
+        .out("❌", '{"kind":"argument_error","origin":"builtin","file":"<inline>","operation":"@lte","status":0,"input":[1],"expected":["[_ ? @Number, _ ? @Number]","[_ ? @String, _ ? @String]"]}')
+    end
+  end
+
+  describe "@gte" do
+    it "is true when strictly greater" do
+      expect_pipe
+        .in("✅", "[2,1]")
+        .code("(p => p | @gte)")
+        .out("✅", "true")
+    end
+
+    it "is true when equal" do
+      expect_pipe
+        .in("✅", "[1,1]")
+        .code("(p => p | @gte)")
+        .out("✅", "true")
+    end
+
+    it "is false when strictly less" do
+      expect_pipe
+        .in("✅", "[1,2]")
+        .code("(p => p | @gte)")
+        .out("✅", "false")
+    end
+
+    it "errors on mixed types" do
+      expect_pipe
+        .in("✅", '["a",1]')
+        .code("(p => p | @gte)")
+        .out("❌", '{"kind":"argument_error","origin":"builtin","file":"<inline>","operation":"@gte","status":0,"input":["a",1],"expected":["[_ ? @Number, _ ? @Number]","[_ ? @String, _ ? @String]"]}')
     end
   end
 
@@ -445,93 +498,40 @@ RSpec.describe "builtins" do
     end
   end
 
-  describe "@length" do
+  describe "@size" do
     it "measures a string" do
       expect_pipe
         .in("✅", '"abc"')
-        .code("(v => v | @length)")
+        .code("(v => v | @size)")
         .out("✅", "3")
     end
 
     it "measures an array" do
       expect_pipe
         .in("✅", "[1,2,3]")
-        .code("(v => v | @length)")
+        .code("(v => v | @size)")
         .out("✅", "3")
     end
 
     it "measures an object by key count" do
       expect_pipe
         .in("✅", '{"a":1,"b":2}')
-        .code("(v => v | @length)")
+        .code("(v => v | @size)")
         .out("✅", "2")
     end
 
     it "is zero for the empty string" do
       expect_pipe
         .in("✅", '""')
-        .code("(v => v | @length)")
+        .code("(v => v | @size)")
         .out("✅", "0")
     end
 
     it "errors on a number" do
       expect_pipe
         .in("✅", "5")
-        .code("(v => v | @length)")
-        .out("❌", '{"kind":"argument_error","origin":"builtin","file":"<inline>","operation":"@length","status":0,"input":5,"expected":["_ ? @String","_ ? @Array","_ ? @Object"]}')
-    end
-  end
-
-  describe "@concat" do
-    it "concatenates two strings" do
-      expect_pipe
-        .in("✅", '["a","b"]')
-        .code("(p => p | @concat)")
-        .out("✅", '"ab"')
-    end
-
-    it "concatenates with an empty string" do
-      expect_pipe
-        .in("✅", '["x",""]')
-        .code("(p => p | @concat)")
-        .out("✅", '"x"')
-    end
-
-    it "errors when an element is not a string" do
-      expect_pipe
-        .in("✅", '["a",1]')
-        .code("(p => p | @concat)")
-        .out("❌", '{"kind":"argument_error","origin":"builtin","file":"<inline>","operation":"@concat","status":0,"input":["a",1],"expected":["[_ ? @String, _ ? @String]"]}')
-    end
-
-    it "errors with argument_error on a non-pair" do
-      expect_pipe
-        .in("✅", '["a"]')
-        .code("(p => p | @concat)")
-        .out("❌", '{"kind":"argument_error","origin":"builtin","file":"<inline>","operation":"@concat","status":0,"input":["a"],"expected":["[_ ? @String, _ ? @String]"]}')
-    end
-  end
-
-  describe "@chars" do
-    it "splits a string into its characters" do
-      expect_pipe
-        .in("✅", '"abc"')
-        .code("(s => s | @chars)")
-        .out("✅", '["a","b","c"]')
-    end
-
-    it "splits the empty string into an empty array" do
-      expect_pipe
-        .in("✅", '""')
-        .code("(s => s | @chars)")
-        .out("✅", "[]")
-    end
-
-    it "errors on a non-string" do
-      expect_pipe
-        .in("✅", "5")
-        .code("(s => s | @chars)")
-        .out("❌", '{"kind":"argument_error","origin":"builtin","file":"<inline>","operation":"@chars","status":0,"input":5,"expected":["_ ? @String"]}')
+        .code("(v => v | @size)")
+        .out("❌", '{"kind":"argument_error","origin":"builtin","file":"<inline>","operation":"@size","status":0,"input":5,"expected":["_ ? @String","_ ? @Array","_ ? @Object"]}')
     end
   end
 
@@ -562,6 +562,59 @@ RSpec.describe "builtins" do
         .in("✅", '[["a"]]')
         .code("(p => p | @join)")
         .out("❌", '{"kind":"argument_error","origin":"builtin","file":"<inline>","operation":"@join","status":0,"input":[["a"]],"expected":["[_ ? (xs => {\"xs\": xs, \"f\": @String} | @all), _ ? @String]"]}')
+    end
+  end
+
+  # @split is the inverse of @join: [string, separator]. It splits on the literal
+  # separator, keeps empty fields, and treats an empty separator as "characters".
+  describe "@split" do
+    it "splits a string on a separator" do
+      expect_pipe
+        .in("✅", '["a-b-c","-"]')
+        .code("(p => p | @split)")
+        .out("✅", '["a","b","c"]')
+    end
+
+    it "keeps a trailing empty field" do
+      expect_pipe
+        .in("✅", '["a-b-","-"]')
+        .code("(p => p | @split)")
+        .out("✅", '["a","b",""]')
+    end
+
+    it "splits on a literal space (no whitespace-run special case)" do
+      expect_pipe
+        .in("✅", '["a b  c"," "]')
+        .code("(p => p | @split)")
+        .out("✅", '["a","b","","c"]')
+    end
+
+    it "splits into characters on an empty separator" do
+      expect_pipe
+        .in("✅", '["abc",""]')
+        .code("(p => p | @split)")
+        .out("✅", '["a","b","c"]')
+    end
+
+    it "is empty for the empty string" do
+      expect_pipe
+        .in("✅", '["","-"]')
+        .code("(p => p | @split)")
+        .out("✅", "[]")
+    end
+
+    it "errors when an element is not a string" do
+      expect_pipe
+        .in("✅", "[5,\"-\"]")
+        .code("(p => p | @split)")
+        .out("❌", '{"kind":"argument_error","origin":"builtin","file":"<inline>","operation":"@split","status":0,"input":[5,"-"],"expected":["[_ ? @String, _ ? @String]"]}')
+    end
+
+    it "errors with argument_error on a non-pair" do
+      expect_pipe
+        .in("✅", '["a-b"]')
+        .code("(p => p | @split)")
+        .out("❌", '{"kind":"argument_error","origin":"builtin","file":"<inline>","operation":"@split","status":0,"input":["a-b"],"expected":["[_ ? @String, _ ? @String]"]}')
     end
   end
 

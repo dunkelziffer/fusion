@@ -126,7 +126,7 @@ number's absolute value:
 
 ```fusion
 (n =>
-  [n, 0] | @lessThan | (
+  [n, 0] | @lt | (
     true  => [0, n] | @subtract,
     false => n
   )
@@ -140,7 +140,7 @@ echo '-5' | fusion lesson.fsn    # => 5
 echo '5'  | fusion lesson.fsn    # => 5
 ```
 
-Read the middle line carefully: `[n, 0] | @lessThan` produces `true` or `false`. That
+Read the middle line carefully: `[n, 0] | @lt` produces `true` or `false`. That
 boolean is then piped into a *second, inline function* whose two clauses are the two
 branches. **An `if` is just a function with a `true` clause and a `false` clause.**
 
@@ -214,7 +214,7 @@ Create a function that sorts a pair of values:
 
 ```fusion
 (
-  [a, b] ? @lessThan => [a, b],
+  [a, b] ? @lt => [a, b],
   [a, b] => [b, a]
 )
 ```

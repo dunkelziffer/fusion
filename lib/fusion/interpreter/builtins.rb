@@ -16,18 +16,19 @@ module Fusion
         define.call("subtract", method(:subtract))
         define.call("multiply", method(:multiply))
         define.call("divide", method(:divide))
-        define.call("mod", method(:mod))
         define.call("negate", method(:negate))
         define.call("floor", method(:floor))
-        define.call("equals", method(:equals))
-        define.call("lessThan", method(:less_than))
+        define.call("eq", method(:eq))
+        define.call("lt", method(:lt))
+        define.call("gt", method(:gt))
+        define.call("lte", method(:lte))
+        define.call("gte", method(:gte))
         define.call("and", method(:and_))
         define.call("or", method(:or_))
         define.call("not", method(:not_))
-        define.call("length", method(:length))
-        define.call("concat", method(:concat))
-        define.call("chars", method(:chars))
+        define.call("size", method(:size))
         define.call("join", method(:join))
+        define.call("split", method(:split))
         define.call("toString", method(:to_string))
         define.call("parseNumber", method(:parse_number))
         define.call("keys", method(:keys))
@@ -63,6 +64,7 @@ module Fusion
           "and"      => NativeFunc.new("OP.and", method(:op_and)),
           "or"       => NativeFunc.new("OP.or", method(:op_or)),
           "not"      => NativeFunc.new("OP.not", method(:op_not)),
+          "get"      => NativeFunc.new("OP.get", method(:op_get)),
         }
       end
 
@@ -107,14 +109,6 @@ module Fusion
         v[0].to_f / v[1]
       end
 
-      def mod(v)
-        return v if v.is_a?(ErrorVal)
-        return argument_error("mod", v, NUMBER_PAIR) unless pair?(v) && numeric?(v[0]) && numeric?(v[1])
-        return error("math_error", "mod", v, "modulo by zero") if v[1] == 0
-
-        v[0] % v[1]
-      end
-
       def negate(v)
         return v if v.is_a?(ErrorVal)
         return argument_error("negate", v, ["_ ? @Number"]) unless numeric?(v)
@@ -133,25 +127,40 @@ module Fusion
       # --- comparison ---
 
       # `equals` is `@OP.equal` restricted to a pair (deep, exact).
-      def equals(v)
+      # `eq` is `@OP.equal` restricted to a pair (deep, exact).
+      def eq(v)
         return v if v.is_a?(ErrorVal)
-        return argument_error("equals", v, ["[_, _]"]) unless pair?(v)
+        return argument_error("eq", v, ["[_, _]"]) unless pair?(v)
 
         op_equal(v)
       end
 
-      # `lessThan` is the strictly-less case of `@OP.compare` on a pair.
-      def less_than(v)
-        return v if v.is_a?(ErrorVal)
-        expected = ["[_ ? @Number, _ ? @Number]", "[_ ? @String, _ ? @String]"]
-        return argument_error("lessThan", v, expected) unless pair?(v)
+      COMPARE_PAIR = ["[_ ? @Number, _ ? @Number]", "[_ ? @String, _ ? @String]"].freeze
 
-        a, b = v
-        if (numeric?(a) && numeric?(b)) || (a.is_a?(String) && b.is_a?(String))
-          op_compare(v) == -1
-        else
-          argument_error("lessThan", v, expected)
-        end
+      # `lt`/`gt`/`lte`/`gte` read off `@OP.compare` (-1 / 0 / 1) on a pair, each
+      # re-tagging a bad-shape error with its own name.
+      def lt(v)
+        return v if v.is_a?(ErrorVal)
+        c = op_compare(v)
+        c.is_a?(ErrorVal) ? argument_error("lt", v, COMPARE_PAIR) : c == -1
+      end
+
+      def gt(v)
+        return v if v.is_a?(ErrorVal)
+        c = op_compare(v)
+        c.is_a?(ErrorVal) ? argument_error("gt", v, COMPARE_PAIR) : c == 1
+      end
+
+      def lte(v)
+        return v if v.is_a?(ErrorVal)
+        c = op_compare(v)
+        c.is_a?(ErrorVal) ? argument_error("lte", v, COMPARE_PAIR) : c <= 0
+      end
+
+      def gte(v)
+        return v if v.is_a?(ErrorVal)
+        c = op_compare(v)
+        c.is_a?(ErrorVal) ? argument_error("gte", v, COMPARE_PAIR) : c >= 0
       end
 
       # --- boolean ---
@@ -174,8 +183,14 @@ module Fusion
         op_or(v)
       end
 
+      # A thin wrapper over `@OP.not` that reports its own `@`-reference: it
+      # re-tags any error the delegate returns. Re-tagging every such error is
+      # safe because #dispatch_apply never passes an error input into a built-in,
+      # so an `ErrorVal` here is always one the delegate produced — never a
+      # propagated input error whose original `operation` we'd need to keep.
       def not_(v)
-        op_not(v)
+        result = op_not(v)
+        result.is_a?(ErrorVal) ? result.with_operation("@not") : result
       end
 
       # --- OP: the operations that will gain infix syntax sugar ---
@@ -249,12 +264,11 @@ module Fusion
       # `nil` — NaN is a reachable value (`Infinity - Infinity`).
       def op_compare(v)
         return v if v.is_a?(ErrorVal)
-        expected = ["[_ ? @Number, _ ? @Number]", "[_ ? @String, _ ? @String]"]
-        return argument_error("OP.compare", v, expected) unless pair?(v)
+        return argument_error("OP.compare", v, COMPARE_PAIR) unless pair?(v)
 
         a, b = v
         unless (numeric?(a) && numeric?(b)) || (a.is_a?(String) && b.is_a?(String))
-          return argument_error("OP.compare", v, expected)
+          return argument_error("OP.compare", v, COMPARE_PAIR)
         end
 
         if a < b then -1
@@ -285,27 +299,15 @@ module Fusion
 
       # --- strings and structure bridges ---
 
-      def length(v)
+      def size(v)
         return v if v.is_a?(ErrorVal)
-        return argument_error("length", v, ["_ ? @String", "_ ? @Array", "_ ? @Object"]) unless v.is_a?(String) || v.is_a?(Array) || v.is_a?(Hash)
+        return argument_error("size", v, ["_ ? @String", "_ ? @Array", "_ ? @Object"]) unless v.is_a?(String) || v.is_a?(Array) || v.is_a?(Hash)
 
         v.length
       end
 
-      def concat(v)
-        return v if v.is_a?(ErrorVal)
-        return argument_error("concat", v, ["[_ ? @String, _ ? @String]"]) unless pair?(v) && v[0].is_a?(String) && v[1].is_a?(String)
-
-        v[0] + v[1]
-      end
-
-      def chars(v)
-        return v if v.is_a?(ErrorVal)
-        return argument_error("chars", v, ["_ ? @String"]) unless v.is_a?(String)
-
-        v.chars
-      end
-
+      # `[items, separator]`: join an array of strings into one string. `@concat`
+      # is the stdlib pair-case built on this.
       def join(v)
         return v if v.is_a?(ErrorVal)
         expected = ['[_ ? (xs => {"xs": xs, "f": @String} | @all), _ ? @String]']
@@ -317,6 +319,21 @@ module Fusion
         end
 
         array.join(separator)
+      end
+
+      # `[string, separator]`: the inverse of `@join`. Splits on the LITERAL
+      # separator (Ruby's `" "` whitespace special-case does not apply) and keeps
+      # empty fields; an empty separator splits into characters. `@chars` is the
+      # stdlib single-string case built on this.
+      def split(v)
+        return v if v.is_a?(ErrorVal)
+        expected = ["[_ ? @String, _ ? @String]"]
+        return argument_error("split", v, expected) unless pair?(v) && v[0].is_a?(String) && v[1].is_a?(String)
+
+        string, separator = v
+        return string.chars if separator.empty?
+
+        string.split(Regexp.new(Regexp.escape(separator)), -1)
       end
 
       def to_string(v)
@@ -361,23 +378,33 @@ module Fusion
 
       # Read from an array (integer index, negative counts from the end) or an
       # object (string key) — mirroring the `[]` operator (reference §8).
+      # A thin wrapper over `@OP.get` that reports its own `@`-reference: it
+      # re-tags any error the delegate returns. Re-tagging every such error is
+      # safe because #dispatch_apply never passes an error input into a built-in,
+      # so an `ErrorVal` here is always one the delegate produced — never a
+      # propagated input error whose original `operation` we'd need to keep.
       def get(v)
+        result = op_get(v)
+        result.is_a?(ErrorVal) ? result.with_operation("@get") : result
+      end
+
+      def op_get(v)
         return v if v.is_a?(ErrorVal)
         expected = ["[_ ? @Array, _ ? @Integer]", "[_ ? @Object, _ ? @String]"]
-        return argument_error("get", v, expected) unless pair?(v)
+        return argument_error("OP.get", v, expected) unless pair?(v)
 
         container, key = v
         if container.is_a?(Array) && key.is_a?(Integer)
           i = key.negative? ? container.length + key : key
           return container[i] if i >= 0 && i < container.length
 
-          error("access_error", "get", v, "index out of range")
+          error("access_error", "OP.get", v, "index out of range")
         elsif container.is_a?(Hash) && key.is_a?(String)
           return container[key] if container.key?(key)
 
-          error("access_error", "get", v, "missing key")
+          error("access_error", "OP.get", v, "missing key")
         else
-          argument_error("get", v, expected)
+          argument_error("OP.get", v, expected)
         end
       end
 

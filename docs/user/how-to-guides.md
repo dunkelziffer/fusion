@@ -26,7 +26,7 @@ Compute a boolean, then pipe it into a two-clause function:
 
 ```fusion
 (n =>
-  [n, 0] | @lessThan | (
+  [n, 0] | @lt | (
     true  => "negative",
     false => "non-negative"
   )
@@ -40,8 +40,8 @@ Here's an elegant way of writing FizzBuzz:
 (
   n =>
     [
-      [n, 3] | @mod,
-      [n, 5] | @mod,
+      [n, 3] | @OP.modulo,
+      [n, 5] | @OP.modulo,
     ]
       |
     (
@@ -114,14 +114,14 @@ so guard the whole array instead:
 (
   []  => "palindrome",
   [_] => "palindrome",
-  [_, ...rest, _] ? ([first, ..., last] => [first, last] | @equals) => rest | @,
+  [_, ...rest, _] ? ([first, ..., last] => [first, last] | @eq) => rest | @,
   _   => "not a palindrome"
 )
 ```
 
 The outer pattern `[_, ...rest, _]` is what you destructure for retrieving the middle
 of the array which you need to continue your recursion. The inline predicate
-`([first, ..., last] => [first, last] | @equals)` independently destructures the same
+`([first, ..., last] => [first, last] | @eq)` independently destructures the same
 array again to compare its two ends.
 
 ---

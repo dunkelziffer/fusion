@@ -237,4 +237,66 @@ RSpec.describe "stdlib error handling" do
         .out("✅", "false")
     end
   end
+
+  # @concat and @chars are stdlib wrappers over the @join / @split builtins, so
+  # their argument_errors report origin "stdlib".
+  describe "@concat" do
+    it "concatenates two strings" do
+      expect_pipe
+        .in("✅", '["a","b"]')
+        .code("(p => p | @concat)")
+        .out("✅", '"ab"')
+    end
+
+    it "concatenates with an empty string" do
+      expect_pipe
+        .in("✅", '["x",""]')
+        .code("(p => p | @concat)")
+        .out("✅", '"x"')
+    end
+
+    it "errors when an element is not a string" do
+      expect_pipe
+        .in("✅", '["a",1]')
+        .code("(p => p | @concat)")
+        .out("❌", '{"kind":"argument_error","origin":"stdlib","file":"<inline>","operation":"@concat","status":0,"input":["a",1],"expected":["[_ ? @String, _ ? @String]"]}')
+    end
+
+    it "errors on a non-pair" do
+      expect_pipe
+        .in("✅", '["a"]')
+        .code("(p => p | @concat)")
+        .out("❌", '{"kind":"argument_error","origin":"stdlib","file":"<inline>","operation":"@concat","status":0,"input":["a"],"expected":["[_ ? @String, _ ? @String]"]}')
+    end
+  end
+
+  describe "@chars" do
+    it "splits a string into its characters" do
+      expect_pipe
+        .in("✅", '"abc"')
+        .code("(s => s | @chars)")
+        .out("✅", '["a","b","c"]')
+    end
+
+    it "splits the empty string into an empty array" do
+      expect_pipe
+        .in("✅", '""')
+        .code("(s => s | @chars)")
+        .out("✅", "[]")
+    end
+
+    it "counts characters, not bytes (Unicode)" do
+      expect_pipe
+        .in("✅", '"héllo"')
+        .code("(s => s | @chars)")
+        .out("✅", '["h","é","l","l","o"]')
+    end
+
+    it "errors on a non-string" do
+      expect_pipe
+        .in("✅", "5")
+        .code("(s => s | @chars)")
+        .out("❌", '{"kind":"argument_error","origin":"stdlib","file":"<inline>","operation":"@chars","status":0,"input":5,"expected":["_ ? @String"]}')
+    end
+  end
 end

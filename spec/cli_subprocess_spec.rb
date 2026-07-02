@@ -53,7 +53,7 @@ RSpec.describe "CLI (exe/fusion)" do
 
   describe "use case selection" do
     it "starts the REPL when run with no arguments at all" do
-      out, _err, status = run_cli(stdin: "[1, 2, 3] | @length\n")
+      out, _err, status = run_cli(stdin: "[1, 2, 3] | @size\n")
       expect(out).to eq("3\n")
       expect(status.exitstatus).to eq(0)
     end
@@ -194,7 +194,7 @@ RSpec.describe "CLI (exe/fusion)" do
     end
 
     it "accepts --jail with --repl" do
-      out, _err, status = run_cli("--repl", "-j", ".", stdin: "[1, 2, 3] | @length\n")
+      out, _err, status = run_cli("--repl", "-j", ".", stdin: "[1, 2, 3] | @size\n")
       expect(out).to eq("3\n")
       expect(status.exitstatus).to eq(0)
     end
@@ -560,8 +560,8 @@ RSpec.describe "CLI (exe/fusion)" do
     end
 
     it "decodes the input as UTF-8 characters, not bytes" do
-      # "héllo ✓ 日本" is 10 characters but 17 bytes; @length must count characters.
-      out, _err, status = run_cli("-e", "(s => s | @length)", stdin: '"héllo ✓ 日本"')
+      # "héllo ✓ 日本" is 10 characters but 17 bytes; @size must count characters.
+      out, _err, status = run_cli("-e", "(s => s | @size)", stdin: '"héllo ✓ 日本"')
       expect(out).to eq("10\n")
       expect(status.exitstatus).to eq(0)
     end
@@ -585,7 +585,7 @@ RSpec.describe "CLI (exe/fusion)" do
     end
 
     it "evaluates a bare expression" do
-      out, _err, status = run_cli("--repl", stdin: "[1, 2, 3] | @length\n")
+      out, _err, status = run_cli("--repl", stdin: "[1, 2, 3] | @size\n")
       expect(out).to eq("3\n")
       expect(status.exitstatus).to eq(0)
     end

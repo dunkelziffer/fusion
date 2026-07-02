@@ -34,6 +34,17 @@ module Fusion
         self
       end
 
+      # Return a copy of this runtime error with its `operation` replaced (keeping
+      # the field's position). Used by a built-in that delegates to another
+      # operation but reports its own `@`-reference (e.g. `@get` over `@OP.get`).
+      def with_operation(operation)
+        return self unless @runtime && @payload.is_a?(Hash) && @payload.key?("operation")
+
+        copy = @payload.dup
+        copy["operation"] = operation
+        ErrorVal.new(copy, runtime: @runtime)
+      end
+
       # Was this error runtime-produced (as opposed to user-constructed via `!expr`)?
       # Runtime errors use lenient serialization (docs/user/reference.md §9.3) and
       # get a call-site `file` stamped.

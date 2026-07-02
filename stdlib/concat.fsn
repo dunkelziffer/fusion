@@ -1,0 +1,5 @@
+# Concatenate two strings. Input: [a, b]. Built on @join with an empty separator.
+(
+  [a ? @String, b ? @String] => [[a, b], ""] | @join,
+  x => !{"kind": "argument_error", "origin": "stdlib", "operation": "@concat", "status": 0, "input": x, "expected": ["[_ ? @String, _ ? @String]"]}
+)

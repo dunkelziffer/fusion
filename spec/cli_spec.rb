@@ -225,7 +225,7 @@ RSpec.describe Fusion::CLI do
 
   describe ".evaluate" do
     it "evaluates an expression to a value" do
-      result = described_class.evaluate(parse_entry("[1, 2, 3] | @length"), described_class.root_environment)
+      result = described_class.evaluate(parse_entry("[1, 2, 3] | @size"), described_class.root_environment)
       expect(result).to eq(3)
     end
 

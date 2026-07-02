@@ -313,7 +313,7 @@ particular built-ins:
   is per-call: it is not enough for the function to have *some* error clause;
   that clause must match the specific error received. An error of a shape no
   clause catches propagates unchanged.
-- **Built-in operations (`@add`, `@divide`, `@equals`, `@Integer`, …) all
+- **Built-in operations (`@add`, `@divide`, `@eq`, `@Integer`, …) all
   propagate** their input error without examining it. To inspect or compare an
   error's payload, you must catch it first and operate on the extracted payload:
   `!42 | (!a => a) | @Integer` returns `true` (the payload `42` *is* an integer);
@@ -417,20 +417,26 @@ input that is not of the queried type (they never return `!`).
 | `add`      | `[number, number]`| sum                                                                    |
 | `subtract` | `[number, number]`| difference                                                             |
 | `multiply` | `[number, number]`| product                                                                |
-| `divide`   | `[number, number]`| quotient; integer if evenly divisible, else float; `!` if divisor is 0 |
-| `mod`      | `[number, number]`| remainder; `!` if divisor is 0                                         |
+| `divide`   | `[number, number]`| quotient, always a **float**; `!` if divisor is 0                      |
 | `negate`   | `number`          | negation                                                               |
 | `floor`    | `number`          | floor (integer)                                                        |
 
+Integer division and remainder are `@OP.quotient` and `@OP.modulo` (§7.6); they
+take a pair of integers and error on any non-integer.
+
 ### 7.2 Comparison (operations)
 
-| Name        | Input                                   | Result                                   |
-| ----------- | --------------------------------------- | ---------------------------------------- |
-| `equals`    | `[any, any]`                            | deep structural equality (boolean)       |
-| `lessThan`  | `[number, number]` or `[string, string]`| boolean; `!` on mismatched/invalid types |
+| Name  | Input                                    | Result                                     |
+| ----- | ---------------------------------------- | ------------------------------------------ |
+| `eq`  | `[any, any]`                             | deep structural equality (boolean)         |
+| `lt`  | `[number, number]` or `[string, string]` | `true` if the first is strictly less       |
+| `gt`  | `[number, number]` or `[string, string]` | `true` if the first is strictly greater    |
+| `lte` | `[number, number]` or `[string, string]` | `true` if the first is `≤` the second      |
+| `gte` | `[number, number]` or `[string, string]` | `true` if the first is `≥` the second      |
 
-Other comparisons (`lessEq`, `greaterThan`, `greaterEq`, `notEquals`) are specified
-for the standard library, derivable from `equals` and `lessThan`.
+All five report `!` on mismatched/invalid types. `@OP.compare` (§7.6) gives the raw
+`-1` / `0` / `1` ordering these read off; a `notEquals` is derivable from `eq` in the
+standard library.
 
 ### 7.3 Boolean (operations)
 
@@ -447,10 +453,9 @@ is truthy except `false` and `null`), not strict booleans, and always return a b
 
 | Name          | Input                       | Result                                  |
 | ------------- | --------------------------- | --------------------------------------- |
-| `length`      | string / array / object     | element/character/key count (integer)   |
-| `concat`      | `[string, string]`          | concatenation                           |
-| `chars`       | string                      | array of single-character strings       |
-| `join`        | `[array-of-strings, string]`| joined string                           |
+| `size`        | string / array / object     | element/character/key count (integer)   |
+| `join`        | `[array-of-strings, separator]` | the elements joined by the separator string |
+| `split`       | `[string, separator]`       | array split on the **literal** separator (an empty separator splits into characters), keeping empty fields |
 | `toString`    | any                         | string form of the value                |
 | `parseNumber` | string                      | integer or float; `!` if not numeric    |
 | `keys`        | object                      | array of key strings                    |
@@ -458,6 +463,10 @@ is truthy except `false` and `null`), not strict booleans, and always return a b
 | `get`         | `[array, int]` or `[object, string-key]` | element at that index/key (like `[]`, §8); `!` if out of range / missing |
 | `set`         | `[array, int, value]` or `[object, string-key, value]` | a **new** array/object with that entry set; an array index must already exist, an object key may be new |
 | `toObject`    | `[[string-key, value], …]`  | object built from entries; later duplicate keys win |
+
+`concat` (`[string, string]` → concatenation) and `chars` (string → array of its
+characters) are **standard-library** functions built on `join` / `split`, not
+built-ins.
 
 ### 7.5 Type predicates (predicates)
 
@@ -481,7 +490,33 @@ Notes:
 - Booleans are separate from numbers. There's no automatic type conversion (`false` <-> `0`, `true` <-> `1`).
 - The set of values without JSON representation (§9.3) is exactly `Function` + `NonFinite`
 
-### 7.6 Special built-ins: `ENV` and `load`
+### 7.6 The `@OP` object (sugar-target operations)
+
+`@OP` is a built-in **object**, reached by member access (`@OP.sum`, `@OP.and`, …). It
+bundles the operations slated to gain infix syntax sugar later. Its arithmetic,
+boolean, and equality members generalise their two-argument cousins above to an
+**array of any length**; `compare` reports an ordering. Several top-level built-ins are
+thin wrappers over these — `@add` over `@OP.sum`, `@multiply` over `@OP.product`,
+`@subtract`/`@divide` over sum-of-negate / product-of-invert, `@eq` over `@OP.equal`,
+`@lt`/`@gt`/`@lte`/`@gte` over `@OP.compare`, `@and`/`@or`/`@not` over their `@OP`
+namesakes, and `@get` over `@OP.get` — so a wrapper's errors report the wrapper's own name.
+
+| Member        | Input                                    | Result                                                   |
+| ------------- | ---------------------------------------- | -------------------------------------------------------- |
+| `OP.sum`      | array of numbers                         | sum (`0` for `[]`)                                        |
+| `OP.product`  | array of numbers                         | product (`1` for `[]`)                                    |
+| `OP.negate`   | number                                   | negation                                                 |
+| `OP.invert`   | number                                   | reciprocal `1/x`, always a float; `!` if `0`             |
+| `OP.quotient` | `[integer, integer]`                     | integer division; `!` on a non-integer or a `0` divisor  |
+| `OP.modulo`   | `[integer, integer]`                     | integer remainder; `!` on a non-integer or a `0` divisor |
+| `OP.equal`    | array (any element types)                | deep equality: `true` iff every element equals the first |
+| `OP.compare`  | `[number, number]` or `[string, string]` | `-1` / `0` / `1` (first smaller / equal / larger)        |
+| `OP.and`      | array                                    | `true` if every element is truthy (`true` for `[]`)      |
+| `OP.or`       | array                                    | `true` if any element is truthy (`false` for `[]`)       |
+| `OP.not`      | `_`                                      | `true` if the operand is falsey                          |
+| `OP.get`      | `[array, int]` or `[object, string-key]` | element at that index/key; `!` if out of range / missing |
+
+### 7.7 Special built-ins: `ENV` and `load`
 
 These resolve in the `@name` chain like other built-ins (so a sibling file of the
 same name shadows them), but they are not plain unary value functions:

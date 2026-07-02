@@ -286,7 +286,7 @@ RSpec.describe "@OP builtin" do
         .out("✅", "false")
     end
 
-    it "compares a pair, like @equals" do
+    it "compares a pair, like @eq" do
       expect_pipe
         .in("✅", "[1,2]")
         .code("(v => v | @OP.equal)")
@@ -337,7 +337,7 @@ RSpec.describe "@OP builtin" do
   end
 
   # @OP.compare orders a pair of numbers or a pair of strings: -1 (first smaller),
-  # 0 (equal), 1 (first bigger). No deep equality; same allowed inputs as @lessThan.
+  # 0 (equal), 1 (first bigger). No deep equality; same allowed inputs as @lt.
   describe "@OP.compare" do
     it "is -1 when the first number is smaller" do
       expect_pipe
@@ -527,6 +527,52 @@ RSpec.describe "@OP builtin" do
         .in("✅", "0")
         .code("(v => v | @OP.not)")
         .out("✅", "false")
+    end
+  end
+
+  # @OP.get reads an array element by integer index (negatives count from the
+  # end) or an object value by string key. @get is a thin wrapper over it.
+  describe "@OP.get" do
+    it "reads an array element by index" do
+      expect_pipe
+        .in("✅", "[10,20,30]")
+        .code("(a => [a, 1] | @OP.get)")
+        .out("✅", "20")
+    end
+
+    it "reads by a negative index from the end" do
+      expect_pipe
+        .in("✅", "[10,20,30]")
+        .code("(a => [a, -1] | @OP.get)")
+        .out("✅", "30")
+    end
+
+    it "reads an object value by key" do
+      expect_pipe
+        .in("✅", '{"a":1,"b":2}')
+        .code('(o => [o, "b"] | @OP.get)')
+        .out("✅", "2")
+    end
+
+    it "errors with access_error on a missing key" do
+      expect_pipe
+        .in("✅", '{"a":1}')
+        .code('(o => [o, "z"] | @OP.get)')
+        .out("❌", '{"kind":"access_error","origin":"builtin","file":"<inline>","operation":"@OP.get","status":0,"input":[{"a":1},"z"],"message":"missing key"}')
+    end
+
+    it "errors with access_error when an index is out of range" do
+      expect_pipe
+        .in("✅", "[10,20]")
+        .code("(a => [a, 5] | @OP.get)")
+        .out("❌", '{"kind":"access_error","origin":"builtin","file":"<inline>","operation":"@OP.get","status":0,"input":[[10,20],5],"message":"index out of range"}')
+    end
+
+    it "errors on a wrong-typed address" do
+      expect_pipe
+        .in("✅", "[1,2]")
+        .code('(a => [a, "x"] | @OP.get)')
+        .out("❌", '{"kind":"argument_error","origin":"builtin","file":"<inline>","operation":"@OP.get","status":0,"input":[[1,2],"x"],"expected":["[_ ? @Array, _ ? @Integer]","[_ ? @Object, _ ? @String]"]}')
     end
   end
 

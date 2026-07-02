@@ -79,9 +79,9 @@ Future work and open questions are tracked separately in our [Roadmap](./roadmap
 ### Decisions
 
 - 🧑 ✅ Integers and floats are distinct kinds.
-- 🤖 ✅ `divide` returns an integer when evenly divisible and a float otherwise.
+- 🤖 ⏪ `divide` returned an integer when evenly divisible, a float otherwise; it is now always a float, with integer division split out to `@OP.quotient` (§5.5).
 - 🤖 ✅ `floor` returns an integer.
-- 🤖 ✅ `equals` is exact.
+- 🤖 ✅ `eq` is exact.
 
 ### Alternatives
 
@@ -232,7 +232,7 @@ Future work and open questions are tracked separately in our [Roadmap](./roadmap
 - Unifies three things (structural matching, type checks, value guards) into one mechanism.
 - The "type system" is user-extensible with ordinary functions.
 - Nothing new to learn beyond `?`.
-- Predicates compose directly (`a ? @ends | @equals`) instead of requiring a wrapping function (`a ? (x => x | @ends | @equals)`).
+- Predicates compose directly (`a ? @ends | @eq`) instead of requiring a wrapping function (`a ? (x => x | @ends | @eq)`).
 
 ### Cons
 
@@ -336,7 +336,7 @@ Future work and open questions are tracked separately in our [Roadmap](./roadmap
 - 🧑 ✅ In expression position, `!expr` is a prefix operator that wraps a value as an error; in pattern position, `!pat` matches an error and destructures its payload (bare `!` matches any error without binding; `!_` does the same but admits a `?` predicate).
 - 🧑 ✅ Propagation preserves the *same* error (payload intact), so by the time you reach a catch site you still know what happened.
 - 🧑 ✅ The CLI prints the payload (as JSON) to stderr on failure and exits `1`, leaving stdout empty.
-- 🧑 ✅ **Errors propagate uniformly — they are not values.** At any moment of execution there is either a value or an error in motion, never both. Built-ins (including `@equals` and the type predicates), array and object literals, `?` predicates, and the function-value position of a pipe all propagate an encountered error. The only way to do anything with an error besides letting it propagate is to catch it in an `!pat` clause, which yields a normal value (the payload).
+- 🧑 ✅ **Errors propagate uniformly — they are not values.** At any moment of execution there is either a value or an error in motion, never both. Built-ins (including `@eq` and the type predicates), array and object literals, `?` predicates, and the function-value position of a pipe all propagate an encountered error. The only way to do anything with an error besides letting it propagate is to catch it in an `!pat` clause, which yields a normal value (the payload).
 - 🧑 ✅ **No nested errors.** When `!expr` is evaluated and `expr` itself produces an error, that inner error propagates and the outer `!` is a no-op. This preserves the "never more than one error simultaneously" invariant — there is no `!!` value, ever.
 - 🧑 ✅ **Partial matching propagates the unmatched error.** A function with error clauses that match *some* error shapes (e.g. `!42 => ...`) but not the one it receives (e.g. `!"oops"`) propagates the unmatched error rather than turning it into `null`. The "no match → null" lenient default from 2.7 applies only to non-error inputs.
 - 🧑 ✅ **`!pat` is a top-level prefix in the clause grammar.** `!` is a prefix on the *clause pattern*, not on any sub-pattern: array elements, object members, and the payload of another `!` all recurse into the non-`!` pattern production. This grammar shape simultaneously enforces two things with no special-case parsing flag: (i) nested error patterns (`[!a, b]`, `{"err": !x}`, `!!42`, `!{"k": !v}`) are syntax errors, matching the runtime invariant that errors never sit inside other values; and (ii) `!pat ? pred` parses as `!(pat ? pred)`, so the `?` binds *inside* the `!`. The runtime payoff is that the predicate of `!a ? pred` naturally sees the payload, with no special case needed in `PGuard`.
@@ -347,7 +347,7 @@ Future work and open questions are tracked separately in our [Roadmap](./roadmap
 - 🧑 ⏪ Keep `!` opaque with no payload (the original error model, superseded because it was too hard to debug).
 - 🤖 💭 Use a `Result`-style two-variant `Ok | Err` (hypothetical: needs new machinery; payloaded errors with propagation give the same ergonomics with two rules).
 - 🤖 ❌ Make payloads always strings (Claude's first payload sketch, e.g. `!"divide by zero"`; rejected because built-in mechanics like missing keys benefit from structured payloads).
-- 🤖 ⏪ Make errors first-class values that can be stored in collections, compared with `@equals`, and inspected by predicates (Claude implemented this reading; the designer corrected it because it creates carve-outs in propagation that contradict the "never more than one error" invariant).
+- 🤖 ⏪ Make errors first-class values that can be stored in collections, compared with `@eq`, and inspected by predicates (Claude implemented this reading; the designer corrected it because it creates carve-outs in propagation that contradict the "never more than one error" invariant).
 - 🤖 ⏪ Parse `!pat ? pred` as `(!pat) ? pred` so the predicate refines the whole error rather than the payload (Claude parsed it this way; the designer corrected it to `!(pat ? pred)` so the predicate sees the payload, matching its sibling binders).
 
 ### Pros
@@ -477,7 +477,7 @@ Refines §2.9: same general shape, more orthogonal fields, field values easier t
 - 🧑 ✅ Split `status` out from `input`. `status` is `0` (a value) or `1` (an error). On `1`, `input` carries the error's bare payload, so `input` is always valid JSON.
 - 🧑 ✅ `operation` now contains the failing operation's own **`@`-reference** (`@`, `@@`, `@add`, `@math/square`, `@../mod`, , `@load`) or for Built-in *syntax* its own form (`|`, `.key`, `[]`, `parsing code`). Loading the top-level program file is `loading code` (not an `@`-reference).
 - 🧑 ✅ An `@`-reference takes no argument, so its `input` is `null` and its `status` is always `0`. `@load` is the exception: it's a function taking a filename.
-- 🧑 ✅ For *access errors* the "key" appears only once: `.name` carries the static key in `operation` and the object alone in `input`; `[]` is generic in `operation` with `input` = `[collection, key]` (the key is a dynamic value, and `[]` will later desugar to `@get`).
+- 🧑 ✅ For *access errors* the "key" appears only once: `.name` carries the static key in `operation` and the object alone in `input`; `[]` is generic in `operation` with `input` = `[collection, key]` (the key is a dynamic value, and `[]` will later desugar to `@OP.get`).
 - 🧑 ✅ A failure to read a file (missing file, directory given, access denied) is reported as `"operation": <the literal @-reference>`, `"input": null`, `"file": <the referring call site>`.
 - 🧑 ✅ `type_error` is merged into `argument_error`. The distinction between *wrong shape* and *wrong type* didn't fit Fusion's runtime type system.
 - 🧑 ✅ `expected` lists the acceptable inputs as Fusion patterns (the input matched none); an error with `expected` never also carries a `message`.
@@ -904,7 +904,7 @@ TODO: Under `-!` the input is the error payload, so empty stdin is a usage error
 
 - 🧑 ✅ No infix `+ - * / == < && …`.
 - 🧑 ✅ Arithmetic, comparison, and boolean operations are built-in functions applied to a pair, e.g. `[a, b] | @add`.
-- 🧑 ✅ Sugar is explicitly deferred, not rejected.
+- 🧑 ✅ Sugar is explicitly deferred, not rejected; the operations it will desugar to are grouped under `@OP` (§5.5).
 
 ### Alternatives
 
@@ -951,16 +951,18 @@ TODO: Under `-!` the input is the error payload, so empty stdin is a usage error
 
 - 🤖 ✅ Only things that can't be built in Fusion itself become a builtin. Other frequently used functions become part of the standard library.
 - 🤖 ✅ The interpreter provides these builtins:
-  - arithmetic (`add`, `subtract`, `multiply`, `divide`, `mod`, `negate`, `floor`);
-  - comparison (`equals`, `lessThan`);
+  - arithmetic (`add`, `subtract`, `multiply`, `divide`, `negate`, `floor`);
+  - comparison (`eq`, `lt`, `gt`, `lte`, `gte`);
   - boolean (`and`, `or`, `not`);
-  - bridges (`length`, `concat`, `chars`, `join`, `toString`, `parseNumber`, `keys`, `values`);
-  - predicates (`Integer`, `Float`, `Number`, `String`, `Boolean`, `Array`, `Object`, `Null`).
+  - bridges (`size`, `join`, `split`, `toString`, `parseNumber`, `keys`, `values`, `get`, `set`, `toObject`);
+  - predicates (`Integer`, `Float`, `Number`, `String`, `Boolean`, `Array`, `Object`, `Null`, `Function`, `NonFinite`);
+  - the `@OP` object (§5.5).
 - 🤖 ✅ `keys` must be a builtin: pattern matching can pull *known* object keys but cannot enumerate *unknown* ones, so iterating an object of unknown shape is impossible without it.
+- 🧑 ⏪ The set was reworked in §5.5: `equals`/`lessThan`/`length` renamed to `eq`/`lt`/`size`, `mod`/`concat`/`chars` dropped from the built-ins (`concat`/`chars` are now stdlib), and the sugar-target operations grouped under `@OP`.
 
 ### Alternatives
 
-- 🤖 ❌ Derive `lessThan`'s siblings as built-ins too (chose to leave `lessEq`/`greaterThan`/etc. to the library).
+- 🤖 ⏪ Leave `lessEq`/`greaterThan`/etc. to the library. Reversed in §5.5: `gt`/`lte`/`gte` are built-ins reading off `@OP.compare`.
 - 🤖 ❌ Omit `values` (derivable from `keys`).
 
 ### Pros
@@ -1007,6 +1009,30 @@ TODO: Under `-!` the input is the error payload, so empty stdin is a usage error
 
 ---
 
-## 5.5 `@OP`: grouping the operations that will get infix sugar
+## 5.5 `@OP`: the operation set behind future infix sugar
 
-TODO (summarize at session end).
+### Decisions
+
+- 🧑 ✅ `@OP` is a built-in **object**; its members (`@OP.sum`, `@OP.and`, …) are the operations that will gain infix sugar. The sugar itself is not built yet.
+- 🧑 ✅ The arithmetic/boolean/equality members take an array of **any length**: `sum`/`product` fold a numeric array (`[]` → `0`/`1`), `and`/`or` fold truthiness (`[]` → `true`/`false`), `equal` is deep and true iff every element equals the first.
+- 🧑 ✅ `@OP.compare` returns `-1`/`0`/`1` for a pair of two numbers or two strings; built on `<` so a NaN operand gives `0`, never a non-value.
+- 🧑 ✅ Division and reciprocal are float-only (`@divide`, `@OP.invert`); integer division is the separate integer-only pair `@OP.quotient` / `@OP.modulo`, which error on any non-integer. `@mod` is dropped.
+- 🧑 ✅ The two-argument built-ins remain as thin derivations of the `@OP` members (`@add`/`@subtract` over `sum`, `@multiply`/`@divide` over `product`, `@eq` over `equal`, `@lt`/`@gt`/`@lte`/`@gte` over `compare`, `@and`/`@or`/`@not` and `@get` over their namesakes), each keeping its own `@`-reference in an error's `operation` — a delegating wrapper re-tags the delegate's error.
+- 🧑 ✅ Renames `equals`→`eq`, `lessThan`→`lt`, `length`→`size`; new comparisons `gt`/`lte`/`gte`.
+- 🧑 ✅ `@join` is `[items, separator]`; the new inverse `@split` is `[string, separator]`, splitting on the **literal** separator (no whitespace special-case), keeping empty fields, with an empty separator meaning "characters".
+- 🧑 ✅ `@concat` and `@chars` leave the built-ins and become stdlib functions over `@join` / `@split`.
+
+### Alternatives
+
+- 🤖 ⏪ Keep every operation as its own two-argument built-in (the §5.3 set). Superseded: the sugar targets want n-ary, generalized forms grouped in one place.
+- 🤖 ❌ Derive `@divide` literally as `product(a, invert(b))`. Rejected: double-rounding makes some results wrong in the last digit (`3/5` → `0.6000000000000001`); `@divide` computes `a/b` directly.
+- 🤖 ❌ Let `@OP.compare` return Ruby's `nil` for a NaN operand. Rejected: `nil` is not a Fusion value; `0` keeps the result total.
+
+### Pros
+
+- One place to reach for the operations sugar will target, and the n-ary forms (`sum`, `and`, `equal`) map cleanly onto variadic operators.
+- Keeping the two-argument built-ins as thin wrappers leaves existing code and error identities unchanged.
+
+### Cons
+
+- Two names for the same operation during the transition (`@add` and `@OP.sum`).

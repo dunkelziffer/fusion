@@ -32,7 +32,7 @@ RSpec.describe Fusion::CLI::Repl do
 
     it "is complete for a whole statement or expression" do
       expect(repl.complete?("x = 5")).to be(true)
-      expect(repl.complete?("[1, 2, 3] | @length")).to be(true)
+      expect(repl.complete?("[1, 2, 3] | @size")).to be(true)
       expect(repl.complete?("[\n  1,\n  2\n]")).to be(true)
     end
 
@@ -51,7 +51,7 @@ RSpec.describe Fusion::CLI::Repl do
 
   describe "#handle (expressions)" do
     it "evaluates and renders an expression without binding anything" do
-      expect(repl.handle("[1, 2, 3] | @length", environment)).to eq("3")
+      expect(repl.handle("[1, 2, 3] | @size", environment)).to eq("3")
     end
 
     it "renders an error expression with a `!` prefix" do
