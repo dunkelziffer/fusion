@@ -45,6 +45,24 @@ module Fusion
         ErrorVal.new(copy, runtime: @runtime)
       end
 
+      # True if this is a runtime error the operation produced *itself*, freshly,
+      # not yet stamped with a call-site `file`. An error bubbling up from within
+      # (a nested operation) is already file-stamped, so this is false for it —
+      # letting a wrapper re-tag only its own error (see #apply_op_member).
+      def own_runtime_error?
+        @runtime && @payload.is_a?(Hash) && !@payload.key?("file")
+      end
+
+      # Return a copy with `origin` and `operation` replaced (keeping their
+      # positions). The caller must ensure this is the operation's own error
+      # (#own_runtime_error?).
+      def retag(origin:, operation:)
+        copy = @payload.dup
+        copy["origin"] = origin
+        copy["operation"] = operation
+        ErrorVal.new(copy, runtime: @runtime)
+      end
+
       # Was this error runtime-produced (as opposed to user-constructed via `!expr`)?
       # Runtime errors use lenient serialization (docs/user/reference.md §9.3) and
       # get a call-site `file` stamped.

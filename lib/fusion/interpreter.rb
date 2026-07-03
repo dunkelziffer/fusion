@@ -107,6 +107,15 @@ module Fusion
       @file_cache[abspath] ||= Thunk.new { evaluate_file(abspath) }
     end
 
+    # Load a standard-library function by name as a first-class value. It shares
+    # the file cache, so this is the very `Func` that `@name` resolves to — used
+    # to expose a stdlib function inside a builtin object (e.g. `@map` as
+    # `@OP.map`). Loading only builds the function's closure; its body (and the
+    # `@`-references in it) runs later, when the function is applied.
+    def stdlib_function(name)
+      load_file(File.join(@stdlib_dir, "#{name}.fsn")).force
+    end
+
     # A file path for error payloads: relative to the working directory, so a
     # payload carries no machine-specific absolute prefix (and stays stable when
     # a whole project is moved together).
@@ -486,6 +495,19 @@ module Fusion
       result.is_a?(ErrorVal) ? result.with_call_site(call_site) : result
     end
 
+    # Apply a stdlib function that is exposed as a builtin `@OP` member. Threads
+    # the call site through, then re-tags the delegate's OWN error (a fresh,
+    # not-yet-file-stamped runtime error) to this member's builtin identity —
+    # e.g. `@map`'s bad-bundle error becomes `origin: builtin, operation: @OP.map`.
+    # Errors bubbling up from within the delegate (from `f`, already file-stamped)
+    # pass through untouched, keeping their own origin/operation.
+    def apply_op_member(func, v, call_site, operation)
+      result = dispatch_apply(func, v, call_site)
+      return result unless result.is_a?(ErrorVal) && result.own_runtime_error?
+
+      result.retag(origin: "builtin", operation: operation)
+    end
+
     def dispatch_apply(f, v, call_site)
       if f.is_a?(ErrorVal)
         # Propagate errors
@@ -501,7 +523,7 @@ module Fusion
         # Safety net: a builtin that raises a Ruby error (e.g. a domain error)
         # becomes a payloaded error rather than a raw backtrace on stderr.
         begin
-          f.fn.call(v)
+          f.needs_call_site? ? f.fn.call(v, call_site) : f.fn.call(v)
         rescue StandardError => err
           # TODO: move math errors into the builtins. This should become a safety net for unpredicted errors.
           kind = (err.is_a?(FloatDomainError) || err.is_a?(ZeroDivisionError)) ? "math_error" : "internal_error"

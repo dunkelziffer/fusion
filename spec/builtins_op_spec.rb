@@ -576,6 +576,42 @@ RSpec.describe "@OP builtin" do
     end
   end
 
+  # @OP.map is a stdlib function (`@map`) hooked into the OP object — the same
+  # Func, so it behaves identically (arrays and objects) and errors report @map.
+  describe "@OP.map" do
+    it "maps over an array like @map" do
+      expect_pipe
+        .in("✅", "[1,2,3]")
+        .code('(xs => {"f": (n => [n, 2] | @OP.product), "xs": xs} | @OP.map)')
+        .out("✅", "[2,4,6]")
+    end
+
+    it "maps over an object's values like @map" do
+      expect_pipe
+        .in("✅", '{"a":1,"b":2}')
+        .code('(o => {"f": (n => [n, 2] | @OP.product), "xs": o} | @OP.map)')
+        .out("✅", '{"a":2,"b":4}')
+    end
+
+    # @OP.map's OWN bad-bundle error is re-tagged from stdlib @map to builtin
+    # @OP.map, so it reads like the other @OP members.
+    it "re-tags its own bad-bundle error to @OP.map / builtin" do
+      expect_pipe
+        .in("✅", "5")
+        .code("(x => x | @OP.map)")
+        .out("❌", '{"kind":"argument_error","origin":"builtin","file":"<inline>","operation":"@OP.map","status":0,"input":5,"expected":["{\"f\": _ ? @Function, \"xs\": _ ? @Array}","{\"f\": _ ? @Function, \"xs\": _ ? @Object}"]}')
+    end
+
+    # An error bubbling up from `f` is NOT re-tagged — it keeps its own origin
+    # and operation (transparency).
+    it "leaves an inner error from f untouched" do
+      expect_pipe
+        .in("✅", '[["a","b"]]')
+        .code('(xs => {"f": @OP.sum, "xs": xs} | @OP.map)')
+        .out("❌", '{"kind":"argument_error","origin":"builtin","file":"<inline>","operation":"@OP.sum","status":0,"input":["a","b"],"expected":["_ ? (xs => {\"xs\": xs, \"f\": @Number} | @all)"]}')
+    end
+  end
+
   # Errors propagate through an OP member just like any builtin: an error input is
   # returned untouched (the member is never invoked on it).
   describe "error propagation" do

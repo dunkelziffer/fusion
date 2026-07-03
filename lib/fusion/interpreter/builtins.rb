@@ -52,6 +52,7 @@ module Fusion
         # `OP` bundles the operations slated for infix syntax sugar (a later
         # step). Reached as `@OP.and`, `@OP.sum`, … — a member access on this
         # builtin object, whose values are native functions.
+        map_func = interp.stdlib_function("map")
         table["OP"] = {
           "sum"      => NativeFunc.new("OP.sum", method(:op_sum)),
           "product"  => NativeFunc.new("OP.product", method(:op_product)),
@@ -65,6 +66,12 @@ module Fusion
           "or"       => NativeFunc.new("OP.or", method(:op_or)),
           "not"      => NativeFunc.new("OP.not", method(:op_not)),
           "get"      => NativeFunc.new("OP.get", method(:op_get)),
+          # A stdlib function (`@map`) hooked in as an `@OP` member: applied like
+          # `@map`, but its OWN bad-bundle error is re-tagged from stdlib `@map`
+          # to builtin `@OP.map`; an error bubbling up from `f` passes through.
+          "map"      => NativeFunc.new("OP.map", lambda do |v, call_site|
+            interp.apply_op_member(map_func, v, call_site, "@OP.map")
+          end, needs_call_site: true),
         }
       end
 

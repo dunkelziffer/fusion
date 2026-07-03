@@ -1022,6 +1022,7 @@ TODO: Under `-!` the input is the error payload, so empty stdin is a usage error
 - 🧑 ✅ Renames `equals`→`eq`, `lessThan`→`lt`, `length`→`size`; new comparisons `gt`/`lte`/`gte`.
 - 🧑 ✅ `@join` is `[items, separator]`; the new inverse `@split` is `[string, separator]`, splitting on the **literal** separator (no whitespace special-case), keeping empty fields, with an empty separator meaning "characters".
 - 🧑 ✅ `@concat` and `@chars` leave the built-ins and become stdlib functions over `@join` / `@split`.
+- 🧑 ✅ An `@OP` member may delegate to a stdlib function: `@OP.map` applies the stdlib `@map` (loaded via the shared file cache) but re-tags `@map`'s own error to `origin: builtin, operation: @OP.map`; an inner error from `f` bubbles through unchanged. The delegate's own error is distinguished by being a fresh, not-yet-file-stamped runtime error.
 
 ### Alternatives
 

@@ -500,6 +500,10 @@ thin wrappers over these — `@add` over `@OP.sum`, `@multiply` over `@OP.produc
 `@subtract`/`@divide` over sum-of-negate / product-of-invert, `@eq` over `@OP.equal`,
 `@lt`/`@gt`/`@lte`/`@gte` over `@OP.compare`, `@and`/`@or`/`@not` over their `@OP`
 namesakes, and `@get` over `@OP.get` — so a wrapper's errors report the wrapper's own name.
+A member may also delegate to a standard-library function: `@OP.map` applies the stdlib
+`@map`, but re-tags `@map`'s own bad-input error to `origin: builtin, operation: @OP.map`
+(so it reads like the other members). An error bubbling up from the supplied `f` passes
+through untouched, keeping its own origin and operation.
 
 | Member        | Input                                    | Result                                                   |
 | ------------- | ---------------------------------------- | -------------------------------------------------------- |
@@ -515,6 +519,7 @@ namesakes, and `@get` over `@OP.get` — so a wrapper's errors report the wrappe
 | `OP.or`       | array                                    | `true` if any element is truthy (`false` for `[]`)       |
 | `OP.not`      | `_`                                      | `true` if the operand is falsey                          |
 | `OP.get`      | `[array, int]` or `[object, string-key]` | element at that index/key; `!` if out of range / missing |
+| `OP.map`      | `{"f": fn, "xs": array-or-object}`       | delegates to the standard-library `@map` (own error re-tagged to `@OP.map`) |
 
 ### 7.7 Special built-ins: `ENV` and `load`
 
