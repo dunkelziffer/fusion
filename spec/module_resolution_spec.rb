@@ -4,18 +4,32 @@
 # self-recursion, @ENV and @load. Fixtures live in spec/fixtures/ref/.
 RSpec.describe "@-resolution" do
   describe "sibling files shadow builtins" do
-    it "lets a sibling add.fsn shadow the builtin @add" do
+    it "lets a sibling add.fsn shadow @add" do
       expect_pipe
         .in("✅", "null")
         .file_path("ref/usesAdd.fsn")
         .out("✅", '"shadowed-add"')
     end
 
-    it "falls back to the builtin @add when there is no sibling" do
+    it "falls back to the default @add when there is no sibling" do
       expect_pipe
         .in("✅", "null")
         .file_path("ref/sub/usesBuiltinAdd.fsn")
         .out("✅", "5")
+    end
+  end
+
+  # The operators live in the shadowable `@OP` object; the derived helpers
+  # (`@add`, …) build on `@OP.*` and resolve it in their own directory. So an
+  # `OP.fsn` override reskins both the operators and any local helper that
+  # derives from them.
+  describe "reskinning @OP per directory" do
+    it "makes a local @add follow an OP.fsn override of @OP.sum" do
+      # ref/reskin/OP.fsn overrides `sum`; both @OP.sum and the local @add see it.
+      expect_pipe
+        .in("✅", "[1,2]")
+        .file_path("ref/reskin/probe.fsn")
+        .out("✅", '["reskinned","reskinned"]')
     end
   end
 
@@ -49,6 +63,34 @@ RSpec.describe "@-resolution" do
       expect_pipe
         .code("@@")
         .out("❌", '{"kind":"reference_error","origin":"code","file":"<inline>","operation":"@@","status":0,"input":null,"message":"no enclosing file"}')
+    end
+  end
+
+  # `@@name` is the stable form: it resolves `name` skipping the sibling `name.fsn`,
+  # so a local shadow can't intercept it (used by error patterns and escape hatches).
+  describe "@@name stable references" do
+    it "skips a sibling shadow and reaches the stdlib" do
+      # ref/stable/all.fsn shadows @all; @all hits it ("shadowed"), @@all doesn't.
+      expect_pipe
+        .in("✅", '["a","b"]')
+        .file_path("ref/stable/probe.fsn")
+        .out("✅", '["shadowed",true]')
+    end
+
+    it "resolves a stable builtin regardless of shadowing" do
+      expect_pipe
+        .in("✅", "5")
+        .code("(x => x | @@Integer)")
+        .out("✅", "true")
+    end
+
+    it "rejects an upward @@../ path as a syntax error" do
+      expect_pipe
+        .code("(_ => @@../x)")
+        .out("❌", a_string_including(
+          '"kind":"syntax_error"', '"origin":"code"', '"file":"<inline>"', '"operation":"parsing code"',
+          '"message":'
+        ))
     end
   end
 

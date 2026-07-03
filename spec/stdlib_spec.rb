@@ -286,4 +286,72 @@ RSpec.describe "stdlib error handling" do
         .out("❌", '{"kind":"argument_error","origin":"stdlib","file":"<inline>","operation":"@chars","status":0,"input":5,"expected":["_ ? @String"]}')
     end
   end
+
+  # The friendly binary operators are stdlib files that derive from @OP.* (so they
+  # follow a per-directory @OP override). They only shape-check "a pair"; a type
+  # mismatch is left to @OP.* and bubbles through with the @OP member's identity.
+  describe "derived operators (built on @OP)" do
+    it "@add sums a pair" do
+      expect_pipe
+        .in("✅", "[2,3]")
+        .code("(p => p | @add)")
+        .out("✅", "5")
+    end
+
+    it "@subtract subtracts (via @OP.sum of a negated operand)" do
+      expect_pipe
+        .in("✅", "[5,3]")
+        .code("(p => p | @subtract)")
+        .out("✅", "2")
+    end
+
+    it "@multiply multiplies" do
+      expect_pipe
+        .in("✅", "[3,4]")
+        .code("(p => p | @multiply)")
+        .out("✅", "12")
+    end
+
+    it "@eq is deep equality" do
+      expect_pipe
+        .in("✅", "[[1,[2]],[1,[2]]]")
+        .code("(p => p | @eq)")
+        .out("✅", "true")
+    end
+
+    it "@lt / @gt / @lte / @gte read off @OP.compare" do
+      expect_pipe
+        .in("✅", "[1,2]")
+        .code('(p => [p | @lt, p | @gt, p | @lte, p | @gte])')
+        .out("✅", "[true,false,true,false]")
+    end
+
+    it "@lte and @gte are true at equality" do
+      expect_pipe
+        .in("✅", "[2,2]")
+        .code('(p => [p | @lte, p | @gte])')
+        .out("✅", "[true,true]")
+    end
+
+    it "errors with a stdlib argument_error on a non-pair" do
+      expect_pipe
+        .in("✅", "5")
+        .code("(p => p | @add)")
+        .out("❌", '{"kind":"argument_error","origin":"stdlib","file":"<inline>","operation":"@add","status":0,"input":5,"expected":["[_, _]"]}')
+    end
+
+    it "lets a type mismatch bubble through as the @OP member's error" do
+      expect_pipe
+        .in("✅", '[1,"x"]')
+        .code("(p => p | @add)")
+        .out("❌", '{"kind":"argument_error","origin":"builtin","file":"<inline>","operation":"@OP.sum","status":0,"input":[1,"x"],"expected":["_ ? (xs => {\"xs\": xs, \"f\": @Number} | @all)"]}')
+    end
+
+    it "@lt on mixed types bubbles the @OP.compare error" do
+      expect_pipe
+        .in("✅", '[1,"a"]')
+        .code("(p => p | @lt)")
+        .out("❌", '{"kind":"argument_error","origin":"builtin","file":"<inline>","operation":"@OP.compare","status":0,"input":[1,"a"],"expected":["[_ ? @Number, _ ? @Number]","[_ ? @String, _ ? @String]"]}')
+    end
+  end
 end

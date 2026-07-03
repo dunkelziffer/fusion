@@ -1,0 +1,5 @@
+# a + b — derives from @OP.sum, so it follows a per-directory @OP override.
+(
+  [a, b] => [a, b] | @OP.sum,
+  x => !{"kind": "argument_error", "origin": "stdlib", "operation": "@add", "status": 0, "input": x, "expected": ["[_, _]"]}
+)

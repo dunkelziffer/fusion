@@ -11,21 +11,12 @@ module Fusion
         @interp = interp
         define = ->(name, fn) { table[name] = NativeFunc.new(name, fn) }
 
-        # operations on a pair [a, b] (or a single value)
-        define.call("add", method(:add))
-        define.call("subtract", method(:subtract))
-        define.call("multiply", method(:multiply))
+        # Irreducible primitives kept as built-ins. The sugar-target operators
+        # (arithmetic/comparison/boolean) live in `@OP` below; their friendly
+        # derived forms (`@add`, `@eq`, `@lt`, …) are stdlib files that build on
+        # `@OP.*`, so they follow a per-directory `@OP` override.
         define.call("divide", method(:divide))
-        define.call("negate", method(:negate))
         define.call("floor", method(:floor))
-        define.call("eq", method(:eq))
-        define.call("lt", method(:lt))
-        define.call("gt", method(:gt))
-        define.call("lte", method(:lte))
-        define.call("gte", method(:gte))
-        define.call("and", method(:and_))
-        define.call("or", method(:or_))
-        define.call("not", method(:not_))
         define.call("size", method(:size))
         define.call("join", method(:join))
         define.call("split", method(:split))
@@ -49,10 +40,11 @@ module Fusion
         define.call("Function", method(:function?))
         define.call("NonFinite", method(:non_finite?))
 
-        # `OP` bundles the operations slated for infix syntax sugar (a later
-        # step). Reached as `@OP.and`, `@OP.sum`, … — a member access on this
-        # builtin object, whose values are native functions.
-        map_func = interp.stdlib_function("map")
+        # `OP` bundles the sugar-target operators as a shadowable builtin object,
+        # reached as `@OP.sum`, `@OP.and`, … A directory can swap the operators by
+        # placing an `OP.fsn` sibling that overrides members (reaching the
+        # originals with `@@`); infix sugar and the derived stdlib helpers resolve
+        # `@OP` per directory, so they follow the override.
         table["OP"] = {
           "sum"      => NativeFunc.new("OP.sum", method(:op_sum)),
           "product"  => NativeFunc.new("OP.product", method(:op_product)),
@@ -65,13 +57,6 @@ module Fusion
           "and"      => NativeFunc.new("OP.and", method(:op_and)),
           "or"       => NativeFunc.new("OP.or", method(:op_or)),
           "not"      => NativeFunc.new("OP.not", method(:op_not)),
-          "get"      => NativeFunc.new("OP.get", method(:op_get)),
-          # A stdlib function (`@map`) hooked in as an `@OP` member: applied like
-          # `@map`, but its OWN bad-bundle error is re-tagged from stdlib `@map`
-          # to builtin `@OP.map`; an error bubbling up from `f` passes through.
-          "map"      => NativeFunc.new("OP.map", lambda do |v, call_site|
-            interp.apply_op_member(map_func, v, call_site, "@OP.map")
-          end, needs_call_site: true),
         }
       end
 
@@ -79,31 +64,6 @@ module Fusion
 
       NUMBER_PAIR = ["[_ ? @Number, _ ? @Number]"].freeze
       NUMBER_ARRAY = ['_ ? (xs => {"xs": xs, "f": @Number} | @all)'].freeze
-
-      # `add` is `@OP.sum` restricted to a numeric pair; it keeps its own shape
-      # check so its `expected` stays the binary `[Number, Number]`.
-      def add(v)
-        return v if v.is_a?(ErrorVal)
-        return argument_error("add", v, NUMBER_PAIR) unless pair?(v) && numeric?(v[0]) && numeric?(v[1])
-
-        op_sum(v)
-      end
-
-      # `subtract` is `@OP.sum` with the second operand negated.
-      def subtract(v)
-        return v if v.is_a?(ErrorVal)
-        return argument_error("subtract", v, NUMBER_PAIR) unless pair?(v) && numeric?(v[0]) && numeric?(v[1])
-
-        op_sum([v[0], op_negate(v[1])])
-      end
-
-      # `multiply` is `@OP.product` restricted to a numeric pair.
-      def multiply(v)
-        return v if v.is_a?(ErrorVal)
-        return argument_error("multiply", v, NUMBER_PAIR) unless pair?(v) && numeric?(v[0]) && numeric?(v[1])
-
-        op_product(v)
-      end
 
       # `divide` always yields a float (`a * @OP.invert(b)` in spirit, computed
       # directly to avoid double-rounding). Integer division is `@OP.quotient`;
@@ -116,13 +76,6 @@ module Fusion
         v[0].to_f / v[1]
       end
 
-      def negate(v)
-        return v if v.is_a?(ErrorVal)
-        return argument_error("negate", v, ["_ ? @Number"]) unless numeric?(v)
-
-        op_negate(v)
-      end
-
       def floor(v)
         return v if v.is_a?(ErrorVal)
         return argument_error("floor", v, ["_ ? @Number"]) unless numeric?(v)
@@ -131,81 +84,12 @@ module Fusion
         v.floor
       end
 
-      # --- comparison ---
-
-      # `equals` is `@OP.equal` restricted to a pair (deep, exact).
-      # `eq` is `@OP.equal` restricted to a pair (deep, exact).
-      def eq(v)
-        return v if v.is_a?(ErrorVal)
-        return argument_error("eq", v, ["[_, _]"]) unless pair?(v)
-
-        op_equal(v)
-      end
-
-      COMPARE_PAIR = ["[_ ? @Number, _ ? @Number]", "[_ ? @String, _ ? @String]"].freeze
-
-      # `lt`/`gt`/`lte`/`gte` read off `@OP.compare` (-1 / 0 / 1) on a pair, each
-      # re-tagging a bad-shape error with its own name.
-      def lt(v)
-        return v if v.is_a?(ErrorVal)
-        c = op_compare(v)
-        c.is_a?(ErrorVal) ? argument_error("lt", v, COMPARE_PAIR) : c == -1
-      end
-
-      def gt(v)
-        return v if v.is_a?(ErrorVal)
-        c = op_compare(v)
-        c.is_a?(ErrorVal) ? argument_error("gt", v, COMPARE_PAIR) : c == 1
-      end
-
-      def lte(v)
-        return v if v.is_a?(ErrorVal)
-        c = op_compare(v)
-        c.is_a?(ErrorVal) ? argument_error("lte", v, COMPARE_PAIR) : c <= 0
-      end
-
-      def gte(v)
-        return v if v.is_a?(ErrorVal)
-        c = op_compare(v)
-        c.is_a?(ErrorVal) ? argument_error("gte", v, COMPARE_PAIR) : c >= 0
-      end
-
-      # --- boolean ---
-
-      # `and`/`or`/`not` judge truthiness (Ruby-style: `false` and `null` are
-      # falsey, everything else truthy), not strict booleans, and always return a
-      # boolean. `and`/`or` are the pair cases of `@OP.and`/`@OP.or`; `not` is a
-      # distinct wrapper around `@OP.not`.
-      def and_(v)
-        return v if v.is_a?(ErrorVal)
-        return argument_error("and", v, ["[_, _]"]) unless pair?(v)
-
-        op_and(v)
-      end
-
-      def or_(v)
-        return v if v.is_a?(ErrorVal)
-        return argument_error("or", v, ["[_, _]"]) unless pair?(v)
-
-        op_or(v)
-      end
-
-      # A thin wrapper over `@OP.not` that reports its own `@`-reference: it
-      # re-tags any error the delegate returns. Re-tagging every such error is
-      # safe because #dispatch_apply never passes an error input into a built-in,
-      # so an `ErrorVal` here is always one the delegate produced — never a
-      # propagated input error whose original `operation` we'd need to keep.
-      def not_(v)
-        result = op_not(v)
-        result.is_a?(ErrorVal) ? result.with_operation("@not") : result
-      end
-
-      # --- OP: the operations that will gain infix syntax sugar ---
+      # --- OP: the sugar-target operators (reached as `@OP.sum`, `@OP.and`, …) ---
       #
-      # Reached as `@OP.sum`, `@OP.and`, … (a member access on the `OP` builtin
-      # object). The arithmetic, boolean, and equality members take an array of
-      # ANY length; the unary ones take a single value. `compare` returns
-      # -1 / 0 / 1. The binary built-ins above derive from these.
+      # The arithmetic, boolean, and equality members take an array of ANY length;
+      # the unary ones take a single value; `compare` returns -1 / 0 / 1. The
+      # friendly derived forms (`@add`, `@eq`, `@lt`, …) are stdlib files built on
+      # these.
 
       def op_sum(v)
         return v if v.is_a?(ErrorVal)
@@ -265,6 +149,8 @@ module Fusion
 
         v.all? { |x| @interp.deep_equal?(v[0], x) }
       end
+
+      COMPARE_PAIR = ["[_ ? @Number, _ ? @Number]", "[_ ? @String, _ ? @String]"].freeze
 
       # Order two numbers or two strings: -1, 0, or 1 (no deep equality). Built on
       # `<` rather than `<=>` so a NaN operand yields 0 (unordered), never Ruby's
@@ -385,33 +271,26 @@ module Fusion
 
       # Read from an array (integer index, negative counts from the end) or an
       # object (string key) — mirroring the `[]` operator (reference §8).
-      # A thin wrapper over `@OP.get` that reports its own `@`-reference: it
-      # re-tags any error the delegate returns. Re-tagging every such error is
-      # safe because #dispatch_apply never passes an error input into a built-in,
-      # so an `ErrorVal` here is always one the delegate produced — never a
-      # propagated input error whose original `operation` we'd need to keep.
+      # Read from an array (integer index, negative counts from the end) or an
+      # object (string key) — the functional form of `[]` (reference §8), which
+      # desugars to `@get`.
       def get(v)
-        result = op_get(v)
-        result.is_a?(ErrorVal) ? result.with_operation("@get") : result
-      end
-
-      def op_get(v)
         return v if v.is_a?(ErrorVal)
         expected = ["[_ ? @Array, _ ? @Integer]", "[_ ? @Object, _ ? @String]"]
-        return argument_error("OP.get", v, expected) unless pair?(v)
+        return argument_error("get", v, expected) unless pair?(v)
 
         container, key = v
         if container.is_a?(Array) && key.is_a?(Integer)
           i = key.negative? ? container.length + key : key
           return container[i] if i >= 0 && i < container.length
 
-          error("access_error", "OP.get", v, "index out of range")
+          error("access_error", "get", v, "index out of range")
         elsif container.is_a?(Hash) && key.is_a?(String)
           return container[key] if container.key?(key)
 
-          error("access_error", "OP.get", v, "missing key")
+          error("access_error", "get", v, "missing key")
         else
-          argument_error("OP.get", v, expected)
+          argument_error("get", v, expected)
         end
       end
 

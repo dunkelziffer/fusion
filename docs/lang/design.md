@@ -740,6 +740,7 @@ All access goes through `@`:
 
 - 🧑 ✅ `@@` is the "super" method. It allows access to the built-in/stdlib shadowed by the current file.
 - 🧑 ✅ Inline/REPL `@@` is a `reference_error` (`no enclosing file`). There is no filename to take "super" of.
+- 🧑 ✅ `@@name` (and downward `@@dir/name`) generalizes super to an explicit name: resolve `name` skipping *its* sibling — the stable built-in/stdlib, immune to a local shadow. Used for escape hatches (`@@OP` inside an `OP.fsn` override) and for error-payload patterns that must stay canonical regardless of a caller's shadows. `@@../…` is meaningless (super of an upward path) and is a syntax error. Bare `@@` is the special case `@@<current-file>`.
 
 ### Alternatives
 
@@ -952,18 +953,17 @@ TODO: Under `-!` the input is the error payload, so empty stdin is a usage error
 
 - 🤖 ✅ Only things that can't be built in Fusion itself become a builtin. Other frequently used functions become part of the standard library.
 - 🤖 ✅ The interpreter provides these builtins:
-  - arithmetic (`add`, `subtract`, `multiply`, `divide`, `negate`, `floor`);
-  - comparison (`eq`, `lt`, `gt`, `lte`, `gte`);
-  - boolean (`and`, `or`, `not`);
+  - arithmetic (`divide`, `floor`);
   - bridges (`size`, `join`, `split`, `toString`, `parseNumber`, `keys`, `values`, `get`, `set`, `toObject`);
   - predicates (`Integer`, `Float`, `Number`, `String`, `Boolean`, `Array`, `Object`, `Null`, `Function`, `NonFinite`);
-  - the `@OP` object (§5.5).
+  - the `@OP` operator object (§5.5).
+  The friendly operators (`add`, `subtract`, `multiply`, `eq`, `lt`, `gt`, `lte`, `gte`) are stdlib files built on `@OP.*` (§5.5), not built-ins.
 - 🤖 ✅ `keys` must be a builtin: pattern matching can pull *known* object keys but cannot enumerate *unknown* ones, so iterating an object of unknown shape is impossible without it.
-- 🧑 ⏪ The set was reworked in §5.5: `equals`/`lessThan`/`length` renamed to `eq`/`lt`/`size`, `mod`/`concat`/`chars` dropped from the built-ins (`concat`/`chars` are now stdlib), and the sugar-target operations grouped under `@OP`.
+- 🧑 ⏪ The set was reworked in §5.5: sugar-target operators moved into the shadowable `@OP`; their friendly forms (`add`/`eq`/`lt`/…) became stdlib derivations; `and`/`or`/`not`/`negate` are `@OP`-only; `equals`/`lessThan`/`length` renamed to `eq`/`lt`/`size`; `mod`/`concat`/`chars` dropped (`concat`/`chars` are stdlib).
 
 ### Alternatives
 
-- 🤖 ⏪ Leave `lessEq`/`greaterThan`/etc. to the library. Reversed in §5.5: `gt`/`lte`/`gte` are built-ins reading off `@OP.compare`.
+- 🧑 ✅ `lessEq`/`greaterThan`/etc. as stdlib derivations of `@OP.compare` (§5.5) — the original "leave the derivations to the library" call, once `@OP.compare` gave them a base to build on.
 - 🤖 ❌ Omit `values` (derivable from `keys`).
 
 ### Pros
@@ -1010,31 +1010,30 @@ TODO: Under `-!` the input is the error payload, so empty stdin is a usage error
 
 ---
 
-## 5.5 `@OP`: the operation set behind future infix sugar
+## 5.5 `@OP`: a shadowable operator object
 
 ### Decisions
 
-- 🧑 ✅ `@OP` is a built-in **object**; its members (`@OP.sum`, `@OP.and`, …) are the operations that will gain infix sugar. The sugar itself is not built yet.
-- 🧑 ✅ The arithmetic/boolean/equality members take an array of **any length**: `sum`/`product` fold a numeric array (`[]` → `0`/`1`), `and`/`or` fold truthiness (`[]` → `true`/`false`), `equal` is deep and true iff every element equals the first.
-- 🧑 ✅ `@OP.compare` returns `-1`/`0`/`1` for a pair of two numbers or two strings; built on `<` so a NaN operand gives `0`, never a non-value.
-- 🧑 ✅ Division and reciprocal are float-only (`@divide`, `@OP.invert`); integer division is the separate integer-only pair `@OP.quotient` / `@OP.modulo`, which error on any non-integer. `@mod` is dropped.
-- 🧑 ✅ The two-argument built-ins remain as thin derivations of the `@OP` members (`@add`/`@subtract` over `sum`, `@multiply`/`@divide` over `product`, `@eq` over `equal`, `@lt`/`@gt`/`@lte`/`@gte` over `compare`, `@and`/`@or`/`@not` and `@get` over their namesakes), each keeping its own `@`-reference in an error's `operation` — a delegating wrapper re-tags the delegate's error.
-- 🧑 ✅ Renames `equals`→`eq`, `lessThan`→`lt`, `length`→`size`; new comparisons `gt`/`lte`/`gte`.
-- 🧑 ✅ `@join` is `[items, separator]`; the new inverse `@split` is `[string, separator]`, splitting on the **literal** separator (no whitespace special-case), keeping empty fields, with an empty separator meaning "characters".
-- 🧑 ✅ `@concat` and `@chars` leave the built-ins and become stdlib functions over `@join` / `@split`.
-- 🧑 ✅ An `@OP` member may delegate to a stdlib function: `@OP.map` applies the stdlib `@map` (loaded via the shared file cache) but re-tags `@map`'s own error to `origin: builtin, operation: @OP.map`; an inner error from `f` bubbles through unchanged. The delegate's own error is distinguished by being a fresh, not-yet-file-stamped runtime error.
+- 🧑 ✅ `@OP` is a **shadowable** built-in object holding the sugar-target operators (`sum product negate invert quotient modulo equal compare and or not`). A directory *reskins* the operators — complex numbers, matrices, ternary logic — by placing an `OP.fsn` sibling that overrides members (spreading the originals via `@@`); the override is confined to that directory (per §3.6 resolution). Infix sugar (once built) desugars to `@OP.*`, so `OP.fsn` is the single place a directory can change what `+`, `<`, `and`, … mean.
+- 🧑 ✅ Members generalize to arrays: `sum`/`product` fold a numeric array (`[]` → `0`/`1`), `and`/`or` fold truthiness (`[]` → `true`/`false`), `equal` is deep and true iff every element equals the first. `compare` returns `-1`/`0`/`1` for a pair of numbers or strings, built on `<` so a NaN operand gives `0`, never a non-value.
+- 🧑 ✅ The friendly derived operators (`add subtract multiply eq lt gt lte gte`) are **stdlib files** built on `@OP.*`, not built-ins. They resolve `@OP` in their own directory, so a local `OP.fsn` override reaches them; a directory's helper follows its reskin, and copying/symlinking the one-line stdlib file into a directory makes the default helper follow too. They shape-check only "a pair" and let a type mismatch bubble as the `@OP` member's own error — so a reskin's non-numeric domain isn't rejected by a `@Number` guard.
+- 🧑 ✅ Each operator has exactly one shadowable reference. `negate`/`and`/`or`/`not` live **only** in `@OP` (their top-level duplicates are dropped). Structural/utility functions (`map`, `get`, `size`, `keys`, `join`, `split`, …) live **only** at top level, never in `@OP`. `@divide` and `@get` stay Ruby built-ins outside `@OP` (`[]` desugars to `@get`, not the reverse).
+- 🧑 ✅ Division/reciprocal are float-only (`@divide`, `@OP.invert`); integer division is the integer-only pair `@OP.quotient` / `@OP.modulo`. `@mod` is dropped.
+- 🧑 ✅ Renames `equals`→`eq`, `lessThan`→`lt`, `length`→`size`; new comparisons `gt`/`lte`/`gte`. `@join` is `[items, separator]`; the new inverse `@split` is `[string, separator]` (literal separator, empty fields kept, empty separator = characters). `@concat`/`@chars` are stdlib over `@join`/`@split`.
 
 ### Alternatives
 
-- 🤖 ⏪ Keep every operation as its own two-argument built-in (the §5.3 set). Superseded: the sugar targets want n-ary, generalized forms grouped in one place.
+- 🤖 ⏪ Keep every operator as its own two-argument built-in (the §5.3 set). Superseded: a shadowable `@OP` plus stdlib derivations lets a directory reskin all operators from one place, with the derived helpers following.
+- 🤖 ⏪ Hook `map`/`get` into `@OP` (with error re-tagging so `@OP.map` reports as `@OP.map`). Reverted: a member that duplicates a top-level name is an independent shadow point that can diverge; structural methods stay top-level only — which also deletes the re-tagging machinery (`needs_call_site`, `apply_op_member`, `retag`).
+- 🤖 ❌ Resolve `@OP` **dynamically** (at the call site) so stdlib helpers follow a foreign override. Rejected: it breaks the per-directory confinement — a library's own helpers would leak the *caller's* arithmetic. Lexical resolution keeps overrides confined; a helper follows a reskin only in the directory it's resolved in (ship the helper alongside `OP.fsn`).
 - 🤖 ❌ Derive `@divide` literally as `product(a, invert(b))`. Rejected: double-rounding makes some results wrong in the last digit (`3/5` → `0.6000000000000001`); `@divide` computes `a/b` directly.
 - 🤖 ❌ Let `@OP.compare` return Ruby's `nil` for a NaN operand. Rejected: `nil` is not a Fusion value; `0` keeps the result total.
 
 ### Pros
 
-- One place to reach for the operations sugar will target, and the n-ary forms (`sum`, `and`, `equal`) map cleanly onto variadic operators.
-- Keeping the two-argument built-ins as thin wrappers leaves existing code and error identities unchanged.
+- One shadowable object defines the operators; `OP.fsn` is the single thing to check to know whether a directory changed them, and the override is confined there.
+- No operator has two divergent references; derived helpers follow a reskin by the same lexical rule as everything else.
 
 ### Cons
 
-- Two names for the same operation during the transition (`@add` and `@OP.sum`).
+- A directory that reskins and wants a *named* helper (not just sugar) to follow must ship the one-line helper too (copy or symlink).

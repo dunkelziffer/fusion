@@ -1,0 +1,5 @@
+# a == b — deep equality, derives from @OP.equal.
+(
+  [a, b] => [a, b] | @OP.equal,
+  x => !{"kind": "argument_error", "origin": "stdlib", "operation": "@eq", "status": 0, "input": x, "expected": ["[_, _]"]}
+)

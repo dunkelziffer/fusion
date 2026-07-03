@@ -135,6 +135,52 @@ uses yours; files elsewhere still get the built-in.
 
 ---
 
+## Reskin the operators (`@OP`) for a directory
+
+The arithmetic, comparison, and boolean operators live in one built-in object,
+`@OP` (`@OP.sum`, `@OP.compare`, `@OP.and`, …), and — like any `@`-name — it is
+resolved per directory. To change what the operators mean for the files in one
+directory (complex numbers, matrices, …), drop an `OP.fsn` there that overrides the
+members you want, reaching the originals with `@@`:
+
+```fusion
+# OP.fsn — this directory's arithmetic
+{ ...@@, "sum": (p => "my sum"), "product": (p => "my product") }
+```
+
+Only files in *that* directory are affected; everything else keeps the defaults. To
+check whether a directory changed the operators, look for an `OP.fsn` — there is no
+other way to change them.
+
+### Making a named derived helper follow your override
+
+The standard-library helpers such as `@add` are one-liners that derive from `@OP`
+(`add.fsn` is `([a, b] => [a, b] | @OP.sum)`). But a helper resolves `@OP` in *its
+own* directory — the stdlib — so `@add` keeps the default arithmetic even where you
+overrode `@OP`. (Once operator sugar lands this rarely matters: `a + b` desugars to
+`@OP` *in your file*, so it already follows your override; reach for a named helper
+only when you need the operator as a value.)
+
+When you do want a named helper to follow your override, put the stdlib file into
+your directory — it then resolves `@OP` locally:
+
+```sh
+# copy — portable, a frozen snapshot
+cp "$(fusion --stdlib-path)/add.fsn" .
+
+# or symlink — tracks stdlib updates, but re-create it after an upgrade
+ln -s "$(fusion --stdlib-path)/add.fsn" ./add.fsn
+```
+
+Both work by the same rule: Fusion resolves module paths **lexically** — it never
+calls `realpath` — so a file, *or a symlink*, named `add.fsn` in your directory
+resolves its `@OP` reference against *your* directory, while its bytes come from the
+stdlib. A symlink to a versioned install path can dangle after an upgrade; re-create
+it, or copy instead. (`fusion --stdlib-path` and a `fusion vendor` scaffold are
+planned — see the roadmap.)
+
+---
+
 ## Read environment variables
 
 `@ENV` evaluates to an object of all environment variables (every value is a string;

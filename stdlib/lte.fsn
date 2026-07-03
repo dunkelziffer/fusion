@@ -1,0 +1,5 @@
+# a <= b — derives from @OP.compare.
+(
+  [a, b] => [a, b] | @OP.compare | (1 => false, _ => true),
+  x => !{"kind": "argument_error", "origin": "stdlib", "operation": "@lte", "status": 0, "input": x, "expected": ["[_, _]"]}
+)
