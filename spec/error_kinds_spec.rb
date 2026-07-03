@@ -172,8 +172,8 @@ RSpec.describe "error kinds" do
     it "division by zero" do
       expect_pipe
         .in("✅", "[1,0]")
-        .code("(p => p | @divide)")
-        .out("❌", '{"kind":"math_error","origin":"builtin","file":"<inline>","operation":"@divide","status":0,"input":[1,0],"message":"division by zero"}')
+        .code("(p => p | @math.divide)")
+        .out("❌", '{"kind":"math_error","origin":"builtin","file":"<inline>","operation":"@math.divide","status":0,"input":[1,0],"message":"division by zero"}')
     end
   end
 
@@ -253,8 +253,8 @@ RSpec.describe "error kinds" do
   describe "internal errors render their input leniently" do
     it "renders a function in input as \"<function>\"" do
       expect_pipe
-        .code("(_ => (y => y) | @floor)")
-        .out("❌", '{"kind":"argument_error","origin":"builtin","file":"<inline>","operation":"@floor","status":0,"input":"<function>","expected":["_ ? @Number"]}')
+        .code("(_ => (y => y) | @math.floor)")
+        .out("❌", '{"kind":"argument_error","origin":"builtin","file":"<inline>","operation":"@math.floor","status":0,"input":"<function>","expected":["_ ? @Number"]}')
     end
 
     it "renders a function nested in input as \"<function>\"" do
@@ -265,8 +265,8 @@ RSpec.describe "error kinds" do
 
     it "renders a non-finite number in input as \"<Infinity>\"" do
       expect_pipe
-        .code("(_ => 1e400 | @floor)")
-        .out("❌", '{"kind":"math_error","origin":"builtin","file":"<inline>","operation":"@floor","status":0,"input":"<Infinity>","message":"not a finite number"}')
+        .code("(_ => 1e400 | @math.floor)")
+        .out("❌", '{"kind":"math_error","origin":"builtin","file":"<inline>","operation":"@math.floor","status":0,"input":"<Infinity>","message":"not a finite number"}')
     end
   end
 

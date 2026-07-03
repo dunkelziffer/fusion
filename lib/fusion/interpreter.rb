@@ -507,7 +507,7 @@ module Fusion
           f.fn.call(v)
         rescue StandardError => err
           # TODO: move math errors into the builtins. This should become a safety net for unpredicted errors.
-          kind = (err.is_a?(FloatDomainError) || err.is_a?(ZeroDivisionError)) ? "math_error" : "internal_error"
+          kind = (err.is_a?(FloatDomainError) || err.is_a?(ZeroDivisionError) || err.is_a?(Math::DomainError)) ? "math_error" : "internal_error"
           ErrorVal.from_runtime(kind: kind, origin: "builtin", operation: "@#{f.name}", input: v, message: err.message)
         end
       elsif f.is_a?(Func)

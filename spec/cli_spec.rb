@@ -248,7 +248,7 @@ RSpec.describe Fusion::CLI do
     end
 
     it "serializes an error into a status-1 WirePair carrying its payload" do
-      error = described_class.evaluate(parse_entry("[1, 0] | @divide"), described_class.root_environment)
+      error = described_class.evaluate(parse_entry("[1, 0] | @math.divide"), described_class.root_environment)
       wire = described_class.serialize(error)
       expect(wire.status).to eq(1)
       expect(wire.data).to include('"kind":"math_error"')

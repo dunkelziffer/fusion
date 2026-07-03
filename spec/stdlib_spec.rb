@@ -354,4 +354,163 @@ RSpec.describe "stdlib error handling" do
         .out("❌", '{"kind":"argument_error","origin":"builtin","file":"<inline>","operation":"@OP.compare","status":0,"input":[1,"a"],"expected":["[_ ? @Number, _ ? @Number]","[_ ? @String, _ ? @String]"]}')
     end
   end
+
+  describe "@filter" do
+    it "keeps array elements where the predicate is truthy" do
+      expect_pipe
+        .in("✅", "[-1,2,-3,4]")
+        .code('(xs => {"f": (n => [n, 0] | @gt), "xs": xs} | @filter)')
+        .out("✅", "[2,4]")
+    end
+
+    it "keeps object values where the predicate is truthy, dropping keys" do
+      expect_pipe
+        .in("✅", '{"a":1,"b":3,"c":5}')
+        .code('(o => {"f": (n => [n, 2] | @gt), "xs": o} | @filter)')
+        .out("✅", '{"b":3,"c":5}')
+    end
+
+    it "is empty for the empty array" do
+      expect_pipe
+        .in("✅", "[]")
+        .code('(xs => {"f": (n => n), "xs": xs} | @filter)')
+        .out("✅", "[]")
+    end
+
+    it "validates f eagerly on an empty collection" do
+      expect_pipe
+        .in("✅", "[]")
+        .code('(xs => {"f": 5, "xs": xs} | @filter)')
+        .out("❌", '{"kind":"argument_error","origin":"stdlib","file":"<inline>","operation":"@filter","status":0,"input":{"f":5,"xs":[]},"expected":["{\"f\": _ ? @Function, \"xs\": _ ? @Array}","{\"f\": _ ? @Function, \"xs\": _ ? @Object}"]}')
+    end
+
+    it "errors on a non-{f,xs} value" do
+      expect_pipe
+        .in("✅", "5")
+        .code("(x => x | @filter)")
+        .out("❌", '{"kind":"argument_error","origin":"stdlib","file":"<inline>","operation":"@filter","status":0,"input":5,"expected":["{\"f\": _ ? @Function, \"xs\": _ ? @Array}","{\"f\": _ ? @Function, \"xs\": _ ? @Object}"]}')
+    end
+  end
+
+  describe "@reduce" do
+    it "folds left over an array" do
+      expect_pipe
+        .in("✅", "[1,2,3,4]")
+        .code('(xs => {"f": @add, "init": 0, "xs": xs} | @reduce)')
+        .out("✅", "10")
+    end
+
+    it "returns the initial value for an empty array" do
+      expect_pipe
+        .in("✅", "[]")
+        .code('(xs => {"f": @add, "init": 42, "xs": xs} | @reduce)')
+        .out("✅", "42")
+    end
+
+    it "threads the accumulator (order-sensitive)" do
+      expect_pipe
+        .in("✅", '["a","b","c"]')
+        .code('(xs => {"f": @concat, "init": "", "xs": xs} | @reduce)')
+        .out("✅", '"abc"')
+    end
+
+    it "errors on a non-{f,init,xs} value" do
+      expect_pipe
+        .in("✅", "5")
+        .code("(x => x | @reduce)")
+        .out("❌", '{"kind":"argument_error","origin":"stdlib","file":"<inline>","operation":"@reduce","status":0,"input":5,"expected":["{\"f\": _ ? @Function, \"init\": _, \"xs\": _ ? @Array}"]}')
+    end
+  end
+
+  describe "@compact" do
+    it "drops null elements" do
+      expect_pipe
+        .in("✅", "[1,null,2,null,3]")
+        .code("(xs => xs | @compact)")
+        .out("✅", "[1,2,3]")
+    end
+
+    it "keeps a falsey non-null element like false or 0" do
+      expect_pipe
+        .in("✅", "[0,false,null,1]")
+        .code("(xs => xs | @compact)")
+        .out("✅", "[0,false,1]")
+    end
+
+    it "errors on a non-array" do
+      expect_pipe
+        .in("✅", "5")
+        .code("(x => x | @compact)")
+        .out("❌", '{"kind":"argument_error","origin":"stdlib","file":"<inline>","operation":"@compact","status":0,"input":5,"expected":["_ ? @Array"]}')
+    end
+  end
+
+  describe "@flatten" do
+    it "recursively flattens nested arrays" do
+      expect_pipe
+        .in("✅", "[1,[2,[3,4]],5]")
+        .code("(xs => xs | @flatten)")
+        .out("✅", "[1,2,3,4,5]")
+    end
+
+    it "leaves an already-flat array unchanged" do
+      expect_pipe
+        .in("✅", "[1,2,3]")
+        .code("(xs => xs | @flatten)")
+        .out("✅", "[1,2,3]")
+    end
+
+    it "is empty for the empty array" do
+      expect_pipe
+        .in("✅", "[]")
+        .code("(xs => xs | @flatten)")
+        .out("✅", "[]")
+    end
+
+    it "errors on a non-array" do
+      expect_pipe
+        .in("✅", "5")
+        .code("(x => x | @flatten)")
+        .out("❌", '{"kind":"argument_error","origin":"stdlib","file":"<inline>","operation":"@flatten","status":0,"input":5,"expected":["_ ? @Array"]}')
+    end
+  end
+
+  describe "@any" do
+    it "is true when some element satisfies the predicate" do
+      expect_pipe
+        .in("✅", "[1,2,-3]")
+        .code('(xs => {"f": (n => [n, 0] | @lt), "xs": xs} | @any)')
+        .out("✅", "true")
+    end
+
+    it "is false when none satisfy it" do
+      expect_pipe
+        .in("✅", "[1,2,3]")
+        .code('(xs => {"f": (n => [n, 0] | @lt), "xs": xs} | @any)')
+        .out("✅", "false")
+    end
+
+    it "is false for the empty array" do
+      expect_pipe
+        .in("✅", "[]")
+        .code('(xs => {"f": (n => n), "xs": xs} | @any)')
+        .out("✅", "false")
+    end
+
+    # Short-circuits: once an element is truthy, later elements are never tested,
+    # so a predicate that would error on the second element is never reached.
+    it "stops at the first truthy element without testing the rest" do
+      expect_pipe
+        .in("✅", "[true, false]")
+        .code('(xs => {"f": (true => true, _ => [1, "x"] | @OP.compare), "xs": xs} | @any)')
+        .out("✅", "true")
+    end
+
+    it "errors on a non-{f,xs} value" do
+      expect_pipe
+        .in("✅", "5")
+        .code("(x => x | @any)")
+        .out("❌", '{"kind":"argument_error","origin":"stdlib","file":"<inline>","operation":"@any","status":0,"input":5,"expected":["{\"f\": _ ? @Function, \"xs\": _ ? @Array}"]}')
+    end
+  end
 end

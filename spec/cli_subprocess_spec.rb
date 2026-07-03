@@ -19,7 +19,7 @@ RSpec.describe "CLI (exe/fusion)" do
   FIX  = File.expand_path("fixtures", __dir__)
 
   let(:division_by_zero) do
-    '{"kind":"math_error","origin":"builtin","file":"<inline>","operation":"@divide","status":0,"input":[1,0],"message":"division by zero"}'
+    '{"kind":"math_error","origin":"builtin","file":"<inline>","operation":"@math.divide","status":0,"input":[1,0],"message":"division by zero"}'
   end
 
   # Run the binary with the given args and stdin; returns [stdout, stderr, status].
@@ -44,7 +44,7 @@ RSpec.describe "CLI (exe/fusion)" do
     end
 
     it "prints only the payload to stderr (stdout empty) and exits 1 on error" do
-      out, err, status = run_cli("-e", "(p => p | @divide)", stdin: "[1,0]")
+      out, err, status = run_cli("-e", "(p => p | @math.divide)", stdin: "[1,0]")
       expect(out).to eq("")
       expect(err).to eq("#{division_by_zero}\n")
       expect(status.exitstatus).to eq(1)
@@ -416,7 +416,7 @@ RSpec.describe "CLI (exe/fusion)" do
     end
 
     it "prints an error as !payload on stdout and still exits 0" do
-      out, err, status = run_cli("--output", "bang", "-e", "(p => p | @divide)", stdin: "[1,0]")
+      out, err, status = run_cli("--output", "bang", "-e", "(p => p | @math.divide)", stdin: "[1,0]")
       expect(out).to eq("!#{division_by_zero}\n")
       expect(err).to eq("")
       expect(status.exitstatus).to eq(0)
@@ -440,7 +440,7 @@ RSpec.describe "CLI (exe/fusion)" do
     end
 
     it "wraps an error as [1, payload]" do
-      out, err, status = run_cli("--output", "array", "-e", "(p => p | @divide)", stdin: "[1,0]")
+      out, err, status = run_cli("--output", "array", "-e", "(p => p | @math.divide)", stdin: "[1,0]")
       expect(out).to eq("[1,#{division_by_zero}]\n")
       expect(err).to eq("")
       expect(status.exitstatus).to eq(0)
@@ -455,7 +455,7 @@ RSpec.describe "CLI (exe/fusion)" do
     end
 
     it 'wraps an error as {"error": _}' do
-      out, err, status = run_cli("--output", "object", "-e", "(p => p | @divide)", stdin: "[1,0]")
+      out, err, status = run_cli("--output", "object", "-e", "(p => p | @math.divide)", stdin: "[1,0]")
       expect(out).to eq(%({"error":#{division_by_zero}}\n))
       expect(err).to eq("")
       expect(status.exitstatus).to eq(0)
@@ -518,7 +518,7 @@ RSpec.describe "CLI (exe/fusion)" do
     end
 
     it "keeps a per-record error in-band and continues the stream" do
-      out, err, status = run_cli("--stream", "-e", "(p => p | @divide)", stdin: "[0,[4,2]]\n[0,[1,0]]\n[0,[9,3]]\n")
+      out, err, status = run_cli("--stream", "-e", "(p => p | @math.divide)", stdin: "[0,[4,2]]\n[0,[1,0]]\n[0,[9,3]]\n")
       expect(out).to eq("[0,2.0]\n[1,#{division_by_zero}]\n[0,3.0]\n")
       expect(err).to eq("")
       expect(status.exitstatus).to eq(0)

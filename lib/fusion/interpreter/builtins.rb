@@ -14,9 +14,8 @@ module Fusion
         # Irreducible primitives kept as built-ins. The sugar-target operators
         # (arithmetic/comparison/boolean) live in `@OP` below; their friendly
         # derived forms (`@add`, `@eq`, `@lt`, …) are stdlib files that build on
-        # `@OP.*`, so they follow a per-directory `@OP` override.
-        define.call("divide", method(:divide))
-        define.call("floor", method(:floor))
+        # `@OP.*`, so they follow a per-directory `@OP` override. Numeric functions
+        # (`round`, `divide`, `sin`, …) and constants (`pi`, `e`) live in `@math`.
         define.call("size", method(:size))
         define.call("join", method(:join))
         define.call("split", method(:split))
@@ -58,30 +57,141 @@ module Fusion
           "or"       => NativeFunc.new("OP.or", method(:op_or)),
           "not"      => NativeFunc.new("OP.not", method(:op_not)),
         }
+
+        # `math` bundles numeric functions and constants, reached as `@math.round`,
+        # `@math.pi`, … Like `@OP`, it is a shadowable builtin object. `pi`/`e` are
+        # plain values; the rest are one-argument functions.
+        table["math"] = {
+          "round"  => NativeFunc.new("math.round", method(:math_round)),
+          "floor"  => NativeFunc.new("math.floor", method(:math_floor)),
+          "ceil"   => NativeFunc.new("math.ceil", method(:math_ceil)),
+          "divide" => NativeFunc.new("math.divide", method(:math_divide)),
+          "sign"   => NativeFunc.new("math.sign", method(:math_sign)),
+          "abs"    => NativeFunc.new("math.abs", method(:math_abs)),
+          "rand"   => NativeFunc.new("math.rand", method(:math_rand)),
+          "sin"    => NativeFunc.new("math.sin", method(:math_sin)),
+          "cos"    => NativeFunc.new("math.cos", method(:math_cos)),
+          "exp"    => NativeFunc.new("math.exp", method(:math_exp)),
+          "log"    => NativeFunc.new("math.log", method(:math_log)),
+          "pow"    => NativeFunc.new("math.pow", method(:math_pow)),
+          "pi"     => Math::PI,
+          "e"      => Math::E,
+        }
       end
 
-      # --- arithmetic ---
+      # --- math (reached as `@math.round`, `@math.divide`, `@math.pi`, …) ---
 
       NUMBER_PAIR = ["[_ ? @Number, _ ? @Number]"].freeze
       NUMBER_ARRAY = ['_ ? (xs => {"xs": xs, "f": @Number} | @all)'].freeze
+      NUMBER = ["_ ? @Number"].freeze
 
-      # `divide` always yields a float (`a * @OP.invert(b)` in spirit, computed
-      # directly to avoid double-rounding). Integer division is `@OP.quotient`;
-      # the remainder is `@OP.modulo`.
-      def divide(v)
+      # `round`/`floor`/`ceil` return an integer; a non-finite input is a math_error
+      # (their Ruby forms raise `FloatDomainError` on it).
+      def math_round(v)
         return v if v.is_a?(ErrorVal)
-        return argument_error("divide", v, NUMBER_PAIR) unless pair?(v) && numeric?(v[0]) && numeric?(v[1])
-        return error("math_error", "divide", v, "division by zero") if v[1] == 0
+        return argument_error("math.round", v, NUMBER) unless numeric?(v)
+        return error("math_error", "math.round", v, "not a finite number") if non_finite?(v)
+
+        v.round
+      end
+
+      def math_floor(v)
+        return v if v.is_a?(ErrorVal)
+        return argument_error("math.floor", v, NUMBER) unless numeric?(v)
+        return error("math_error", "math.floor", v, "not a finite number") if non_finite?(v)
+
+        v.floor
+      end
+
+      def math_ceil(v)
+        return v if v.is_a?(ErrorVal)
+        return argument_error("math.ceil", v, NUMBER) unless numeric?(v)
+        return error("math_error", "math.ceil", v, "not a finite number") if non_finite?(v)
+
+        v.ceil
+      end
+
+      # `divide` always yields a float. Integer division is `@OP.quotient`, the
+      # remainder `@OP.modulo`.
+      def math_divide(v)
+        return v if v.is_a?(ErrorVal)
+        return argument_error("math.divide", v, NUMBER_PAIR) unless pair?(v) && numeric?(v[0]) && numeric?(v[1])
+        return error("math_error", "math.divide", v, "division by zero") if v[1] == 0
 
         v[0].to_f / v[1]
       end
 
-      def floor(v)
+      # -1 / 0 / 1 (via `<`/`>`, so NaN → 0, never Ruby's `nil`).
+      def math_sign(v)
         return v if v.is_a?(ErrorVal)
-        return argument_error("floor", v, ["_ ? @Number"]) unless numeric?(v)
-        return error("math_error", "floor", v, "not a finite number") if non_finite?(v)
+        return argument_error("math.sign", v, NUMBER) unless numeric?(v)
 
-        v.floor
+        if v < 0 then -1
+        elsif v > 0 then 1
+        else 0
+        end
+      end
+
+      def math_abs(v)
+        return v if v.is_a?(ErrorVal)
+        return argument_error("math.abs", v, NUMBER) unless numeric?(v)
+
+        v.abs
+      end
+
+      # `null` → a float in `[0.0, 1.0)`; a positive integer `n` → an integer in
+      # `[0, n)`.
+      def math_rand(v)
+        return v if v.is_a?(ErrorVal)
+        return rand if v == NULL
+        return rand(v) if integer?(v) && v.positive?
+
+        argument_error("math.rand", v, ["_ ? @Null", '_ ? (n ? @Integer => [0, n] | @OP.compare | (-1 => true))'])
+      end
+
+      def math_sin(v)
+        return v if v.is_a?(ErrorVal)
+        return argument_error("math.sin", v, NUMBER) unless numeric?(v)
+
+        Math.sin(v)
+      end
+
+      def math_cos(v)
+        return v if v.is_a?(ErrorVal)
+        return argument_error("math.cos", v, NUMBER) unless numeric?(v)
+
+        Math.cos(v)
+      end
+
+      def math_exp(v)
+        return v if v.is_a?(ErrorVal)
+        return argument_error("math.exp", v, NUMBER) unless numeric?(v)
+
+        Math.exp(v)
+      end
+
+      # Natural logarithm; the domain is positive numbers (`Math.log` raises on a
+      # negative and gives `-Infinity` at 0).
+      def math_log(v)
+        return v if v.is_a?(ErrorVal)
+        return argument_error("math.log", v, NUMBER) unless numeric?(v)
+        return error("math_error", "math.log", v, "log of a non-positive number") if v <= 0
+
+        Math.log(v)
+      end
+
+      # `base ** exponent`: integer when the base and a non-negative integer
+      # exponent are integers, a float otherwise. A negative base with a fractional
+      # exponent (a complex result) is a math_error.
+      def math_pow(v)
+        return v if v.is_a?(ErrorVal)
+        return argument_error("math.pow", v, NUMBER_PAIR) unless pair?(v) && numeric?(v[0]) && numeric?(v[1])
+
+        a, b = v
+        result = a.is_a?(Integer) && b.is_a?(Integer) && !b.negative? ? a**b : a.to_f**b
+        return error("math_error", "math.pow", v, "not in domain (complex result)") if result.is_a?(Complex)
+
+        result
       end
 
       # --- OP: the sugar-target operators (reached as `@OP.sum`, `@OP.and`, …) ---

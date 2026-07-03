@@ -14,8 +14,8 @@ RSpec.describe "the error `file` (innermost user-code call site)" do
     it "a builtin applied directly to the input" do
       expect_pipe
         .in("✅", "[1,0]")
-        .code("@divide")
-        .out("❌", '{"kind":"math_error","origin":"builtin","file":"<fusion>","operation":"@divide","status":0,"input":[1,0],"message":"division by zero"}')
+        .code("@math.divide")
+        .out("❌", '{"kind":"math_error","origin":"builtin","file":"<fusion>","operation":"@math.divide","status":0,"input":[1,0],"message":"division by zero"}')
     end
 
     it "a stdlib function applied directly to the input" do

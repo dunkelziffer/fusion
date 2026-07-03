@@ -1,0 +1,7 @@
+# Left fold over an array. Input: {"f": binaryFn, "init": acc, "xs": array}. `f`
+# receives the pair [acc, element] and returns the next accumulator.
+(
+  {"f": _ ? @Function, "init": acc, "xs": []} => acc,
+  {"f": f ? @Function, "init": acc, "xs": [x, ...rest]} => {"f": f, "init": [acc, x] | f, "xs": rest} | @,
+  x => !{"kind": "argument_error", "origin": "stdlib", "operation": "@reduce", "status": 0, "input": x, "expected": ["{\"f\": _ ? @Function, \"init\": _, \"xs\": _ ? @Array}"]}
+)

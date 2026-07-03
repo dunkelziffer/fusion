@@ -85,22 +85,22 @@ RSpec.describe "payloaded errors" do
     it "catches a produced error with bare !" do
       expect_pipe
         .in("✅", "5")
-        .code('(x => ([x,0] | @divide) | (! => "caught"))')
+        .code('(x => ([x,0] | @math.divide) | (! => "caught"))')
         .out("✅", '"caught"')
     end
 
     it "catches with !_ and no binding" do
       expect_pipe
         .in("✅", "5")
-        .code('(x => ([x,0] | @divide) | (!_ => "caught"))')
+        .code('(x => ([x,0] | @math.divide) | (!_ => "caught"))')
         .out("✅", '"caught"')
     end
 
     it "binds the payload with !msg" do
       expect_pipe
         .in("✅", "5")
-        .code('(x => ([x,0] | @divide) | (!msg => msg))')
-        .out("✅", '{"kind":"math_error","origin":"builtin","file":"<inline>","operation":"@divide","status":0,"input":[5,0],"message":"division by zero"}')
+        .code('(x => ([x,0] | @math.divide) | (!msg => msg))')
+        .out("✅", '{"kind":"math_error","origin":"builtin","file":"<inline>","operation":"@math.divide","status":0,"input":[5,0],"message":"division by zero"}')
     end
 
     it "matches a literal payload with !42" do
@@ -129,8 +129,8 @@ RSpec.describe "payloaded errors" do
     it "preserves the payload through an unrelated function" do
       expect_pipe
         .in("✅", "5")
-        .code('(x => ([x,0] | @divide) | (n => [n, 1] | @OP.sum))')
-        .out("❌", '{"kind":"math_error","origin":"builtin","file":"<inline>","operation":"@divide","status":0,"input":[5,0],"message":"division by zero"}')
+        .code('(x => ([x,0] | @math.divide) | (n => [n, 1] | @OP.sum))')
+        .out("❌", '{"kind":"math_error","origin":"builtin","file":"<inline>","operation":"@math.divide","status":0,"input":[5,0],"message":"division by zero"}')
     end
 
     it "returns !null on a strict no-match (not the propagated input error)" do
@@ -143,8 +143,8 @@ RSpec.describe "payloaded errors" do
     it "propagates the inner error of a nested ! rather than wrapping it (!!)" do
       expect_pipe
         .in("✅", "5")
-        .code("(x => !([x,0] | @divide))")
-        .out("❌", '{"kind":"math_error","origin":"builtin","file":"<inline>","operation":"@divide","status":0,"input":[5,0],"message":"division by zero"}')
+        .code("(x => !([x,0] | @math.divide))")
+        .out("❌", '{"kind":"math_error","origin":"builtin","file":"<inline>","operation":"@math.divide","status":0,"input":[5,0],"message":"division by zero"}')
     end
   end
 
@@ -235,7 +235,7 @@ RSpec.describe "payloaded errors" do
     it "recovers a produced error by piping into a recovery clause" do
       expect_pipe
         .in("✅", "5")
-        .code("(x => ([x,0] | @divide) | (! => 999, y => y))")
+        .code("(x => ([x,0] | @math.divide) | (! => 999, y => y))")
         .out("✅", "999")
     end
   end

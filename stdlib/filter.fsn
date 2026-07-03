@@ -1,0 +1,13 @@
+# Keep the array elements (or object values) for which f(x) is truthy. Input:
+# {"f": predicate, "xs": array-or-object}. Like @map, it is polymorphic on xs.
+(
+  {"f": _ ? @Function, "xs": []} => [],
+  {"f": f ? @Function, "xs": [x, ...rest]} => x | f | (
+    false => {"f": f, "xs": rest} | @,
+    null  => {"f": f, "xs": rest} | @,
+    _     => [x, ...({"f": f, "xs": rest} | @)]
+  ),
+  {"f": f ? @Function, "xs": obj ? @Object} =>
+    {"f": (e => e | ([_, v] => v | f)), "xs": {"f": (k => [k, [obj, k] | @get]), "xs": obj | @keys} | @map} | @ | @toObject,
+  x => !{"kind": "argument_error", "origin": "stdlib", "operation": "@filter", "status": 0, "input": x, "expected": ["{\"f\": _ ? @Function, \"xs\": _ ? @Array}", "{\"f\": _ ? @Function, \"xs\": _ ? @Object}"]}
+)

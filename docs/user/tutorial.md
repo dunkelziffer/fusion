@@ -264,7 +264,7 @@ So far you have written programs that succeed. What happens when something goes
 wrong? Try dividing by zero. Save as `boom.fsn`:
 
 ```fusion
-(n => [n, 0] | @divide)
+(n => [n, 0] | @math.divide)
 ```
 
 ```sh
@@ -307,7 +307,7 @@ Catching is done with an error pattern:
 Here's `safeDivide` that returns `null` instead of failing:
 
 ```fusion
-(p => p | @divide | (! => null, n => n))
+(p => p | @math.divide | (! => null, n => n))
 ```
 
 Run `echo '[10, 0]' | fusion safeDivide.fsn` and you get `null` rather than an

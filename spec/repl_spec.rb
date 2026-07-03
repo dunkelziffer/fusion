@@ -17,7 +17,7 @@ RSpec.describe Fusion::CLI::Repl do
   let(:environment) { Fusion::Interpreter::Env.new.set_context(:dir, Dir.pwd) }
 
   let(:division_by_zero) do
-    '{"kind":"math_error","origin":"builtin","file":"<inline>","operation":"@divide","status":0,"input":[1,0],"message":"division by zero"}'
+    '{"kind":"math_error","origin":"builtin","file":"<inline>","operation":"@math.divide","status":0,"input":[1,0],"message":"division by zero"}'
   end
 
   let(:self_cycle) do
@@ -55,7 +55,7 @@ RSpec.describe Fusion::CLI::Repl do
     end
 
     it "renders an error expression with a `!` prefix" do
-      expect(repl.handle("[1, 0] | @divide", environment)).to eq("!#{division_by_zero}")
+      expect(repl.handle("[1, 0] | @math.divide", environment)).to eq("!#{division_by_zero}")
     end
 
     it "renders a function leniently" do
@@ -94,7 +94,7 @@ RSpec.describe Fusion::CLI::Repl do
     end
 
     it "allows binding errors to identifiers and renders errors with a `!` prefix" do
-      expect(repl.handle("bad = [1, 0] | @divide", environment)).to eq("!#{division_by_zero}")
+      expect(repl.handle("bad = [1, 0] | @math.divide", environment)).to eq("!#{division_by_zero}")
       expect(repl.handle("bad", environment)).to eq("!#{division_by_zero}")
     end
   end

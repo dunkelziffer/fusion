@@ -313,7 +313,7 @@ particular built-ins:
   is per-call: it is not enough for the function to have *some* error clause;
   that clause must match the specific error received. An error of a shape no
   clause catches propagates unchanged.
-- **Built-in and stdlib operations (`@divide`, `@OP.sum`, `@Integer`, …) all
+- **Built-in and stdlib operations (`@math.divide`, `@OP.sum`, `@Integer`, …) all
   propagate** their input error without examining it. To inspect or compare an
   error's payload, you must catch it first and operate on the extracted payload:
   `!42 | (!a => a) | @Integer` returns `true` (the payload `42` *is* an integer);
@@ -323,7 +323,7 @@ particular built-ins:
   evaluating an element/member. `[1, !"bad", 2]` evaluates to `!"bad"`, not to
   an array of three things.
 - **Constructing an error from an erroring expression** propagates the inner
-  error rather than wrapping it. `!([5,0] | @divide)` evaluates to the division
+  error rather than wrapping it. `!([5,0] | @math.divide)` evaluates to the division
   error itself (a `math_error`, §6.5), never to an error wrapping an error. (This
   preserves the rule that there is never more than one error simultaneously.)
 - **When the function value itself is an error** (e.g. `value | @undefined_name`
@@ -355,7 +355,7 @@ There are two origins of error values, and they differ in payload:
 #### Payload shape
 
 ```json
-{"kind": "argument_error", "origin": "builtin", "operation": "@divide", "status": 0, "input": [1, "x"], "expected": ["[_ ? @Number, _ ? @Number]"]}
+{"kind": "argument_error", "origin": "builtin", "operation": "@math.divide", "status": 0, "input": [1, "x"], "expected": ["[_ ? @Number, _ ? @Number]"]}
 ```
 
 | Field       | Required | Meaning                                                                                                                    |
@@ -405,7 +405,7 @@ User errors don't have to adhere to this standard.
 ## 7. Built-in functions
 
 All built-ins are ordinary one-argument functions, **reached with an `@` prefix**
-(`@divide`, `@Integer`, …); see §9.2 for how `@name` resolves. The names in the tables
+(`@size`, `@Integer`, …); see §9.2 for how `@name` resolves. The names in the tables
 below are the built-in names; write `@` before them to use them. **Operations** return
 `!` on type-invalid or domain-invalid input. **Predicates** return `false` on any
 input that is not of the queried type (they never return `!`).
@@ -416,17 +416,11 @@ below are stdlib functions built on `@OP.*`, so they follow a per-directory over
 
 ### 7.1 Arithmetic
 
-Two built-ins:
-
-| Name     | Input             | Result                                            |
-| -------- | ----------------- | ------------------------------------------------- |
-| `divide` | `[number, number]`| quotient, always a **float**; `!` if divisor is 0 |
-| `floor`  | `number`          | floor (integer)                                   |
-
 Addition, subtraction, multiplication and negation are `@OP.sum`/`product`/`negate`
 (§7.6); the named stdlib forms are `@add`, `@subtract`, `@multiply` (negation has no
 named form — use `@OP.negate`). Integer division/remainder are `@OP.quotient` /
-`@OP.modulo`.
+`@OP.modulo`. Division and the other numeric functions live in `@math` (§7.6a):
+`@math.divide`, `@math.floor`, `@math.round`, `@math.abs`, `@math.log`, etc.
 
 ### 7.2 Comparison
 
@@ -517,6 +511,30 @@ are stdlib files built on `@OP.*`, so they follow a local override (see the how-
 | `OP.or`       | array                                    | `true` if any element is truthy (`false` for `[]`)       |
 | `OP.not`      | `_`                                      | `true` if the operand is falsey                          |
 
+### 7.6a The `@math` object (numeric functions and constants)
+
+`@math` is a built-in object (shadowable like `@OP`) of numeric functions and two
+constants. `pi`/`e` are plain values; the rest are one-argument functions. A
+non-finite input to `round`/`floor`/`ceil`, a `log` of a non-positive number, and a
+`pow` with a complex result are `math_error`s.
+
+| Member        | Input                | Result                                                     |
+| ------------- | -------------------- | ---------------------------------------------------------- |
+| `math.pi`     | —                    | `3.141592653589793` (a value, not a function)              |
+| `math.e`      | —                    | `2.718281828459045` (a value)                              |
+| `math.round`  | number               | nearest integer (half away from zero)                      |
+| `math.floor`  | number               | floor (integer)                                            |
+| `math.ceil`   | number               | ceiling (integer)                                          |
+| `math.divide` | `[number, number]`   | quotient, always a **float**; `!` if divisor is 0          |
+| `math.sign`   | number               | `-1` / `0` / `1`                                           |
+| `math.abs`    | number               | absolute value (keeps int/float)                           |
+| `math.rand`   | `null` or a positive integer `n` | float in `[0, 1)`, or integer in `[0, n)`      |
+| `math.sin`    | number               | sine (radians), float                                      |
+| `math.cos`    | number               | cosine (radians), float                                    |
+| `math.exp`    | number               | `e^x`, float                                               |
+| `math.log`    | positive number      | natural log, float; `!` on a non-positive number           |
+| `math.pow`    | `[base, exponent]`   | `base^exp` (integer when base and non-negative integer exponent; else float); `!` on a complex result |
+
 ### 7.7 Special built-ins: `ENV` and `load`
 
 These resolve in the `@name` chain like other built-ins (so a sibling file of the
@@ -606,7 +624,7 @@ Confinement is lexical (it normalises `..`) and follows existing symlinks. It co
 references to a directory tree; it is not a security sandbox and needs none, since Fusion
 cannot write files. Pass `--jail '*'` to disable confinement entirely.
 
-**Built-ins are reached through this same mechanism**: `@divide`, `@Integer`, etc. are
+**Built-ins are reached through this same mechanism**: `@size`, `@Integer`, etc. are
 `@name` references that resolve at step 2. A *bare* identifier (without `@`) is only
 a pattern hole; it never denotes a built-in.
 
