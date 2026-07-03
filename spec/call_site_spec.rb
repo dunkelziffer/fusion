@@ -22,7 +22,7 @@ RSpec.describe "the error `file` (innermost user-code call site)" do
       expect_pipe
         .in("✅", "5")
         .code("@map")
-        .out("❌", '{"kind":"argument_error","origin":"stdlib","file":"<fusion>","operation":"@map","status":0,"input":5,"expected":["{\"f\": _ ? @Function, \"xs\": _ ? @Array}"]}')
+        .out("❌", '{"kind":"argument_error","origin":"stdlib","file":"<fusion>","operation":"@map","status":0,"input":5,"expected":["{\"f\": _ ? @Function, \"xs\": _ ? @Array}","{\"f\": _ ? @Function, \"xs\": _ ? @Object}"]}')
     end
 
     it "piping the input into a non-function program" do
@@ -45,7 +45,7 @@ RSpec.describe "the error `file` (innermost user-code call site)" do
       expect_pipe
         .in("✅", "5")
         .code("(x => x | @map)")
-        .out("❌", '{"kind":"argument_error","origin":"stdlib","file":"<inline>","operation":"@map","status":0,"input":5,"expected":["{\"f\": _ ? @Function, \"xs\": _ ? @Array}"]}')
+        .out("❌", '{"kind":"argument_error","origin":"stdlib","file":"<inline>","operation":"@map","status":0,"input":5,"expected":["{\"f\": _ ? @Function, \"xs\": _ ? @Array}","{\"f\": _ ? @Function, \"xs\": _ ? @Object}"]}')
     end
 
     it "a member access (.name)" do
@@ -91,7 +91,7 @@ RSpec.describe "the error `file` (innermost user-code call site)" do
       expect_pipe
         .in("✅", "5")
         .file_path("callsite/stdlib.fsn")
-        .out("❌", '{"kind":"argument_error","origin":"stdlib","file":"spec/fixtures/callsite/stdlib.fsn","operation":"@map","status":0,"input":5,"expected":["{\"f\": _ ? @Function, \"xs\": _ ? @Array}"]}')
+        .out("❌", '{"kind":"argument_error","origin":"stdlib","file":"spec/fixtures/callsite/stdlib.fsn","operation":"@map","status":0,"input":5,"expected":["{\"f\": _ ? @Function, \"xs\": _ ? @Array}","{\"f\": _ ? @Function, \"xs\": _ ? @Object}"]}')
     end
 
     it "a member access (.name)" do

@@ -485,7 +485,7 @@ Refines §2.9: same general shape, more orthogonal fields, field values easier t
 - 🧑 ✅ A runtime resource limit being exceeded is a separate `limit_error` (currently a stack overflow, `"stack level too deep"`): the runtime gave up because a space/time budget ran out — not an engine defect. The general name (vs `stack_error`) lets future runtime resource limits share the kind.
 - 🧑 ✅ stdlib functions preemptively handle all *argument* errors. They appear atomic. No input should be able to trigger e.g. an error in a `|` operation. *Argument* errors refer to the stdlib function itself (`origin: "stdlib"`, `operation` = its `@`-reference).
 - 🧑 ✅ stdlib functions are *transparent* for *inner errors*. They can't catch every possible error from inner operations, so an inner error bubbles through unchanged. The purest example is `@map`, which knows nothing about the given `f`: an error from `f` originates from `f` and simply bubbles through `map`.
-- 🧑 ✅ stdlib higher-order functions (`@all`/`@map`/`@mapValues`) guard `f ? @Function` in every clause — a non-function `f` errors even on an empty collection — and `expected` shows the guard.
+- 🧑 ✅ stdlib higher-order functions (`@all`/`@map`) guard `f ? @Function` in every clause — a non-function `f` errors even on an empty collection — and `expected` shows the guard.
 - 🧑 ✅ `@all` short-circuits: the first falsey item yields `false`, the rest go untested.
 
 ### Alternatives
@@ -927,6 +927,7 @@ TODO: Under `-!` the input is the error payload, so empty stdin is a usage error
 
 - 🧑 ✅ The standard library is a directory of `.fsn` files reached via `@name` (the designer's file-reference scheme — "this should also solve how we build our standard library").
 - 🤖 ✅ Each stdlib file is typically one function written in Fusion; only true primitives that cannot be written in Fusion are built into the interpreter.
+- 🧑 ✅ `@map` is polymorphic on its `xs`: an array maps elementwise, an object maps over the values keeping the keys. The former separate `@mapValues` is folded in (one name, dispatched by collection type).
 
 ### Alternatives
 

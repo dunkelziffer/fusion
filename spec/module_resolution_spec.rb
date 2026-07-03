@@ -216,14 +216,14 @@ RSpec.describe "@-resolution" do
         .out("❌", '{"kind":"reference_error","origin":"code","file":"spec/fixtures/ref/sub/usesParent.fsn","operation":"@../helper","status":0,"input":null,"message":"outside the jail"}')
     end
 
-    # @mapValues is a stdlib file that calls its stdlib sibling @map. Both must
-    # load even under a tight, unrelated jail — the stdlib is exempt, and a
+    # @sanitize is a stdlib file that calls stdlib siblings (@map, @concat). All
+    # must load even under a tight, unrelated jail — the stdlib is exempt, and a
     # stdlib file's siblings are inside the stdlib, so no user jail can break them.
     it "keeps the stdlib and its internal sibling references reachable despite a tight jail" do
       expect_pipe
         .jail("ref/localmath")
-        .code('(_ => {"f": (v => [v, 10] | @OP.sum), "object": {"a": 1, "b": 2}} | @mapValues)')
-        .out("✅", '{"a":11,"b":12}')
+        .code('(_ => {"a": 1, "b": [1e400]} | @sanitize)')
+        .out("✅", '{"a":1,"b":["<Infinity>"]}')
     end
 
     it "blocks an @load target that escapes the jail, without probing its existence" do

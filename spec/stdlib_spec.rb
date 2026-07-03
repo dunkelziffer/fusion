@@ -62,32 +62,55 @@ RSpec.describe "stdlib error handling" do
         .out("✅", "[1,4,9]")
     end
 
+    # When xs is an object, @map transforms each value and keeps the keys (the
+    # former @mapValues).
+    it "maps over an object's values, keeping the keys" do
+      expect_pipe
+        .in("✅", '{"a":1,"b":2,"c":3}')
+        .code('(o => {"f": (n => [n, 2] | @OP.product), "xs": o} | @map)')
+        .out("✅", '{"a":2,"b":4,"c":6}')
+    end
+
+    it "is empty for the empty object" do
+      expect_pipe
+        .in("✅", "{}")
+        .code('(o => {"f": (n => n), "xs": o} | @map)')
+        .out("✅", "{}")
+    end
+
     it "errors on a non-{f,xs} value" do
       expect_pipe
         .in("✅", "5")
         .code("(x => x | @map)")
-        .out("❌", '{"kind":"argument_error","origin":"stdlib","file":"<inline>","operation":"@map","status":0,"input":5,"expected":["{\"f\": _ ? @Function, \"xs\": _ ? @Array}"]}')
+        .out("❌", '{"kind":"argument_error","origin":"stdlib","file":"<inline>","operation":"@map","status":0,"input":5,"expected":["{\"f\": _ ? @Function, \"xs\": _ ? @Array}","{\"f\": _ ? @Function, \"xs\": _ ? @Object}"]}')
     end
 
     it "errors when a required key is missing" do
       expect_pipe
         .in("✅", "[1,2]")
         .code('(xs => {"xs": xs} | @map)')
-        .out("❌", '{"kind":"argument_error","origin":"stdlib","file":"<inline>","operation":"@map","status":0,"input":{"xs":[1,2]},"expected":["{\"f\": _ ? @Function, \"xs\": _ ? @Array}"]}')
+        .out("❌", '{"kind":"argument_error","origin":"stdlib","file":"<inline>","operation":"@map","status":0,"input":{"xs":[1,2]},"expected":["{\"f\": _ ? @Function, \"xs\": _ ? @Array}","{\"f\": _ ? @Function, \"xs\": _ ? @Object}"]}')
     end
 
     it "errors when xs is present but not an array" do
       expect_pipe
         .in("✅", "null")
         .code('(_ => {"f": @OP.negate, "xs": "nope"} | @map)')
-        .out("❌", '{"kind":"argument_error","origin":"stdlib","file":"<inline>","operation":"@map","status":0,"input":{"f":"<function>","xs":"nope"},"expected":["{\"f\": _ ? @Function, \"xs\": _ ? @Array}"]}')
+        .out("❌", '{"kind":"argument_error","origin":"stdlib","file":"<inline>","operation":"@map","status":0,"input":{"f":"<function>","xs":"nope"},"expected":["{\"f\": _ ? @Function, \"xs\": _ ? @Array}","{\"f\": _ ? @Function, \"xs\": _ ? @Object}"]}')
     end
 
     it "validates f eagerly: a non-function f errors even when xs is empty" do
       expect_pipe
         .in("✅", "[]")
         .code('(xs => {"f": 5, "xs": xs} | @map)')
-        .out("❌", '{"kind":"argument_error","origin":"stdlib","file":"<inline>","operation":"@map","status":0,"input":{"f":5,"xs":[]},"expected":["{\"f\": _ ? @Function, \"xs\": _ ? @Array}"]}')
+        .out("❌", '{"kind":"argument_error","origin":"stdlib","file":"<inline>","operation":"@map","status":0,"input":{"f":5,"xs":[]},"expected":["{\"f\": _ ? @Function, \"xs\": _ ? @Array}","{\"f\": _ ? @Function, \"xs\": _ ? @Object}"]}')
+    end
+
+    it "validates f eagerly for an object too: a non-function f errors on an empty object" do
+      expect_pipe
+        .in("✅", "{}")
+        .code('(o => {"f": 5, "xs": o} | @map)')
+        .out("❌", '{"kind":"argument_error","origin":"stdlib","file":"<inline>","operation":"@map","status":0,"input":{"f":5,"xs":{}},"expected":["{\"f\": _ ? @Function, \"xs\": _ ? @Array}","{\"f\": _ ? @Function, \"xs\": _ ? @Object}"]}')
     end
   end
 
@@ -118,21 +141,21 @@ RSpec.describe "stdlib error handling" do
       expect_pipe
         .in("✅", "null")
         .code('(_ => {"f": @OP.negate} | @map)')
-        .out("❌", '{"kind":"argument_error","origin":"stdlib","file":"<inline>","operation":"@map","status":0,"input":{"f":"<function>"},"expected":["{\"f\": _ ? @Function, \"xs\": _ ? @Array}"]}')
+        .out("❌", '{"kind":"argument_error","origin":"stdlib","file":"<inline>","operation":"@map","status":0,"input":{"f":"<function>"},"expected":["{\"f\": _ ? @Function, \"xs\": _ ? @Array}","{\"f\": _ ? @Function, \"xs\": _ ? @Object}"]}')
     end
 
     it "@map of a bare function echoes the function placeholder" do
       expect_pipe
         .in("✅", "null")
         .code("(_ => (y => y) | @map)")
-        .out("❌", '{"kind":"argument_error","origin":"stdlib","file":"<inline>","operation":"@map","status":0,"input":"<function>","expected":["{\"f\": _ ? @Function, \"xs\": _ ? @Array}"]}')
+        .out("❌", '{"kind":"argument_error","origin":"stdlib","file":"<inline>","operation":"@map","status":0,"input":"<function>","expected":["{\"f\": _ ? @Function, \"xs\": _ ? @Array}","{\"f\": _ ? @Function, \"xs\": _ ? @Object}"]}')
     end
 
     it "renders deeply nested functions and non-finite numbers in the echoed input" do
       expect_pipe
         .in("✅", "null")
         .code('(_ => {"a": [1, (y => y), {"deep": @OP.negate}], "b": [1e400]} | @map)')
-        .out("❌", '{"kind":"argument_error","origin":"stdlib","file":"<inline>","operation":"@map","status":0,"input":{"a":[1,"<function>",{"deep":"<function>"}],"b":["<Infinity>"]},"expected":["{\"f\": _ ? @Function, \"xs\": _ ? @Array}"]}')
+        .out("❌", '{"kind":"argument_error","origin":"stdlib","file":"<inline>","operation":"@map","status":0,"input":{"a":[1,"<function>",{"deep":"<function>"}],"b":["<Infinity>"]},"expected":["{\"f\": _ ? @Function, \"xs\": _ ? @Array}","{\"f\": _ ? @Function, \"xs\": _ ? @Object}"]}')
     end
   end
 
@@ -154,42 +177,6 @@ RSpec.describe "stdlib error handling" do
     end
   end
 
-  describe "@mapValues" do
-    it "applies a function to each value, keeping the keys" do
-      expect_pipe
-        .in("✅", '{"a":1,"b":2,"c":3}')
-        .code('(o => {"f": (n => [n, 2] | @OP.product), "object": o} | @mapValues)')
-        .out("✅", '{"a":2,"b":4,"c":6}')
-    end
-
-    it "is empty for the empty object" do
-      expect_pipe
-        .in("✅", "{}")
-        .code('(o => {"f": (n => n), "object": o} | @mapValues)')
-        .out("✅", "{}")
-    end
-
-    it "errors when object is not an object" do
-      expect_pipe
-        .in("✅", "5")
-        .code('(o => {"f": (n => n), "object": o} | @mapValues)')
-        .out("❌", '{"kind":"argument_error","origin":"stdlib","file":"<inline>","operation":"@mapValues","status":0,"input":{"f":"<function>","object":5},"expected":["{\"f\": _ ? @Function, \"object\": _ ? @Object}"]}')
-    end
-
-    it "errors on a non-{f,object} value" do
-      expect_pipe
-        .in("✅", "5")
-        .code("(x => x | @mapValues)")
-        .out("❌", '{"kind":"argument_error","origin":"stdlib","file":"<inline>","operation":"@mapValues","status":0,"input":5,"expected":["{\"f\": _ ? @Function, \"object\": _ ? @Object}"]}')
-    end
-
-    it "validates f eagerly: a non-function f errors even when the object is empty" do
-      expect_pipe
-        .in("✅", "{}")
-        .code('(o => {"f": 5, "object": o} | @mapValues)')
-        .out("❌", '{"kind":"argument_error","origin":"stdlib","file":"<inline>","operation":"@mapValues","status":0,"input":{"f":5,"object":{}},"expected":["{\"f\": _ ? @Function, \"object\": _ ? @Object}"]}')
-    end
-  end
 
   describe "@all" do
     it "is true when every item satisfies the predicate" do
