@@ -37,17 +37,24 @@ Errors are not regular values:
 
 ### 2.1 Expressions
 
-Precedence, tightest to loosest:
+Precedence, tightest to loosest (everything below the postfix level is syntactic
+sugar — see §2.7):
 
 1. Primary: literals, `[...]`, `{...}`, `(...)` grouping, function literals,
    identifiers, `@`-references.
-2. Postfix member/index access: `x.key`, `x[expr]`.
-3. Error prefix: `!expr` (construct an error). Bare `!` (with no operand) is the
-   same as `!null`.
-4. Pipe (application): `value | function`. Left-associative
-   (`a | f | g` ≡ `(a | f) | g`).
-5. Clause arrow: `=>` (loosest, so the entire right-hand side of a clause is one
-   expression).
+2. Postfix: member access `x.key`, index read `x[expr]`, index write `x[key = value]`.
+3. Unary prefix: `!x` (construct an error; bare `!` is `!null`), `-x` (negate),
+   `/x` (invert), `~x` (logical not).
+4. Pipe (application) and map-pipes: `value | function`, `|:` (map), `|?` (filter),
+   `|+` (reduce). Left-associative (`a | f | g` ≡ `(a | f) | g`).
+5. Multiplicative: `*`, `/`, `%`, `//`. Left-associative.
+6. Additive: `+`, `-`. Left-associative.
+7. Ordering: `??`. Left-associative.
+8. Equality: `==`.
+9. Logical and: `&&`.
+10. Logical or: `||`.
+11. Clause arrow: `=>` (loosest, so the entire right-hand side of a clause is one
+    expression).
 
 ### 2.2 Function literals
 
@@ -95,17 +102,25 @@ by the same rule.
 ```ebnf
 file           = expr ;
 
-expr           = pipe ;
-pipe           = prefix { "|" prefix } ;
-prefix         = "!" [ prefix ] | postfix ;            (* bare "!" -> !null *)
-postfix        = primary { "." identifier | "[" expr "]" } ;
+expr           = logical_or ;
+logical_or     = logical_and { "||" logical_and } ;
+logical_and    = equality { "&&" equality } ;
+equality       = ordering { "==" ordering } ;
+ordering       = additive { "??" additive } ;
+additive       = multiplicative { ( "+" | "-" ) multiplicative } ;
+multiplicative = pipe { ( "*" | "/" | "%" | "//" ) pipe } ;
+pipe           = unary { ( "|" | "|:" | "|?" | "|+" ) unary } ;
+unary          = "!" [ unary ]                          (* bare "!" -> !null; "!x" builds an error *)
+               | ( "-" | "/" | "~" ) unary              (* negate / invert / not; operand required *)
+               | postfix ;
+postfix        = primary { "." identifier | "[" expr [ "=" expr ] "]" } ;   (* "[e]" reads, "[e = e]" writes *)
 primary        = atom | array | object | function | identifier | fileref | "(" expr ")" ;
 
 identifier     = letter { letter | digit | "_" } ;
 
 atom           = "null" | "true" | "false" | number | string ;
-number         = int_lit | float_lit ;
-int_lit        = [ "-" ] digit { digit } ;
+number         = int_lit | float_lit ;                 (* unsigned; a negative is unary "-" *)
+int_lit        = digit { digit } ;
 float_lit      = int_lit "." digit { digit } [ exp ] | int_lit exp ;
 exp            = ("e" | "E") [ "+" | "-" ] digit { digit } ;
 string         = '"' { char | escape } '"' ;           (* char excludes raw newline; use \n *)
@@ -119,8 +134,8 @@ spread         = "..." expr ;
 function       = "(" [ clause { "," clause } [ "," ] ] ")" ;   (* "()" is the empty function *)
 clause         = pattern "=>" expr ;
 
-fileref        = "@" [ refpath ] ;                     (* bare "@" = current unit *)
-refpath        = { "../" } segment { "/" segment } ;   (* ".fsn" implied *)
+fileref        = ( "@" | "@@" ) [ path ] ;             (* bare "@"/"@@" = current unit / its super *)
+path           = { ".." "/" } segment { "/" segment } ;   (* one tight lexer token; ".fsn" implied *)
 segment        = identifier ;
 
 pattern        = p_error | p_guarded ;
@@ -128,7 +143,7 @@ p_error        = "!" | "!" p_guarded ;                 (* bare "!" matches any e
 p_guarded      = p_core [ "?" predicate ] ;
 predicate      = pipe ;                                (* a `|` chain of functions; the matched value flows in *)
 p_core         = p_literal | p_bind | p_wildcard | p_array | p_object ;
-p_literal      = atom ;
+p_literal      = atom | "-" number ;                   (* "-" number is a negative literal *)
 p_wildcard     = "_" ;
 p_bind         = identifier ;
 
@@ -153,6 +168,63 @@ p_rest         = "..." [ identifier ] ;
 Object literals and object patterns may not repeat a fixed key. `{"a": …, "a": …}`
 is a `syntax_error`. Keys arriving through `...spread` / `...rest` are dynamic and
 not checked.
+
+A file-reference **path** is a single token, lexed only immediately after `@` or `@@`
+with no intervening whitespace: tight `/`-separated `segment`s (identifiers) with an
+optional leading `../` chain. So a `/` that is not part of such a path is division/invert:
+`@a/b` is the path `a/b`, but `@a / b` is `@a` divided by `b`. `//` is always the
+integer-quotient operator, never a path separator.
+
+There are no negative-number tokens: `-` is always the negation/subtraction operator.
+A negative literal is written `-` directly before a number — the parser folds it into a
+literal in expressions, and `p_literal` admits it directly in patterns.
+
+### 2.7 Operators (syntactic sugar)
+
+Every operator here is **pure syntactic sugar**: it desugars to a pipe into an `@OP.*`
+member (§7.6), or, for the map-pipes, into a stdlib call. The runtime has no operators of
+its own. Because the targets are `@OP.*`, a directory that shadows `@OP` reskins the
+operators too.
+
+House style: write pipes tight (`x|@f`) and value operators spaced (`a + b`), so spacing
+mirrors precedence.
+
+```
+  -a           →  negative literal if a is a number, else  a | @OP.negate
+  /a           →  a | @OP.invert
+  ~a           →  a | @OP.not
+  a + b + c    →  [a, b, c] | @OP.sum
+  a - b        →  [a, b | @OP.negate] | @OP.sum      (numeric b folds: a - 42 → [a, -42] | @OP.sum)
+  a * b * c    →  [a, b, c] | @OP.product
+  a / b        →  [a, b | @OP.invert] | @OP.product
+  a % b        →  [a, b] | @OP.modulo
+  a // b       →  [a, b] | @OP.quotient
+  a ?? b       →  [a, b] | @OP.compare
+  a == b == c  →  [a, b, c] | @OP.equal
+  a && b && c  →  [a, b, c] | @OP.and
+  a || b || c  →  [a, b, c] | @OP.or
+  xs |: f      →  {"c": xs, "f": f} | @map
+  xs |? f      →  {"c": xs, "f": f} | @filter
+  xs |+ f      →  {"c": xs, "f": f} | @reduce
+  c[k]         →  index read  (core syntax, §8)
+  c[k = v]     →  index write (core syntax, §8)
+```
+
+Folding and associativity:
+
+- A maximal run of `+`/`-` folds into one `@OP.sum` over all terms; each `-` term is
+  negated (a numeric literal folds to a negative literal, otherwise via `@OP.negate`).
+- A maximal run of `*`/`/` folds into one `@OP.product`; each `/` term is inverted via
+  `@OP.invert` (never a literal, so `1/x` stays a float and `/0` stays a runtime error).
+- Runs of `==`, `&&`, `||` fold n-ary into `@OP.equal` / `@OP.and` / `@OP.or`.
+- `%`, `//`, `??` are binary and left-associative; they sit at their level and break a
+  fold run: `a * b % c` is `(a * b) % c`; `a ?? b == 0` is `(a ?? b) == 0`.
+
+Because pipe binds tighter than the value operators, `x|@f + 1` is `(x|@f) + 1`; to pipe a
+computed value onward, parenthesize it: `(a + b)|@f`, `(a ?? b)|@gt`.
+
+Comparisons: `a == b` is equality directly; `a < b` is `(a ?? b) | @lt` (likewise `@gt` /
+`@lte` / `@gte`), since `??` yields the `-1`/`0`/`1` ordering those stdlib helpers interpret.
 
 ---
 
@@ -416,11 +488,12 @@ below are stdlib functions built on `@OP.*`, so they follow a per-directory over
 
 ### 7.1 Arithmetic
 
-Addition, multiplication and negation are `@OP.sum` / `@OP.product` / `@OP.negate`
-(§7.6); subtraction is `[a, b | @OP.negate] | @OP.sum`. There are no named `@add` /
-`@subtract` / `@multiply` helpers — pipe a pair into the `@OP` member directly.
-Integer division/remainder are `@OP.quotient` / `@OP.modulo`. Division and the other
-numeric functions live in `@math` (§7.6a): `@math.divide`, `@math.floor`,
+In source you normally write the infix sugar of §2.7 — `a + b`, `-a`, `a * b`, `a % b`,
+`a // b` — which desugars to the members below. Addition, multiplication and negation are
+`@OP.sum` / `@OP.product` / `@OP.negate` (§7.6); subtraction is `[a, b | @OP.negate] | @OP.sum`.
+There are no named `@add` / `@subtract` / `@multiply` helpers — pipe a pair into the `@OP`
+member directly. Integer division/remainder are `@OP.quotient` / `@OP.modulo`. Division and
+the other numeric functions live in `@math` (§7.6a): `@math.divide`, `@math.floor`,
 `@math.round`, `@math.abs`, `@math.log`, `@math.sqrt`, etc.
 
 ### 7.2 Comparison
@@ -436,7 +509,8 @@ named boolean forms **interpret that result** and are applied *after* it:
 | `lte` | `true` | `true` | `false`| `null` |
 | `gte` | `false`| `true` | `true` | `null` |
 
-So `a < b` is written `[a, b] | @OP.compare | @lt`. Because the caller invokes
+So `a < b` is written `[a, b] | @OP.compare | @lt` (with sugar: `(a ?? b) | @lt`; equality
+is `a == b` — see §2.7). Because the caller invokes
 `@OP.compare`, the ordering follows a per-directory `@OP` override while the helper
 itself is fixed and shadow-independent. A partial order whose `compare` returns `null`
 for incomparable operands passes that `null` straight through; any other input is an
@@ -445,7 +519,8 @@ helper runs.
 
 ### 7.3 Boolean
 
-The truthiness operators live in `@OP` (§7.6): `@OP.and`, `@OP.or`, `@OP.not`. They
+The truthiness operators live in `@OP` (§7.6): `@OP.and`, `@OP.or`, `@OP.not`, written
+with the sugar `a && b`, `a || b`, `~a` (§2.7). They
 judge truthiness (every value is truthy except `false` and `null`), not strict
 booleans, and always return a boolean. There are no top-level `@and`/`@or`/`@not`.
 The stdlib helpers `@truthy` and `@falsey` reduce any single value to its truthiness
@@ -463,13 +538,14 @@ everything except `false`/`null`, and `@falsey` is its complement.
 | `parseNumber` | string                      | integer or float; `!` if not numeric    |
 | `keys`        | object                      | array of key strings                    |
 | `values`      | object                      | array of values                         |
-| `get`         | `[array, int]` or `[object, string-key]` | element at that index/key (like `[]`, §8); `!` if out of range / missing |
-| `set`         | `[array, int, value]` or `[object, string-key, value]` | a **new** array/object with that entry set; an array index must already exist, an object key may be new |
 | `toObject`    | `[[string-key, value], …]`  | object built from entries; later duplicate keys win |
 
 `concat` (`[string, string]` → concatenation) and `chars` (string → array of its
 characters) are **standard-library** functions built on `join` / `split`, not
 built-ins.
+
+Indexed read (`x[k]`) and write (`x[k = v]`) are **core syntax**, not built-ins — there
+is no `@get`/`@set`; see §8.
 
 ### 7.5 Type predicates (predicates)
 
@@ -498,7 +574,7 @@ Notes:
 `@OP` is a built-in **object**, reached by member access (`@OP.sum`, `@OP.and`, …),
 holding the arithmetic/comparison/boolean operators. Its members generalise to an
 **array of any length** (`sum`/`product`/`and`/`or` fold; `equal` is deep over all
-elements); `compare` reports an ordering. Infix sugar (once built) desugars to `@OP.*`.
+elements); `compare` reports an ordering. The infix operators (§2.7) desugar to these members.
 
 `@OP` is **shadowable per directory**: place an `OP.fsn` sibling that overrides members
 (spread the originals with `@@`) to reskin the operators — complex numbers, matrices,
@@ -562,12 +638,18 @@ same name shadows them), but they are not plain unary value functions:
 
 ## 8. Member and index access
 
-- `x.key` — if `x` is an object containing `key`, its value; otherwise `!`.
-- `x[expr]` — if `x` is an array and `expr` is an integer in range, the element
-  (negative indices count from the end); if `x` is an object and `expr` is a string
-  key that exists, its value; otherwise `!`.
+Member access (`.`), index read (`[]`), and index write (`[=]`) are **core syntax**,
+evaluated directly by the runtime. There are no `@get`/`@set` built-ins.
 
-Both `.` and `[]` bind tighter than `|`.
+- `x.key` — if `x` is an object containing `key`, its value; otherwise `!`.
+- `x[expr]` — **read**: if `x` is an array and `expr` is an integer in range, the element
+  (negative indices count from the end); if `x` is an object and `expr` is a string key
+  that exists, its value; otherwise `!`.
+- `x[key = value]` — **write**: a **new** array/object with that one entry set; `x` itself
+  is unchanged. An array index must already exist (arrays are not extended; negative
+  indices count from the end); an object key may be new. `!` on a bad index/type.
+
+`.`, `[]`, and `[=]` are postfix and bind tighter than every operator (including `|`).
 
 ---
 

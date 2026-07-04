@@ -477,7 +477,7 @@ Refines §2.9: same general shape, more orthogonal fields, field values easier t
 - 🧑 ✅ Split `status` out from `input`. `status` is `0` (a value) or `1` (an error). On `1`, `input` carries the error's bare payload, so `input` is always valid JSON.
 - 🧑 ✅ `operation` now contains the failing operation's own **`@`-reference** (`@`, `@@`, `@lt`, `@math.round`, `@../mod`, `@load`) or for Built-in *syntax* its own form (`|`, `.key`, `[]`, `parsing code`). Loading the top-level program file is `loading code` (not an `@`-reference).
 - 🧑 ✅ An `@`-reference takes no argument, so its `input` is `null` and its `status` is always `0`. `@load` is the exception: it's a function taking a filename.
-- 🧑 ✅ For *access errors* the "key" appears only once: `.name` carries the static key in `operation` and the object alone in `input`; `[]` is generic in `operation` with `input` = `[collection, key]` (the key is a dynamic value, and `[]` will later desugar to `@OP.get`).
+- 🧑 ✅ For *access errors* the "key" appears only once: `.name` carries the static key in `operation` and the object alone in `input`; `[]` is generic in `operation` with `input` = `[collection, key]` (the key is a dynamic value). `[]`/`[=]` are core syntax (§5.6), not `@`-references.
 - 🧑 ✅ A failure to read a file (missing file, directory given, access denied) is reported as `"operation": <the literal @-reference>`, `"input": null`, `"file": <the referring call site>`.
 - 🧑 ✅ `type_error` is merged into `argument_error`. The distinction between *wrong shape* and *wrong type* didn't fit Fusion's runtime type system.
 - 🧑 ✅ `expected` lists the acceptable inputs as Fusion patterns (the input matched none); an error with `expected` never also carries a `message`.
@@ -903,7 +903,7 @@ TODO: Under `-!` the input is the error payload, so empty stdin is a usage error
 
 ### Decisions
 
-- 🧑 ✅ No infix `+ - * / == < && …` until the core semantics are settled. Syntax sugar is explicitly deferred, not rejected.
+- 🧑 ⏪ No infix `+ - * / == < && …` until the core semantics are settled. Superseded by §5.6, which adds the sugar now that the semantics are settled.
 - 🧑 ✅ Arithmetic, comparison, and boolean operations are built-in functions reached via an `@-reference`, e.g. `[a, b] | @OP.sum`.
 
 ### Alternatives
@@ -1022,6 +1022,44 @@ TODO: Under `-!` the input is the error payload, so empty stdin is a usage error
 
 ### Cons
 
-- Not all operators with syntax sugar have been grouped into `@OP`. Notable exceptions are structural operators like `@map`, `@filter`, `@reduce` and `@get`.
+- Not all operators with syntax sugar have been grouped into `@OP`. Notable exceptions are structural operators like `@map`, `@filter`, `@reduce` and the core `[]`/`[=]` accessors.
 - The few helpers that still reference `@OP` (currently only `@range`) will ignore `@OP` overrides. To make them aware of `@OP` overrides, create a copy of their `stdlib` source code next to your `OP.fsn`.
 - The native way of writing division `[a, b | @OP.negate] | @OP.product` is numerically incorrect and might produce a double rounding error. For the numerically correct division you have to use `@math.divide`.
+
+---
+
+## 5.6 Syntax sugar
+
+Implements the infix-operator sugar deferred in §5.1, adds map/filter/reduce pipe
+operators, and promotes `[]`/`[=]` to core syntax. Desugaring is purely syntactic;
+the only new runtime node is the `[=]` setter.
+
+### Decisions
+
+- 🔢 ✅ Precedence, tightest→loosest: postfix (`.` `[]` `[=]`) → unary prefix (`! - / ~`) → pipe (`| |: |? |+`) → multiplicative (`* / % //`) → additive (`+ -`) → `??` → `==` → `&&` → `||`. Pipe binds just under unary, tighter than every value operator.
+- 🧑 ✅ House style: write pipes with no surrounding spaces (`x|@f`), value operators spaced.
+- 🧑 ✅ The array/object setter is core syntax `container[key = value]`; the `@set` builtin is removed.
+- 🧑 ✅ The getter `container[key]` stays core syntax; the `@get` builtin is removed.
+- 🧑 ✅ A maximal run of `+`/`-` folds to one `[terms] | @OP.sum`; a run of `*`/`/` to one `[terms] | @OP.product`. `-` operands are negated, `/` operands inverted.
+- 🧑 ✅ `-` is always an operator; the lexer emits no negative-number literals.
+- 🧑 ✅ A `-` before a bare numeric literal folds into a negative literal (in expressions and patterns alike); any other operand becomes `operand | @OP.negate`. In a pattern, `-` may only precede a numeric literal.
+- 🧑 ✅ `/` never folds to a literal: `a / 2` → `[a, 2|@OP.invert] | @OP.product`, so `/0` stays a runtime `math_error`.
+- 🧑 ✅ A single `/` is a path separator only inside a file-reference path; elsewhere it is division/invert. `@a/b` is the path `a/b`; `@a / b` (any space around the slash) is `@a` divided by `b`.
+- 🧑 ✅ The lexer emits a `path` token only immediately after `@`/`@@`, tight: no space after `@`/`@@`, interior slashes abutting their segments. A path starts with an identifier or `..`, never a lone `.` (so `@.map` is `.map` access on bare `@`). Bare `@`/`@@` when no tight path follows.
+- 🧑 ✅ Breaking: whitespace between `@`/`@@` and its path is no longer allowed (`@ name` is a syntax error).
+- 🧑 ✅ `~a` desugars to `a | @OP.not` — shadowable, consistent with `&&`/`||`.
+- 🧑 ✅ Binary targets: `a % b`→`[a,b]|@OP.modulo`, `a // b`→`[a,b]|@OP.quotient`, `a ?? b`→`[a,b]|@OP.compare`; runs of `==`/`&&`/`||` fold n-ary to `@OP.equal`/`@OP.and`/`@OP.or`.
+- 🧑 ✅ `??` is its own precedence level, tighter than `==` (compare produces an ordinal that `==` then tests; a boolean can't be compared).
+- 🧑 ✅ `xs |: f`, `xs |? f`, `xs |+ f` desugar to `{"c": xs, "f": f}` piped into `@map`/`@filter`/`@reduce`.
+
+### Alternatives
+
+- 🤖 ⏪ Lex negative-number literals (JSON-style). Rewound: `a-3` would be ambiguous between the literal `-3` and subtraction.
+- 🤖 ❌ Desugar every `-x` to `x | @OP.negate`, dropping literal negatives. Rejected: `-5` should stay a plain literal, not an `@OP`-routed computation.
+- 🤖 ❌ Assemble the path in the parser so `@a / b` is also the path `a/b` (divide via `(@a) / b`). Rejected: a spaced `@a / b` should read as division like every other operator.
+
+### Pros
+
+- Pipe-tightest keeps the useful reading paren-free: a pipe's RHS is always a function and arithmetic never yields one, so `x|@f + 1` can only sensibly mean `(x|@f) + 1`.
+- `predicate = pipe` is unchanged, so no value operator can appear in a pattern predicate — expressions and patterns stay symmetric.
+- Existing programs reparse identically: everything looser than pipe is new syntax.

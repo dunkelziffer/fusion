@@ -139,11 +139,12 @@ productive structure surrounds it.
 
 ## The roads not taken (and one we're still tempted by)
 
-Two ideas were explored and deliberately set aside, both documented in the design doc.
+Two ideas were explored and set aside for a time. One — operator sugar — has since been
+reintroduced; the other remains a road not taken. Both are documented in the design doc.
 
-**Operator sugar.** We could write `a + b` and desugar it to `[a, b] | @OP.sum`. We rolled
-this back early to keep the core honest, with the explicit intent to reintroduce it
-once the semantics were settled. It is a pure ergonomics layer; it changes nothing
+**Operator sugar** *(reintroduced)*. `a + b` desugars to `[a, b] | @OP.sum`. We rolled
+this back early to keep the core honest, then added it once the semantics settled
+(reference §2.7, design §5.6). It is a pure ergonomics layer; it changes nothing
 underneath.
 
 **Destructuring functions.** The tantalizing one. Since a function literal is visibly
