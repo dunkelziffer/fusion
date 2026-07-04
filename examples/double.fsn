@@ -1,4 +1,4 @@
 (
   [] => [],
-  [first, ...rest] => [[2, first] | @OP.product, ...rest | @]
+  [first, ...rest] => [2 * first, ...rest|@]
 )

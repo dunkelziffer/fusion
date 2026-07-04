@@ -67,35 +67,136 @@ module Fusion
     end
 
     def parse_expr
-      parse_pipe
+      parse_or
+    end
+
+    # --- Operator sugar (reference §2.7) --------------------------------------
+    # The ladder below desugars every operator to a pipe into an `@OP.*` member
+    # (or, for the map-pipes, a stdlib call). Tightest to loosest:
+    #   postfix · unary (! - / ~) · pipe (| |: |? |+) · * / % // · + - · ?? · == · && · ||
+    # `@OP.*` is a shadowable `:name` reference, so a local `@OP` reskins the operators.
+
+    def parse_or
+      operands = [parse_and]
+      while at?(:oror)
+        advance
+        operands << parse_and
+      end
+      fold_operator(operands, "or")
+    end
+
+    def parse_and
+      operands = [parse_equality]
+      while at?(:andand)
+        advance
+        operands << parse_equality
+      end
+      fold_operator(operands, "and")
+    end
+
+    def parse_equality
+      operands = [parse_ordering]
+      while at?(:eqeq)
+        advance
+        operands << parse_ordering
+      end
+      fold_operator(operands, "equal")
+    end
+
+    # `??` (compare) is binary and left-associative — it does not fold.
+    def parse_ordering
+      node = parse_additive
+      while at?(:qq)
+        advance
+        node = pipe_operator([node, parse_additive], "compare")
+      end
+      node
+    end
+
+    # A run of `+`/`-` folds into one `@OP.sum`; each `-` term is negated.
+    def parse_additive
+      terms = [parse_multiplicative]
+      folded = false
+      while at?(:plus) || at?(:minus)
+        negated = at?(:minus)
+        advance
+        term = parse_multiplicative
+        terms << (negated ? negate(term) : term)
+        folded = true
+      end
+      folded ? pipe_operator(terms, "sum") : terms.first
+    end
+
+    # A run of `*`/`/` folds into one `@OP.product` (each `/` term inverted); `%`/`//`
+    # are binary and break the run. Standard left-to-right: `a * b % c` is `(a * b) % c`.
+    def parse_multiplicative
+      node = parse_pipe
+      run = nil                                  # accumulating product-run terms, or nil
+      loop do
+        if at?(:star) || at?(:slash)
+          inverted = at?(:slash)
+          advance
+          term = parse_pipe
+          term = pipe_into(term, "invert") if inverted
+          if run
+            run << term
+          else
+            run = [node, term]
+          end
+        elsif at?(:percent) || at?(:slashslash)
+          node = pipe_operator(run, "product") if run
+          run = nil
+          op = at?(:percent) ? "modulo" : "quotient"
+          advance
+          node = pipe_operator([node, parse_pipe], op)
+        else
+          break
+        end
+      end
+      run ? pipe_operator(run, "product") : node
     end
 
     def parse_pipe
-      left = parse_prefix
-      while at?(:pipe)
-        advance
-        right = parse_prefix
-        left = Expression::Pipe.new(left: left, right: right)
+      node = parse_unary
+      loop do
+        if at?(:pipe)
+          advance
+          node = Expression::Pipe.new(left: node, right: parse_unary)
+        elsif at?(:pipemap) || at?(:pipefilter) || at?(:pipereduce)
+          target = { pipemap: "map", pipefilter: "filter", pipereduce: "reduce" }[peek.type]
+          advance
+          arg = Expression::ObjLit.new(pairs: [
+            KeyValuePair.new(key: "c", value: node),
+            KeyValuePair.new(key: "f", value: parse_unary),
+          ])
+          node = Expression::Pipe.new(left: arg, right: name_ref(target))
+        else
+          break
+        end
       end
-      left
+      node
     end
 
-    # Tokens that can begin a primary expression (used by parse_prefix to decide
-    # whether `!` is followed by an operand).
-    PRIMARY_STARTERS = %i[number string true_kw false_kw null_kw bang
-                          lbracket lbrace lparen ident at].freeze
+    # Tokens that can begin a unary operand — used to decide whether `!` has an
+    # operand or is the bare `!null`.
+    PRIMARY_STARTERS = %i[number string true_kw false_kw null_kw bang minus slash tilde
+                          lbracket lbrace lparen ident at atat].freeze
 
-    # `!` is a prefix operator that constructs an error from its operand. A bare
-    # `!` (no operand follows) is shorthand for `!null`. Binds tighter than `|`
-    # so `!x | f` is `(!x) | f`; looser than postfix so `!x.foo` is `!(x.foo)`.
-    def parse_prefix
+    # Unary prefixes: `!x` builds an error (bare `!` is `!null`); `-x` negates,
+    # `/x` inverts, `~x` is logical not. All bind tighter than `|`.
+    def parse_unary
       if at?(:bang)
         advance
-        if PRIMARY_STARTERS.include?(peek.type)
-          Expression::ErrLit.new(payload: parse_prefix)   # allow !!x to nest
-        else
-          Expression::ErrLit.new(payload: nil)            # bare ! -> !null
-        end
+        PRIMARY_STARTERS.include?(peek.type) ? Expression::ErrLit.new(payload: parse_unary) : Expression::ErrLit.new(payload: nil)
+      elsif at?(:minus)
+        advance
+        negate(parse_unary)
+      elsif at?(:slash)
+        advance
+        pipe_into(parse_unary, "invert")
+      elsif at?(:tilde)
+        advance
+        pipe_into(parse_unary, "not")
       else
         parse_postfix
       end
@@ -111,13 +212,50 @@ module Fusion
         elsif at?(:lbracket)
           advance
           idx = parse_expr
-          expect(:rbracket)
-          node = Expression::Index.new(obj: node, idx: idx)
+          if at?(:equals)
+            advance
+            value = parse_expr
+            expect(:rbracket)
+            node = Expression::IndexSet.new(obj: node, idx: idx, value: value)
+          else
+            expect(:rbracket)
+            node = Expression::Index.new(obj: node, idx: idx)
+          end
         else
           break
         end
       end
       node
+    end
+
+    # --- Desugaring helpers ---------------------------------------------------
+
+    def name_ref(path) = Expression::FileRef.new(variety: :name, path: path)
+
+    # `@OP.member`, a shadowable reference.
+    def op_member(member) = Expression::Member.new(obj: name_ref("OP"), key: member)
+
+    # `expr | @OP.member`
+    def pipe_into(expr, member) = Expression::Pipe.new(left: expr, right: op_member(member))
+
+    # `[operands...] | @OP.member`
+    def pipe_operator(operands, member)
+      arr = Expression::ArrLit.new(items: operands.map { |e| ArrayItem.new(value: e) })
+      Expression::Pipe.new(left: arr, right: op_member(member))
+    end
+
+    # A single-operand run collapses to that operand; otherwise fold n-ary.
+    def fold_operator(operands, member)
+      operands.length == 1 ? operands.first : pipe_operator(operands, member)
+    end
+
+    # `-x`: a numeric literal folds to a negative literal; anything else negates.
+    def negate(expr)
+      if expr.is_a?(Expression::Lit) && expr.value.is_a?(Numeric)
+        Expression::Lit.new(value: -expr.value)
+      else
+        pipe_into(expr, "negate")
+      end
     end
 
     def parse_primary
@@ -142,41 +280,22 @@ module Fusion
     # falls through to a parse error.
     def parse_superref
       expect(:atat)
-      return Expression::FileRef.new(variety: :super, path: nil) unless at?(:ident)
+      return Expression::FileRef.new(variety: :super, path: nil) unless at?(:path)
 
-      parts = [expect(:ident).value]
-      while at?(:slash)
-        advance
-        parts << expect(:ident).value
-      end
-      Expression::FileRef.new(variety: :super_name, path: parts.join("/"))
+      tok = advance
+      raise ParseError, "`@@` cannot take an upward path (at #{tok.pos})" if tok.value.include?("..")
+      Expression::FileRef.new(variety: :super_name, path: tok.value)
     end
 
     def parse_fileref
       expect(:at)
-      # Bare "@" = current file: not followed by something that can begin a path.
-      nxt = peek
-      starts_path = (nxt.type == :ident) || (nxt.type == :dot && peek(1)&.type == :dot)
-      return Expression::FileRef.new(variety: :self, path: nil) unless starts_path
-      # refpath: { "../" } segment { "/" segment }
-      parts = []
-      has_dotdot = false
-      while at?(:dot) && peek(1)&.type == :dot
-        advance; advance # consume the two dots of ..
-        parts << ".."
-        expect(:slash)
-        has_dotdot = true
-      end
-      parts << expect(:ident).value
-      while at?(:slash)
-        advance
-        parts << expect(:ident).value
-      end
-      # A reference is eligible for builtin/stdlib fallback (:name) iff it does NOT
-      # contain "../". Downward paths like "dir/a" are still eligible; only "../"
-      # (escaping upward) forces pure file-path (:path) resolution.
-      bare = !has_dotdot
-      Expression::FileRef.new(variety: bare ? :name : :path, path: parts.join("/"))
+      return Expression::FileRef.new(variety: :self, path: nil) unless at?(:path)
+
+      # A reference is eligible for builtin/stdlib fallback (:name) iff it has no
+      # "../"; downward paths stay eligible, only "../" forces file-only (:path).
+      # The lexer produced the whole path as one tight token (see Lexer#try_lex_path).
+      path = advance.value
+      Expression::FileRef.new(variety: path.include?("..") ? :path : :name, path: path)
     end
 
     def parse_array
@@ -293,7 +412,7 @@ module Fusion
 
     # Tokens that can begin a `guardedpat` (used to detect whether `!` is
     # followed by a payload pattern or stands alone).
-    GUARDEDPAT_STARTERS = %i[number string true_kw false_kw null_kw
+    GUARDEDPAT_STARTERS = %i[number string true_kw false_kw null_kw minus
                              lbracket lbrace ident].freeze
 
     def parse_errpat
@@ -323,6 +442,7 @@ module Fusion
       case t.type
       when :number, :string then advance; Pattern::PLit.new(value: t.value)
       when :true_kw, :false_kw, :null_kw then advance; Pattern::PLit.new(value: t.value)
+      when :minus then advance; Pattern::PLit.new(value: -expect(:number).value)  # negative literal
       when :lbracket then parse_arraypat
       when :lbrace then parse_objectpat
       when :ident

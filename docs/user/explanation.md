@@ -137,14 +137,9 @@ productive structure surrounds it.
 
 ---
 
-## The roads not taken (and one we're still tempted by)
+## The roads not taken
 
-Two ideas were explored and deliberately set aside, both documented in the design doc.
-
-**Operator sugar.** We could write `a + b` and desugar it to `[a, b] | @OP.sum`. We rolled
-this back early to keep the core honest, with the explicit intent to reintroduce it
-once the semantics were settled. It is a pure ergonomics layer; it changes nothing
-underneath.
+Some ideas were explored and set aside for future experiments or a different language.
 
 **Destructuring functions.** The tantalizing one. Since a function literal is visibly
 a list of `pattern => output` clauses, could we pattern-match *on a function*, taking

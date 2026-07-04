@@ -23,8 +23,6 @@ module Fusion
         define.call("parseNumber", method(:parse_number))
         define.call("keys", method(:keys))
         define.call("values", method(:values))
-        define.call("get", method(:get))
-        define.call("set", method(:set))
         define.call("toObject", method(:to_object))
 
         # type predicates: return false on any non-matching value, never an error
@@ -388,52 +386,6 @@ module Fusion
         return argument_error("values", v, ["_ ? @Object"]) unless v.is_a?(Hash)
 
         v.values
-      end
-
-      # Read from an array (integer index, negative counts from the end) or an
-      # object (string key) — mirroring the `[]` operator (reference §8).
-      # Read from an array (integer index, negative counts from the end) or an
-      # object (string key) — the functional form of `[]` (reference §8), which
-      # desugars to `@get`.
-      def get(v)
-        return v if v.is_a?(ErrorVal)
-        expected = ["[_ ? @Array, _ ? @Integer]", "[_ ? @Object, _ ? @String]"]
-        return argument_error("get", v, expected) unless pair?(v)
-
-        container, key = v
-        if container.is_a?(Array) && key.is_a?(Integer)
-          i = key.negative? ? container.length + key : key
-          return container[i] if i >= 0 && i < container.length
-
-          error("access_error", "get", v, "index out of range")
-        elsif container.is_a?(Hash) && key.is_a?(String)
-          return container[key] if container.key?(key)
-
-          error("access_error", "get", v, "missing key")
-        else
-          argument_error("get", v, expected)
-        end
-      end
-
-      # Return a new array/object with one entry set. An array index must already
-      # exist (arrays are not extended); an object key may be new. Addressing
-      # mirrors `@get` (array by integer index, object by string key).
-      def set(v)
-        return v if v.is_a?(ErrorVal)
-        expected = ["[_ ? @Array, _ ? @Integer, _]", "[_ ? @Object, _ ? @String, _]"]
-        return argument_error("set", v, expected) unless v.is_a?(Array) && v.length == 3
-
-        container, key, value = v
-        if container.is_a?(Array) && key.is_a?(Integer)
-          i = key.negative? ? container.length + key : key
-          return error("access_error", "set", v, "index out of range") unless i >= 0 && i < container.length
-
-          container.dup.tap { |copy| copy[i] = value }
-        elsif container.is_a?(Hash) && key.is_a?(String)
-          container.merge(key => value)
-        else
-          argument_error("set", v, expected)
-        end
       end
 
       def to_object(v)
