@@ -416,33 +416,39 @@ below are stdlib functions built on `@OP.*`, so they follow a per-directory over
 
 ### 7.1 Arithmetic
 
-Addition, subtraction, multiplication and negation are `@OP.sum`/`product`/`negate`
-(§7.6); the named stdlib forms are `@add`, `@subtract`, `@multiply` (negation has no
-named form — use `@OP.negate`). Integer division/remainder are `@OP.quotient` /
-`@OP.modulo`. Division and the other numeric functions live in `@math` (§7.6a):
-`@math.divide`, `@math.floor`, `@math.round`, `@math.abs`, `@math.log`, etc.
+Addition, multiplication and negation are `@OP.sum` / `@OP.product` / `@OP.negate`
+(§7.6); subtraction is `[a, b | @OP.negate] | @OP.sum`. There are no named `@add` /
+`@subtract` / `@multiply` helpers — pipe a pair into the `@OP` member directly.
+Integer division/remainder are `@OP.quotient` / `@OP.modulo`. Division and the other
+numeric functions live in `@math` (§7.6a): `@math.divide`, `@math.floor`,
+`@math.round`, `@math.abs`, `@math.log`, `@math.sqrt`, etc.
 
 ### 7.2 Comparison
 
-Equality and ordering are `@OP.equal` and `@OP.compare` (§7.6). Their named boolean
-forms are **standard-library** functions built on them:
+Equality is `@OP.equal` (deep structural equality of a pair; §7.6) — used directly,
+there is no `@eq` helper. Ordering is `@OP.compare`, which returns `-1`/`0`/`1`. The
+named boolean forms **interpret that result** and are applied *after* it:
 
-| Name  | Input                                    | Result                                  |
-| ----- | ---------------------------------------- | --------------------------------------- |
-| `eq`  | `[any, any]`                             | deep structural equality                |
-| `lt`  | `[number, number]` or `[string, string]` | strictly less                           |
-| `gt`  | `[number, number]` or `[string, string]` | strictly greater                        |
-| `lte` | `[number, number]` or `[string, string]` | `≤`                                     |
-| `gte` | `[number, number]` or `[string, string]` | `≥`                                     |
+| Name  | Input (an `@OP.compare` result) | Result                        |
+| ----- | ------------------------------- | ----------------------------- |
+| `lt`  | `-1` / `0` / `1`                | strictly less (`true` at `-1`) |
+| `gt`  | `-1` / `0` / `1`                | strictly greater (`true` at `1`) |
+| `lte` | `-1` / `0` / `1`                | `≤` (`true` unless `1`)        |
+| `gte` | `-1` / `0` / `1`                | `≥` (`true` unless `-1`)       |
 
-They shape-check a pair and delegate the type check to `@OP.*`, so a type mismatch
-surfaces as the `@OP` member's own error. A `notEquals` is derivable from `@OP.equal`.
+So `a < b` is written `[a, b] | @OP.compare | @lt`. Because the caller invokes
+`@OP.compare`, the ordering follows a per-directory `@OP` override while the helper
+itself is fixed and shadow-independent. A type mismatch surfaces as `@OP.compare`'s
+own error, before the helper runs.
 
 ### 7.3 Boolean
 
 The truthiness operators live in `@OP` (§7.6): `@OP.and`, `@OP.or`, `@OP.not`. They
 judge truthiness (every value is truthy except `false` and `null`), not strict
 booleans, and always return a boolean. There are no top-level `@and`/`@or`/`@not`.
+The stdlib helpers `@truthy` and `@falsey` reduce any single value to its truthiness
+by **pattern matching** (independent of any `@OP` override): `@truthy` is `true` for
+everything except `false`/`null`, and `@falsey` is its complement.
 
 ### 7.4 Strings and structure bridges (operations)
 
@@ -494,8 +500,9 @@ elements); `compare` reports an ordering. Infix sugar (once built) desugars to `
 
 `@OP` is **shadowable per directory**: place an `OP.fsn` sibling that overrides members
 (spread the originals with `@@`) to reskin the operators — complex numbers, matrices,
-ternary logic — for that directory only. The named forms in §7.1–7.2 (`@add`, `@lt`, …)
-are stdlib files built on `@OP.*`, so they follow a local override (see the how-to guide).
+ternary logic — for that directory only. The comparison helpers in §7.2 (`@lt`, `@gt`, …)
+interpret an `@OP.compare` result, so ordering follows a local override the moment the
+caller pipes through `@OP.compare` (see the how-to guide).
 
 | Member        | Input                                    | Result                                                   |
 | ------------- | ---------------------------------------- | -------------------------------------------------------- |
@@ -534,6 +541,7 @@ non-finite input to `round`/`floor`/`ceil`, a `log` of a non-positive number, an
 | `math.exp`    | number               | `e^x`, float                                               |
 | `math.log`    | positive number      | natural log, float; `!` on a non-positive number           |
 | `math.pow`    | `[base, exponent]`   | `base^exp` (integer when base and non-negative integer exponent; else float); `!` on a complex result |
+| `math.sqrt`   | non-negative number  | square root (float); `!` on a negative number              |
 
 ### 7.7 Special built-ins: `ENV` and `load`
 
@@ -598,9 +606,9 @@ in order, first match winning:
 2. a **built-in** of that exact name (including `ENV` and `load`);
 3. a **standard-library file** at `<stdlib root>/<name>.fsn`.
 
-If none match, the result is `!`. Downward paths participate fully: `@math/sqrt`
-checks a sibling `math/sqrt.fsn`, then a built-in named `math/sqrt`, then a stdlib
-`math/sqrt.fsn`.
+If none match, the result is `!`. Downward paths participate fully: `@util/helper`
+checks a sibling `util/helper.fsn`, then a built-in named `util/helper`, then a stdlib
+`util/helper.fsn`.
 
 **Resolution of upward paths** (any reference containing `../`) is **file-only**: it
 resolves solely to a file relative to the referencing directory and never falls back
@@ -787,7 +795,7 @@ relative to the working directory.
   statement is an assignment, not a pattern match.)
 - Rebinding a name is allowed; later entries see the new value.
 - A bound function can call itself through its own name
-  (`fact = (0 => 1, n => [n, [n,1] | @subtract | fact] | @multiply)`), because
+  (`fact = (0 => 1, n => [n, [n,-1] | @OP.sum | fact] | @OP.product)`), because
   the name is looked up at application time.
 - Entries report errors at `origin: "code"` with `file: "<inline>"`, like `-e` programs.
 

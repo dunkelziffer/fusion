@@ -13,7 +13,7 @@ module Fusion
 
         # Irreducible primitives kept as built-ins. The sugar-target operators
         # (arithmetic/comparison/boolean) live in `@OP` below; their friendly
-        # derived forms (`@add`, `@eq`, `@lt`, …) are stdlib files that build on
+        # derived forms (`@lt`, `@gt`, `@truthy`, …) are stdlib files that build on
         # `@OP.*`, so they follow a per-directory `@OP` override. Numeric functions
         # (`round`, `divide`, `sin`, …) and constants (`pi`, `e`) live in `@math`.
         define.call("size", method(:size))
@@ -74,6 +74,7 @@ module Fusion
           "exp"    => NativeFunc.new("math.exp", method(:math_exp)),
           "log"    => NativeFunc.new("math.log", method(:math_log)),
           "pow"    => NativeFunc.new("math.pow", method(:math_pow)),
+          "sqrt"   => NativeFunc.new("math.sqrt", method(:math_sqrt)),
           "pi"     => Math::PI,
           "e"      => Math::E,
         }
@@ -170,6 +171,16 @@ module Fusion
         Math.exp(v)
       end
 
+      # Square root; the domain is non-negative numbers (a negative would be
+      # complex).
+      def math_sqrt(v)
+        return v if v.is_a?(ErrorVal)
+        return argument_error("math.sqrt", v, NUMBER) unless numeric?(v)
+        return error("math_error", "math.sqrt", v, "square root of a negative number") if v < 0
+
+        Math.sqrt(v)
+      end
+
       # Natural logarithm; the domain is positive numbers (`Math.log` raises on a
       # negative and gives `-Infinity` at 0).
       def math_log(v)
@@ -198,7 +209,7 @@ module Fusion
       #
       # The arithmetic, boolean, and equality members take an array of ANY length;
       # the unary ones take a single value; `compare` returns -1 / 0 / 1. The
-      # friendly derived forms (`@add`, `@eq`, `@lt`, …) are stdlib files built on
+      # friendly derived forms (`@lt`, `@gt`, `@truthy`, …) are stdlib files built on
       # these.
 
       def op_sum(v)

@@ -232,7 +232,7 @@ Future work and open questions are tracked separately in our [Roadmap](./roadmap
 - Unifies three things (structural matching, type checks, value guards) into one mechanism.
 - The "type system" is user-extensible with ordinary functions.
 - Nothing new to learn beyond `?`.
-- Predicates compose directly (`a ? @ends | @eq`) instead of requiring a wrapping function (`a ? (x => x | @ends | @eq)`).
+- Predicates compose directly (`a ? @ends | @truthy`) instead of requiring a wrapping function (`a ? (x => x | @ends | @truthy)`).
 
 ### Cons
 
@@ -336,7 +336,7 @@ Future work and open questions are tracked separately in our [Roadmap](./roadmap
 - 🧑 ✅ In expression position, `!expr` is a prefix operator that wraps a value as an error; in pattern position, `!pat` matches an error and destructures its payload (bare `!` matches any error without binding; `!_` does the same but admits a `?` predicate).
 - 🧑 ✅ Propagation preserves the *same* error (payload intact), so by the time you reach a catch site you still know what happened.
 - 🧑 ✅ The CLI prints the payload (as JSON) to stderr on failure and exits `1`, leaving stdout empty.
-- 🧑 ✅ **Errors propagate uniformly — they are not values.** At any moment of execution there is either a value or an error in motion, never both. Built-ins (including `@eq` and the type predicates), array and object literals, `?` predicates, and the function-value position of a pipe all propagate an encountered error. The only way to do anything with an error besides letting it propagate is to catch it in an `!pat` clause, which yields a normal value (the payload).
+- 🧑 ✅ **Errors propagate uniformly — they are not values.** At any moment of execution there is either a value or an error in motion, never both. Built-ins (including `@OP.equal` and the type predicates), array and object literals, `?` predicates, and the function-value position of a pipe all propagate an encountered error. The only way to do anything with an error besides letting it propagate is to catch it in an `!pat` clause, which yields a normal value (the payload).
 - 🧑 ✅ **No nested errors.** When `!expr` is evaluated and `expr` itself produces an error, that inner error propagates and the outer `!` is a no-op. This preserves the "never more than one error simultaneously" invariant — there is no `!!` value, ever.
 - 🧑 ✅ **Partial matching propagates the unmatched error.** A function with error clauses that match *some* error shapes (e.g. `!42 => ...`) but not the one it receives (e.g. `!"oops"`) propagates the unmatched error rather than turning it into `null`. The "no match → null" lenient default from 2.7 applies only to non-error inputs.
 - 🧑 ✅ **`!pat` is a top-level prefix in the clause grammar.** `!` is a prefix on the *clause pattern*, not on any sub-pattern: array elements, object members, and the payload of another `!` all recurse into the non-`!` pattern production. This grammar shape simultaneously enforces two things with no special-case parsing flag: (i) nested error patterns (`[!a, b]`, `{"err": !x}`, `!!42`, `!{"k": !v}`) are syntax errors, matching the runtime invariant that errors never sit inside other values; and (ii) `!pat ? pred` parses as `!(pat ? pred)`, so the `?` binds *inside* the `!`. The runtime payoff is that the predicate of `!a ? pred` naturally sees the payload, with no special case needed in `PGuard`.
@@ -347,7 +347,7 @@ Future work and open questions are tracked separately in our [Roadmap](./roadmap
 - 🧑 ⏪ Keep `!` opaque with no payload (the original error model, superseded because it was too hard to debug).
 - 🤖 💭 Use a `Result`-style two-variant `Ok | Err` (hypothetical: needs new machinery; payloaded errors with propagation give the same ergonomics with two rules).
 - 🤖 ❌ Make payloads always strings (Claude's first payload sketch, e.g. `!"divide by zero"`; rejected because built-in mechanics like missing keys benefit from structured payloads).
-- 🤖 ⏪ Make errors first-class values that can be stored in collections, compared with `@eq`, and inspected by predicates (Claude implemented this reading; the designer corrected it because it creates carve-outs in propagation that contradict the "never more than one error" invariant).
+- 🤖 ⏪ Make errors first-class values that can be stored in collections, compared with `@OP.equal`, and inspected by predicates (Claude implemented this reading; the designer corrected it because it creates carve-outs in propagation that contradict the "never more than one error" invariant).
 - 🤖 ⏪ Parse `!pat ? pred` as `(!pat) ? pred` so the predicate refines the whole error rather than the payload (Claude parsed it this way; the designer corrected it to `!(pat ? pred)` so the predicate sees the payload, matching its sibling binders).
 
 ### Pros
@@ -475,7 +475,7 @@ Refines §2.9: same general shape, more orthogonal fields, field values easier t
 - 🧑 ✅ Split `location` into `origin` (where the operation is *defined*) and an optional `file` (the **innermost user-code file** on the call chain).
 - 🧑 ✅ `file` is `Dir.pwd`-relative, so it reads as the route from the location where `fusion` was called to the offending source code.
 - 🧑 ✅ Split `status` out from `input`. `status` is `0` (a value) or `1` (an error). On `1`, `input` carries the error's bare payload, so `input` is always valid JSON.
-- 🧑 ✅ `operation` now contains the failing operation's own **`@`-reference** (`@`, `@@`, `@add`, `@math/square`, `@../mod`, , `@load`) or for Built-in *syntax* its own form (`|`, `.key`, `[]`, `parsing code`). Loading the top-level program file is `loading code` (not an `@`-reference).
+- 🧑 ✅ `operation` now contains the failing operation's own **`@`-reference** (`@`, `@@`, `@lt`, `@math.round`, `@../mod`, `@load`) or for Built-in *syntax* its own form (`|`, `.key`, `[]`, `parsing code`). Loading the top-level program file is `loading code` (not an `@`-reference).
 - 🧑 ✅ An `@`-reference takes no argument, so its `input` is `null` and its `status` is always `0`. `@load` is the exception: it's a function taking a filename.
 - 🧑 ✅ For *access errors* the "key" appears only once: `.name` carries the static key in `operation` and the object alone in `input`; `[]` is generic in `operation` with `input` = `[collection, key]` (the key is a dynamic value, and `[]` will later desugar to `@OP.get`).
 - 🧑 ✅ A failure to read a file (missing file, directory given, access denied) is reported as `"operation": <the literal @-reference>`, `"input": null`, `"file": <the referring call site>`.
@@ -647,10 +647,10 @@ Refines §2.9: same general shape, more orthogonal fields, field values easier t
 
 All access goes through `@`:
 
-- 🧑 ✅ **Built-ins require `@`.** `@add`, `@Integer`, etc. A bare identifier is *only* a pattern hole; it never denotes a built-in. Built-ins cannot be shadowed by a clause's bindings — they live in a different namespace entirely.
+- 🧑 ✅ **Built-ins require `@`.** `@OP.sum`, `@Integer`, etc. A bare identifier is *only* a pattern hole; it never denotes a built-in. Built-ins cannot be shadowed by a clause's bindings — they live in a different namespace entirely.
 - 🧑 ✅ **The standard library has no prefix.** `@map` reaches it directly.
 - 🧑 ✅ **An `@name` reference (without leading `../`) resolves: sibling file → built-in → stdlib file → error.** First match wins. Consequently siblings can shadow a built-in or a stdlib function, but only for files in that directory (never globally).
-- 🧑 ✅ **Built-in/stdlib fallback is gated on `../`, not on `/`.** Downward paths (`@dir/a`, `@math/sqrt`) remain eligible for the built-in/stdlib fallback; only upward paths (`@../a`) are file-only and never fall back.
+- 🧑 ✅ **Built-in/stdlib fallback is gated on `../`, not on `/`.** Downward paths (`@dir/a`, `@util/helper`) remain eligible for the built-in/stdlib fallback; only upward paths (`@../a`) are file-only and never fall back.
 - 🧑 ✅ **A bare `@`** (nothing after it) means the current file — recursion is written this way rather than by repeating the file's own name.
 - 🧑 ✅ **`@ENV`** is a built-in evaluating to an object of environment variables (all string values, no parsing); read with member access (`@ENV.CI`).
 - 🧑 ✅ **`@load`** is a built-in taking a filename **verbatim** (no `.fsn` appended), resolved relative to the referencing file, for runtime/non-identifier filenames. Both `@ENV` and `@load` resolve in the `@name` chain, so both are shadowable by a sibling file of that name.
@@ -659,7 +659,7 @@ All access goes through `@`:
 
 - Every bare `@name` follows one precedence order (sibling → builtin → stdlib), so there are no reserved names to remember and no parser carve-outs.
 - `ENV` and `load` live in the builtin tier like everything else.
-- Gating fallback on `../` rather than on the presence of any `/` keeps downward paths (`@math/sqrt`) eligible for the stdlib, which is what stdlib subpackaging needs.
+- Gating fallback on `../` rather than on the presence of any `/` keeps downward paths (`@util/helper`) eligible for the stdlib, which is what stdlib subpackaging needs.
 
 ### Alternatives
 
@@ -677,7 +677,7 @@ All access goes through `@`:
 
 ### Cons
 
-- Built-ins are verbose (`@add` everywhere).
+- Built-ins are verbose (`@OP.sum` everywhere).
 - Shadowing is invisible at the call site (whether `@map` is yours or the stdlib's depends on directory contents).
 - A bare word that *looks* like a function reference is silently just a hole (reading an unbound one yields an error).
 
@@ -744,7 +744,7 @@ All access goes through `@`:
 
 ### Alternatives
 
-- 🤖 ❌ Make `@name` never refer to its own file (so `@add` inside `add.fsn` means the built-in). Rejected: the override would name itself (breaking relocatability) and it adds a per-file carve-out to the resolution chain.
+- 🤖 ❌ Make `@name` never refer to its own file (so `@range` inside `range.fsn` means the stdlib function). Rejected: the override would name itself (breaking relocatability) and it adds a per-file carve-out to the resolution chain.
 
 ### Pros
 
@@ -904,7 +904,7 @@ TODO: Under `-!` the input is the error payload, so empty stdin is a usage error
 ### Decisions
 
 - 🧑 ✅ No infix `+ - * / == < && …`.
-- 🧑 ✅ Arithmetic, comparison, and boolean operations are built-in functions applied to a pair, e.g. `[a, b] | @add`.
+- 🧑 ✅ Arithmetic, comparison, and boolean operations are built-in functions applied to a pair, e.g. `[a, b] | @OP.sum`.
 - 🧑 ✅ Sugar is explicitly deferred, not rejected; the operations it will desugar to are grouped under `@OP` (§5.5).
 
 ### Alternatives
@@ -918,7 +918,7 @@ TODO: Under `-!` the input is the error payload, so empty stdin is a usage error
 
 ### Cons
 
-- Arithmetic-heavy code is verbose and harder to read (`[n, [n, 1] | @subtract | @fact] | @multiply` vs. `n * fact(n-1)`).
+- Arithmetic-heavy code is verbose and harder to read (`[n, [n, -1] | @OP.sum | @fact] | @OP.product` vs. `n * fact(n-1)`).
 
 ---
 
@@ -1015,10 +1015,11 @@ TODO: Under `-!` the input is the error payload, so empty stdin is a usage error
 
 - 🧑 ✅ `@OP` is a **shadowable** built-in object holding the sugar-target operators (`sum product negate invert quotient modulo equal compare and or not`). A directory *reskins* the operators — complex numbers, matrices, ternary logic — by placing an `OP.fsn` sibling that overrides members (spreading the originals via `@@`); the override is confined to that directory (per §3.6 resolution). Infix sugar (once built) desugars to `@OP.*`, so `OP.fsn` is the single place a directory can change what `+`, `<`, `and`, … mean.
 - 🧑 ✅ Members generalize to arrays: `sum`/`product` fold a numeric array (`[]` → `0`/`1`), `and`/`or` fold truthiness (`[]` → `true`/`false`), `equal` is deep and true iff every element equals the first. `compare` returns `-1`/`0`/`1` for a pair of numbers or strings, built on `<` so a NaN operand gives `0`, never a non-value.
-- 🧑 ✅ The friendly derived operators (`add subtract multiply eq lt gt lte gte`) are **stdlib files** built on `@OP.*`, not built-ins. They resolve `@OP` in their own directory, so a local `OP.fsn` override reaches them; a directory's helper follows its reskin, and copying/symlinking the one-line stdlib file into a directory makes the default helper follow too. They shape-check only "a pair" and let a type mismatch bubble as the `@OP` member's own error — so a reskin's non-numeric domain isn't rejected by a `@Number` guard.
+- 🧑 ✅ Stdlib helpers are designed to be **immune** to a caller's `@OP` reskin, so a directory's override can't silently corrupt them. `@truthy`/`@falsey` decide truthiness by pattern matching (`false`/`null` vs. everything else), not by calling `@OP.not`. The comparison helpers `lt`/`gt`/`lte`/`gte` are stdlib files that **interpret an `@OP.compare` result** (`-1`/`0`/`1` → boolean), applied as `[a, b] | @OP.compare | @lt`: the caller invokes `@OP.compare`, so ordering follows a local override, while the helper's mapping is fixed.
+- 🧑 ⏪ The named arithmetic helpers `@add`/`@subtract`/`@multiply` are dropped; arithmetic is `@OP.sum`/`@OP.product`/`@OP.negate` directly (subtraction is `[a, b | @OP.negate] | @OP.sum`). `@eq` is dropped too — equality is `@OP.equal` directly. Comparison keeps `lt`/`gt`/`lte`/`gte` because a boolean reads better than a raw `-1`/`0`/`1`.
 - 🧑 ✅ Each operator has exactly one shadowable reference. `negate`/`and`/`or`/`not` live **only** in `@OP` (their top-level duplicates are dropped). Structural/utility functions (`map`, `get`, `size`, `keys`, `join`, `split`, …) live **only** at top level, never in `@OP`; `@get` stays a Ruby built-in (`[]` desugars to `@get`, not the reverse). Numeric functions, including division, live in `@math` (§5.6).
 - 🧑 ✅ Division/reciprocal are float-only (`@math.divide`, `@OP.invert`); integer division is the integer-only pair `@OP.quotient` / `@OP.modulo`. `@mod` is dropped.
-- 🧑 ✅ Renames `equals`→`eq`, `lessThan`→`lt`, `length`→`size`; new comparisons `gt`/`lte`/`gte`. `@join` is `[items, separator]`; the new inverse `@split` is `[string, separator]` (literal separator, empty fields kept, empty separator = characters). `@concat`/`@chars` are stdlib over `@join`/`@split`.
+- 🧑 ✅ Renames `lessThan`→`lt`, `length`→`size`; new comparisons `gt`/`lte`/`gte`. `@join` is `[items, separator]`; the new inverse `@split` is `[string, separator]` (literal separator, empty fields kept, empty separator = characters). `@concat`/`@chars` are stdlib over `@join`/`@split`.
 
 ### Alternatives
 
@@ -1043,21 +1044,17 @@ TODO: Under `-!` the input is the error payload, so empty stdin is a usage error
 
 ### Decisions
 
-- 🧑 ✅ Numeric functions and constants live in a shadowable builtin object `@math` (like `@OP`): `round`, `floor`, `ceil`, `divide`, `sign`, `abs`, `rand`, `sin`, `cos`, `exp`, `log`, `pow`, and the values `pi`/`e`. `@floor`/`@divide` moved here from the top level.
-- 🧑 ✅ `round`/`floor`/`ceil` return an integer and a non-finite input is a `math_error`; `log` requires a positive number; `pow` is integer for an integer base with a non-negative integer exponent (else float) and a complex result is a `math_error`; `rand` maps `null` → float `[0,1)` and a positive integer `n` → integer `[0, n)`.
+- 🧑 ✅ Numeric functions and constants live in a shadowable builtin object `@math` (like `@OP`): `round`, `floor`, `ceil`, `divide`, `sign`, `abs`, `rand`, `sin`, `cos`, `exp`, `log`, `pow`, `sqrt`, and the values `pi`/`e`. `@floor`/`@divide` moved here from the top level; the former `@math/square` stdlib file was replaced by `@math.sqrt`, so all of `math` is now the object (no `stdlib/math/` directory).
+- 🧑 ✅ `round`/`floor`/`ceil` return an integer and a non-finite input is a `math_error`; `log` and `sqrt` require a positive / non-negative number; `pow` is integer for an integer base with a non-negative integer exponent (else float) and a complex result is a `math_error`; `rand` maps `null` → float `[0,1)` and a positive integer `n` → integer `[0, n)`.
 - 🧑 ✅ The safety net maps `Math::DomainError` (alongside `FloatDomainError`/`ZeroDivisionError`) to `math_error`, so an unguarded numeric domain failure is a clean `math_error`, not `internal_error`.
 
 ### Alternatives
 
-- 🤖 ❌ Keep `@floor`/`@divide` as top-level builtins. Rejected: grouping the numeric functions under `@math` mirrors `@OP` and keeps the top level uncluttered.
+- 🤖 ❌ Keep `@floor`/`@divide` as top-level builtins, or `square` as a `@math/` stdlib file. Rejected: grouping every numeric function under the `@math` object mirrors `@OP` and keeps one `math` namespace.
 
 ### Pros
 
 - One namespace for numeric functions, shadowable per directory like `@OP`.
-
-### Cons
-
-- `@math/square` (a stdlib *file* path) and `@math.round` (a `@math` object member) are two unrelated `math` things.
 
 ---
 
@@ -1065,4 +1062,6 @@ TODO: Under `-!` the input is the error payload, so empty stdin is a usage error
 
 ### Decisions
 
-- 🧑 ✅ `@filter` (array or object, like `@map`), `@reduce` (left fold over an array, `f` on `[acc, x]`), `@compact` (drop `null` from an array, built on `@filter`), `@flatten` (recursive), and `@any` (existential, short-circuiting) are stdlib Fusion files — recursion over data written in the language, not hidden in Ruby.
+- 🧑 ✅ `@filter` (array or object, like `@map`), `@reduce`, `@compact` (drop `null` from an array, built on `@filter`), `@flatten` (recursive), and `@any` (existential, short-circuiting) are stdlib Fusion files — recursion over data written in the language, not hidden in Ruby.
+- 🧑 ✅ `@reduce` folds a **non-empty** array with no seed: it combines the first two elements with `f` (which receives the pair `[acc, x]`), then folds the rest; a one-element array returns that element, and an empty array is an `argument_error`.
+- 🧑 ✅ `@truthy`/`@falsey` are stdlib files that reduce any value to its Ruby-truthiness by pattern matching on `false`/`null` (see §5.5 for why they avoid `@OP.not`).

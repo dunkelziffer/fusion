@@ -213,7 +213,7 @@ RSpec.describe "error kinds" do
 
     it "a NaN result (Infinity - Infinity)" do
       expect_pipe
-        .code("(_ => [1e400, 1e400] | @subtract)")
+        .code("(_ => [1e400, 1e400 | @OP.negate] | @OP.sum)")
         .out("❌", '{"kind":"serialization_error","origin":"output","operation":"serializing result","status":0,"input":"<NaN>","message":"cannot serialize a non-finite number"}')
     end
 

@@ -263,4 +263,41 @@ RSpec.describe "@math builtin" do
         .out("❌", '{"kind":"math_error","origin":"builtin","file":"<inline>","operation":"@math.pow","status":0,"input":[-1,0.5],"message":"not in domain (complex result)"}')
     end
   end
+
+  describe "@math.sqrt" do
+    it "takes a square root (float)" do
+      expect_pipe
+        .in("✅", "4")
+        .code("(n => n | @math.sqrt)")
+        .out("✅", "2.0")
+    end
+
+    it "is a float even for a non-perfect square" do
+      expect_pipe
+        .in("✅", "2")
+        .code("(n => n | @math.sqrt)")
+        .out("✅", "1.4142135623730951")
+    end
+
+    it "is 0.0 at zero" do
+      expect_pipe
+        .in("✅", "0")
+        .code("(n => n | @math.sqrt)")
+        .out("✅", "0.0")
+    end
+
+    it "errors with math_error on a negative number" do
+      expect_pipe
+        .in("✅", "-1")
+        .code("(n => n | @math.sqrt)")
+        .out("❌", '{"kind":"math_error","origin":"builtin","file":"<inline>","operation":"@math.sqrt","status":0,"input":-1,"message":"square root of a negative number"}')
+    end
+
+    it "errors on a non-number" do
+      expect_pipe
+        .in("✅", '"x"')
+        .code("(n => n | @math.sqrt)")
+        .out("❌", '{"kind":"argument_error","origin":"builtin","file":"<inline>","operation":"@math.sqrt","status":0,"input":"x","expected":["_ ? @Number"]}')
+    end
+  end
 end

@@ -1,5 +1,0 @@
-# a * b — derives from @OP.product.
-(
-  [a, b] => [a, b] | @OP.product,
-  x => !{"kind": "argument_error", "origin": "stdlib", "operation": "@multiply", "status": 0, "input": x, "expected": ["[_, _]"]}
-)

@@ -17,7 +17,7 @@ RSpec.describe "@OP builtin" do
         .out("✅", "10")
     end
 
-    it "sums a pair, like @add" do
+    it "sums a pair" do
       expect_pipe
         .in("✅", "[1,2]")
         .code("(v => v | @OP.sum)")
@@ -68,7 +68,7 @@ RSpec.describe "@OP builtin" do
         .out("✅", "24")
     end
 
-    it "multiplies a pair, like @multiply" do
+    it "multiplies a pair" do
       expect_pipe
         .in("✅", "[3,4]")
         .code("(v => v | @OP.product)")
@@ -286,7 +286,7 @@ RSpec.describe "@OP builtin" do
         .out("✅", "false")
     end
 
-    it "compares a pair, like @eq" do
+    it "compares a pair for equality" do
       expect_pipe
         .in("✅", "[1,2]")
         .code("(v => v | @OP.equal)")
@@ -337,7 +337,7 @@ RSpec.describe "@OP builtin" do
   end
 
   # @OP.compare orders a pair of numbers or a pair of strings: -1 (first smaller),
-  # 0 (equal), 1 (first bigger). No deep equality; same allowed inputs as @lt.
+  # 0 (equal), 1 (first bigger). No deep equality; a pair of numbers or strings only.
   describe "@OP.compare" do
     it "is -1 when the first number is smaller" do
       expect_pipe

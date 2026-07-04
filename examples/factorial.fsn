@@ -2,5 +2,5 @@
 (
   _ ? (i ? @Integer => [i, 0] | @OP.compare | (-1 => true), _ => true) => !"Only non-negative integers, please!",
   0 => 1,
-  n => [n, [n, 1] | @subtract | @] | @OP.product
+  n => [n, [n, -1] | @OP.sum | @] | @OP.product
 )

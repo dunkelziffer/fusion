@@ -4,28 +4,26 @@
 # self-recursion, @ENV and @load. Fixtures live in spec/fixtures/ref/.
 RSpec.describe "@-resolution" do
   describe "sibling files shadow builtins" do
-    it "lets a sibling add.fsn shadow @add" do
+    it "lets a sibling range.fsn shadow @range" do
       expect_pipe
         .in("✅", "null")
-        .file_path("ref/usesAdd.fsn")
-        .out("✅", '"shadowed-add"')
+        .file_path("ref/usesRange.fsn")
+        .out("✅", '"shadowed-range"')
     end
 
-    it "falls back to the default @add when there is no sibling" do
+    it "falls back to the default @range when there is no sibling" do
       expect_pipe
         .in("✅", "null")
-        .file_path("ref/sub/usesBuiltinAdd.fsn")
-        .out("✅", "5")
+        .file_path("ref/sub/usesBuiltinRange.fsn")
+        .out("✅", "[0,1,2]")
     end
   end
 
-  # The operators live in the shadowable `@OP` object; the derived helpers
-  # (`@add`, …) build on `@OP.*` and resolve it in their own directory. So an
-  # `OP.fsn` override reskins both the operators and any local helper that
-  # derives from them.
+  # A local file that derives from `@OP.*` resolves the operator object in its own
+  # directory, so an `OP.fsn` override reskins both the operator and that helper.
   describe "reskinning @OP per directory" do
-    it "makes a local @add follow an OP.fsn override of @OP.sum" do
-      # ref/reskin/OP.fsn overrides `sum`; both @OP.sum and the local @add see it.
+    it "makes a local helper follow an OP.fsn override of @OP.sum" do
+      # ref/reskin/OP.fsn overrides `sum`; both @OP.sum and the local @plus see it.
       expect_pipe
         .in("✅", "[1,2]")
         .file_path("ref/reskin/probe.fsn")
@@ -45,13 +43,6 @@ RSpec.describe "@-resolution" do
   # tag their result with "viaSuper" to prove the sibling ran, and the real
   # builtin/stdlib value proves `@@` reached past the file itself (no self-cycle).
   describe "@@ super-reference" do
-    it "reaches the builtin a sibling add.fsn shadows" do
-      expect_pipe
-        .in("✅", "null")
-        .file_path("ref/super/usesSuperAdd.fsn")
-        .out("✅", '[5,"viaSuper"]')
-    end
-
     it "reaches the stdlib function a sibling range.fsn shadows" do
       expect_pipe
         .in("✅", "3")
@@ -193,14 +184,7 @@ RSpec.describe "@-resolution" do
         .out("✅", "[7,7]")
     end
 
-    it "lets a downward path @math/square fall through to a stdlib subdir" do
-      expect_pipe
-        .in("✅", "6")
-        .file_path("ref/usesStdSub.fsn")
-        .out("✅", "36")
-    end
-
-    it "lets a sibling subdir shadow a stdlib subdir method" do
+    it "resolves a downward path to a sibling subdirectory" do
       expect_pipe
         .in("✅", "6")
         .file_path("ref/usesLocalSub.fsn")
@@ -283,14 +267,14 @@ RSpec.describe "@-resolution" do
     end
 
     # A sibling that exists but sits outside the jail is the jail error, never a
-    # silent fall-through to the builtin/stdlib of the same name. Here @add has a
-    # sibling ref/add.fsn, but the jail (ref/localmath) excludes it.
+    # silent fall-through to the builtin/stdlib of the same name. Here @range has a
+    # sibling ref/range.fsn, but the jail (ref/localmath) excludes it.
     it "errors on an out-of-jail sibling instead of falling back to the builtin" do
       expect_pipe
         .in("✅", "null")
         .jail("ref/localmath")
-        .file_path("ref/usesAdd.fsn")
-        .out("❌", '{"kind":"reference_error","origin":"code","file":"spec/fixtures/ref/usesAdd.fsn","operation":"@add","status":0,"input":null,"message":"outside the jail"}')
+        .file_path("ref/usesRange.fsn")
+        .out("❌", '{"kind":"reference_error","origin":"code","file":"spec/fixtures/ref/usesRange.fsn","operation":"@range","status":0,"input":null,"message":"outside the jail"}')
     end
   end
 end

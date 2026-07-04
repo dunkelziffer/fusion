@@ -1,1 +1,1 @@
-(p => [p | @OP.sum, p | @add])
+(p => [p | @OP.sum, p | @plus])

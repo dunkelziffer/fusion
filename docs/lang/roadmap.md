@@ -45,15 +45,15 @@ in, not just to implement.
 - **A faster implementation** once semantics are frozen.
 - **`fusion --stdlib-path`** *(planned)*. Print the absolute path of the bundled
   standard library so a user can find, read, copy, or symlink its `.fsn` files —
-  e.g. to make a derived helper like `@add` follow a local `@OP` override:
-  `cp "$(fusion --stdlib-path)/add.fsn" .`. This is the one ergonomics gap in the
+  e.g. to make a derived helper like `@compact` follow a local `@OP` override:
+  `cp "$(fusion --stdlib-path)/compact.fsn" .`. This is the one ergonomics gap in the
   "reskin the operators" workflow (see how-to-guides). Needs a stable path: on a
   versioned install the returned directory changes across upgrades, which dangles
   any symlink made against it — copies are unaffected.
 - **`fusion vendor <name>…`** *(planned)*. Scaffold command: copy the named stdlib
   files into the current directory as real, editable files. Ergonomic front-end
   over `--stdlib-path` + `cp` for when a directory reskins `@OP` and wants several
-  named derived helpers (`add`, `subtract`, `eq`, …) to follow the local override
+  helpers that derive from `@OP` (`compact`, `range`, …) to follow the local override
   at once. Copies (portable, frozen) rather than symlinks, so it survives upgrades;
   the copied one-liners can then be hand-edited.
 

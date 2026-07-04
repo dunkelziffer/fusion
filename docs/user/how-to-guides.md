@@ -26,7 +26,7 @@ Compute a boolean, then pipe it into a two-clause function:
 
 ```fusion
 (n =>
-  [n, 0] | @lt | (
+  [n, 0] | @OP.compare | @lt | (
     true  => "negative",
     false => "non-negative"
   )
@@ -61,7 +61,7 @@ You could write `sum` like this:
 ```fusion
 (
   [] => 0,
-  [x, ...rest] => [x, rest | @] | @add
+  [x, ...rest] => [x, rest | @] | @OP.sum
 )
 ```
 
@@ -78,7 +78,7 @@ A Fusion function takes exactly one input. Functions that require multiple input
 them into an array (or object) and destructure that in the pattern:
 
 ```fusion
-([a, b] => [a, b] | @add)
+([a, b] => [a, b] | @OP.sum)
 ```
 
 Call it as `[3, 4] | @thatFunction`
@@ -89,7 +89,7 @@ needs the remaining arguments (`y` in the example below). Each `=>` consumes one
 and hands back a function waiting for the next:
 
 ```fusion
-(x => (y => [x, y] | @add))
+(x => (y => [x, y] | @OP.sum))
 ```
 
 Call it as `4 | (3 | @thatFunction)`. `3 | f` yields a one-argument function that adds 3,
@@ -114,14 +114,14 @@ so guard the whole array instead:
 (
   []  => "palindrome",
   [_] => "palindrome",
-  [_, ...rest, _] ? ([first, ..., last] => [first, last] | @eq) => rest | @,
+  [_, ...rest, _] ? ([first, ..., last] => [first, last] | @OP.equal) => rest | @,
   _   => "not a palindrome"
 )
 ```
 
 The outer pattern `[_, ...rest, _]` is what you destructure for retrieving the middle
 of the array which you need to continue your recursion. The inline predicate
-`([first, ..., last] => [first, last] | @eq)` independently destructures the same
+`([first, ..., last] => [first, last] | @OP.equal)` independently destructures the same
 array again to compare its two ends.
 
 ---
@@ -130,8 +130,8 @@ array again to compare its two ends.
 
 Because a sibling file wins over a built-in or the standard library, you can override
 either — but only for files in the same directory, so you can't break things
-globally. Put an `add.fsn` next to your program and every `@add` *in that directory*
-uses yours; files elsewhere still get the built-in.
+globally. Put a `map.fsn` next to your program and every `@map` *in that directory*
+uses yours; files elsewhere still get the standard one.
 
 ---
 
@@ -154,26 +154,27 @@ other way to change them.
 
 ### Making a named derived helper follow your override
 
-The standard-library helpers such as `@add` are one-liners that derive from `@OP`
-(`add.fsn` is `([a, b] => [a, b] | @OP.sum)`). But a helper resolves `@OP` in *its
-own* directory — the stdlib — so `@add` keeps the default arithmetic even where you
-overrode `@OP`. (Once operator sugar lands this rarely matters: `a + b` desugars to
-`@OP` *in your file*, so it already follows your override; reach for a named helper
-only when you need the operator as a value.)
+Most stdlib helpers are deliberately **immune** to your override, so a reskin can't
+break them by accident: `@truthy`/`@falsey` decide truthiness by pattern matching, and
+the comparison helpers `@lt`/`@gt`/`@lte`/`@gte` interpret an `@OP.compare` *result*
+(you write `[a, b] | @OP.compare | @lt`, so the compare step already follows your
+override while the interpretation stays fixed).
 
-When you do want a named helper to follow your override, put the stdlib file into
-your directory — it then resolves `@OP` locally:
+A few helpers still call `@OP` internally — `@compact` uses `@OP.not`, `@range` uses
+`@OP.sum` — and, like `@`-names everywhere, they resolve `@OP` in *their own* directory
+(the stdlib), so they keep the default even where you overrode `@OP`. To make one follow
+your override, put the stdlib file into your directory — it then resolves `@OP` locally:
 
 ```sh
 # copy — portable, a frozen snapshot
-cp "$(fusion --stdlib-path)/add.fsn" .
+cp "$(fusion --stdlib-path)/compact.fsn" .
 
 # or symlink — tracks stdlib updates, but re-create it after an upgrade
-ln -s "$(fusion --stdlib-path)/add.fsn" ./add.fsn
+ln -s "$(fusion --stdlib-path)/compact.fsn" ./compact.fsn
 ```
 
 Both work by the same rule: Fusion resolves module paths **lexically** — it never
-calls `realpath` — so a file, *or a symlink*, named `add.fsn` in your directory
+calls `realpath` — so a file, *or a symlink*, named `compact.fsn` in your directory
 resolves its `@OP` reference against *your* directory, while its bytes come from the
 stdlib. A symlink to a versioned install path can dangle after an upgrade; re-create
 it, or copy instead. (`fusion --stdlib-path` and a `fusion vendor` scaffold are
@@ -226,7 +227,7 @@ to be called) instead:
 
 ```fusion
 # factorial
-(0 => 1, n ? @Integer => [n, [n, 1] | @subtract | @] | @multiply)
+(0 => 1, n ? @Integer => [n, [n, -1] | @OP.sum | @] | @OP.product)
 ```
 
 If the file evaluates to an **object** and a recursive *helper* lives inside it as a
@@ -237,7 +238,7 @@ by a `.member` access — rather than `@filename.helper`:
 {
   "sumTo": (
     0 => 0,
-    n ? @Integer => [n, [n, 1] | @subtract | @.sumTo] | @add
+    n ? @Integer => [n, [n, -1] | @OP.sum | @.sumTo] | @OP.sum
   )
 }
 ```

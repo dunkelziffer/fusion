@@ -129,14 +129,14 @@ RSpec.describe "CLI (exe/fusion)" do
 
   describe "bare @ in inline (-e) source" do
     it "recurses through a bare @ when the unit is a function applied to stdin" do
-      out, err, status = run_cli("-e", "(0 => [0], n ? @Integer => [n, ...([n,1] | @subtract | @)])", stdin: "3")
+      out, err, status = run_cli("-e", "(0 => [0], n ? @Integer => [n, ...([n, -1] | @OP.sum | @)])", stdin: "3")
       expect(out).to eq("[3,2,1,0]\n")
       expect(err).to eq("")
       expect(status.exitstatus).to eq(0)
     end
 
     it "yields the unit's own function value (a serialization_error) when no stdin applies it" do
-      out, err, status = run_cli("-e", "(0 => 1, n => [n, [n,1] | @subtract | @] | @OP.product)")
+      out, err, status = run_cli("-e", "(0 => 1, n => [n, [n, -1] | @OP.sum | @] | @OP.product)")
       expect(out).to eq("")
       expect(err).to eq(
         %({"kind":"serialization_error","origin":"output","operation":"serializing result","status":0,"input":"<function>","message":"cannot serialize a function"}\n)

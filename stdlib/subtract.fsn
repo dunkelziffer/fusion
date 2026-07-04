@@ -1,5 +1,0 @@
-# a - b — a + (-b), via @OP.sum and @OP.negate.
-(
-  [a, b] => [a, b | @OP.negate] | @OP.sum,
-  x => !{"kind": "argument_error", "origin": "stdlib", "operation": "@subtract", "status": 0, "input": x, "expected": ["[_, _]"]}
-)

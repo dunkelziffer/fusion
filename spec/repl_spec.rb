@@ -63,7 +63,7 @@ RSpec.describe Fusion::CLI::Repl do
     end
 
     it "renders an @-using function leniently — the @ is deferred until it is applied" do
-      expect(repl.handle("(0 => 1, n => [n, [n, 1] | @subtract | @] | @OP.product)", environment)).to eq('"<function>"')
+      expect(repl.handle("(0 => 1, n => [n, [n, -1] | @OP.sum | @] | @OP.product)", environment)).to eq('"<function>"')
     end
 
     it "resolves a bare @ to the entry's own value (forcing it in data position is a self-data-cycle)" do
@@ -84,12 +84,12 @@ RSpec.describe Fusion::CLI::Repl do
     end
 
     it "supports recursion through the bound name" do
-      repl.handle("fact = (0 => 1, n => [n, [n, 1] | @subtract | fact] | @OP.product)", environment)
+      repl.handle("fact = (0 => 1, n => [n, [n, -1] | @OP.sum | fact] | @OP.product)", environment)
       expect(repl.handle("5 | fact", environment)).to eq("120")
     end
 
     it "supports recursion through a bare @ (the entry's own value)" do
-      repl.handle("fact = (0 => 1, n => [n, [n, 1] | @subtract | @] | @OP.product)", environment)
+      repl.handle("fact = (0 => 1, n => [n, [n, -1] | @OP.sum | @] | @OP.product)", environment)
       expect(repl.handle("5 | fact", environment)).to eq("120")
     end
 

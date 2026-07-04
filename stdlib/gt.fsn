@@ -1,5 +1,2 @@
-# a > b — derives from @OP.compare.
-(
-  [a, b] => [a, b] | @OP.compare | (1 => true, _ => false),
-  x => !{"kind": "argument_error", "origin": "stdlib", "operation": "@gt", "status": 0, "input": x, "expected": ["[_, _]"]}
-)
+# Strictly greater: reads an @OP.compare result. Use as `[a, b] | @OP.compare | @gt`.
+(1 => true, _ => false)

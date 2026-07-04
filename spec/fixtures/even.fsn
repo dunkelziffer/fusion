@@ -1,1 +1,1 @@
-(0 => true, n ? @Integer => [n,1] | @subtract | @odd)
+(0 => true, n ? @Integer => [n, -1] | @OP.sum | @odd)
