@@ -29,18 +29,7 @@ help in deep pipelines.
 
 ---
 
-## 3. Standard library completion
-
-Populate Tier 1 (written in Fusion). Done so far: `filter`, `reduce`, `compact`,
-`flatten`, `any`, and the comparison operators `eq`/`lt`/`gt`/`lte`/`gte`. Still
-ahead: `reverse`, `head`, `tail`, `last`, `init`, `take`, `drop`, `zip`, `member`,
-`find`, `count`, `notEquals`; object helpers `entries`, `merge`; an `if` helper.
-This is also the best stress test of whether the language is pleasant to *write*
-in, not just to implement.
-
----
-
-## 4. Runtime and tooling
+## 3. Runtime and tooling
 
 - **A faster implementation** once semantics are frozen.
 - **`fusion --stdlib-path`** *(planned)*. Print the absolute path of the bundled
@@ -59,14 +48,7 @@ in, not just to implement.
 
 ---
 
-## 5. Open semantic questions to settle
-
-- Function equality: `equals` on two functions — always `false`, or an error?
-  (Function equality is undecidable beyond trivial identity.)
-
----
-
-## 6. Bigger experiments
+## 4. Bigger experiments
 
 **Destructuring functions (homoiconicity).** Treat a function as a list of
 `(pattern, output)` clause-pairs and pattern-match on it, enabling macros and
