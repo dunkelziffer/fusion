@@ -7,10 +7,6 @@ live in [design.md](./design.md); this file is only for things still ahead.
 
 ## 1. Ergonomics
 
-**Comparison & concat operators** *(planned)*. Add infix `< <= > >= !=` (today
-`(a ?? b) | @lt` etc.) and string concatenation `++` (today `@concat`) as further
-sugar, following the precedence model of design §5.6 / reference §2.7.
-
 **Exposing the current call site** *(use case found; needs a sigil)*. The
 interpreter tracks the current `:file`/`:dir`/`:call_site` as internal context,
 unreadable from a program. User code should be able to mimick our *standardized*
