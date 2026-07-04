@@ -1,2 +1,9 @@
-# Greater-or-equal: reads an @OP.compare result. Use as `[a, b] | @OP.compare | @gte`.
-(-1 => false, _ => true)
+# Greater-or-equal: interprets an @OP.compare result. Use as `[a, b] | @OP.compare | @gte`.
+# A partial order's compare may return null (incomparable); that propagates as null.
+(
+  -1 => false,
+  0 => true,
+  1 => true,
+  null => null,
+  x => !{"kind": "argument_error", "origin": "stdlib", "operation": "@gte", "status": 0, "input": x, "expected": ["-1", "0", "1", "null"]},
+)

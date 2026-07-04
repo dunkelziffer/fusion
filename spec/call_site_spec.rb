@@ -73,7 +73,7 @@ RSpec.describe "the error `file` (innermost user-code call site)" do
       expect_pipe
         .in("✅", '["x"]')
         .code('(xs => {"f": @range, "xs": xs} | @map)')
-        .out("❌", '{"kind":"argument_error","origin":"stdlib","file":"<inline>","operation":"@range","status":0,"input":"x","expected":["_ ? (m ? @Integer => [m, -1] | @OP.compare | (1 => true))"]}')
+        .out("❌", '{"kind":"argument_error","origin":"stdlib","file":"<inline>","operation":"@range","status":0,"input":"x","expected":["_ ? (m ? @Integer => [m, -1] | @OP.compare | @gt)"]}')
     end
   end
 

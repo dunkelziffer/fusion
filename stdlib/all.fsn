@@ -4,9 +4,8 @@
 (
   {"f": _ ? @Function, "xs": []} => true,
   {"f": f ? @Function, "xs": [x, ...rest]} => (x | f) | (
-    false => false,
-    null => false,
-    _ => {"f": f, "xs": rest} | @
+    _ ? @falsey => false,
+    _           => {"f": f, "xs": rest} | @,
   ),
-  x => !{"kind": "argument_error", "origin": "stdlib", "operation": "@all", "status": 0, "input": x, "expected": ["{\"f\": _ ? @Function, \"xs\": _ ? @Array}"]}
+  x => !{"kind": "argument_error", "origin": "stdlib", "operation": "@all", "status": 0, "input": x, "expected": ["{\"f\": _ ? @Function, \"xs\": _ ? @Array}"]},
 )

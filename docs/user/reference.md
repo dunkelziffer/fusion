@@ -429,17 +429,19 @@ Equality is `@OP.equal` (deep structural equality of a pair; §7.6) — used dir
 there is no `@eq` helper. Ordering is `@OP.compare`, which returns `-1`/`0`/`1`. The
 named boolean forms **interpret that result** and are applied *after* it:
 
-| Name  | Input (an `@OP.compare` result) | Result                        |
-| ----- | ------------------------------- | ----------------------------- |
-| `lt`  | `-1` / `0` / `1`                | strictly less (`true` at `-1`) |
-| `gt`  | `-1` / `0` / `1`                | strictly greater (`true` at `1`) |
-| `lte` | `-1` / `0` / `1`                | `≤` (`true` unless `1`)        |
-| `gte` | `-1` / `0` / `1`                | `≥` (`true` unless `-1`)       |
+| Name  | `-1`   | `0`    | `1`    | `null` |
+| ----- | ------ | ------ | ------ | ------ |
+| `lt`  | `true` | `false`| `false`| `null` |
+| `gt`  | `false`| `false`| `true` | `null` |
+| `lte` | `true` | `true` | `false`| `null` |
+| `gte` | `false`| `true` | `true` | `null` |
 
 So `a < b` is written `[a, b] | @OP.compare | @lt`. Because the caller invokes
 `@OP.compare`, the ordering follows a per-directory `@OP` override while the helper
-itself is fixed and shadow-independent. A type mismatch surfaces as `@OP.compare`'s
-own error, before the helper runs.
+itself is fixed and shadow-independent. A partial order whose `compare` returns `null`
+for incomparable operands passes that `null` straight through; any other input is an
+`argument_error`. A type mismatch surfaces as `@OP.compare`'s own error, before the
+helper runs.
 
 ### 7.3 Boolean
 

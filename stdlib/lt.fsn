@@ -1,2 +1,9 @@
-# Strictly less: reads an @OP.compare result. Use as `[a, b] | @OP.compare | @lt`.
-(-1 => true, _ => false)
+# Strictly less: interprets an @OP.compare result. Use as `[a, b] | @OP.compare | @lt`.
+# A partial order's compare may return null (incomparable); that propagates as null.
+(
+  -1 => true,
+  0 => false,
+  1 => false,
+  null => null,
+  x => !{"kind": "argument_error", "origin": "stdlib", "operation": "@lt", "status": 0, "input": x, "expected": ["-1", "0", "1", "null"]},
+)

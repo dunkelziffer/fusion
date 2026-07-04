@@ -20,14 +20,14 @@ RSpec.describe "stdlib error handling" do
       expect_pipe
         .in("✅", '"hi"')
         .code("(x => x | @range)")
-        .out("❌", '{"kind":"argument_error","origin":"stdlib","file":"<inline>","operation":"@range","status":0,"input":"hi","expected":["_ ? (m ? @Integer => [m, -1] | @OP.compare | (1 => true))"]}')
+        .out("❌", '{"kind":"argument_error","origin":"stdlib","file":"<inline>","operation":"@range","status":0,"input":"hi","expected":["_ ? (m ? @Integer => [m, -1] | @OP.compare | @gt)"]}')
     end
 
     it "errors on a negative integer (rather than recursing forever)" do
       expect_pipe
         .in("✅", "-1")
         .code("(x => x | @range)")
-        .out("❌", '{"kind":"argument_error","origin":"stdlib","file":"<inline>","operation":"@range","status":0,"input":-1,"expected":["_ ? (m ? @Integer => [m, -1] | @OP.compare | (1 => true))"]}')
+        .out("❌", '{"kind":"argument_error","origin":"stdlib","file":"<inline>","operation":"@range","status":0,"input":-1,"expected":["_ ? (m ? @Integer => [m, -1] | @OP.compare | @gt)"]}')
     end
   end
 
@@ -97,7 +97,7 @@ RSpec.describe "stdlib error handling" do
       expect_pipe
         .in("✅", "null")
         .code("(_ => 1e400 | @range)")
-        .out("❌", '{"kind":"argument_error","origin":"stdlib","file":"<inline>","operation":"@range","status":0,"input":"<Infinity>","expected":["_ ? (m ? @Integer => [m, -1] | @OP.compare | (1 => true))"]}')
+        .out("❌", '{"kind":"argument_error","origin":"stdlib","file":"<inline>","operation":"@range","status":0,"input":"<Infinity>","expected":["_ ? (m ? @Integer => [m, -1] | @OP.compare | @gt)"]}')
     end
 
     it "@map of a {f} missing xs echoes the function placeholder" do
@@ -266,6 +266,22 @@ RSpec.describe "stdlib error handling" do
         .in("✅", "[2,2]")
         .code('(p => p | @OP.compare | (c => [c | @lt, c | @gt, c | @lte, c | @gte]))')
         .out("✅", "[false,false,true,true]")
+    end
+
+    # A partial order's `compare` may report `null` (incomparable); each helper
+    # passes that through as `null` rather than forcing a boolean.
+    it "propagates a null compare result as null" do
+      expect_pipe
+        .in("✅", "null")
+        .code('(c => [c | @lt, c | @gt, c | @lte, c | @gte])')
+        .out("✅", "[null,null,null,null]")
+    end
+
+    it "raises a stdlib argument_error on a value that is not a compare result" do
+      expect_pipe
+        .in("✅", "5")
+        .code("(c => c | @lt)")
+        .out("❌", '{"kind":"argument_error","origin":"stdlib","file":"<inline>","operation":"@lt","status":0,"input":5,"expected":["-1","0","1","null"]}')
     end
 
     it "the @OP.compare step bubbles its own error on mixed types" do

@@ -1,2 +1,6 @@
 # True for false and null — Fusion's own falsiness, decided by pattern matching.
-(false => true, null => true, _ => false)
+(
+  false => true,
+  null => true,
+  _ => false,
+)

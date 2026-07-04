@@ -3,9 +3,8 @@
 (
   {"f": _ ? @Function, "xs": []} => false,
   {"f": f ? @Function, "xs": [x, ...rest]} => x | f | (
-    false => {"f": f, "xs": rest} | @,
-    null  => {"f": f, "xs": rest} | @,
-    _     => true
+    _ ? @falsey => {"f": f, "xs": rest} | @,
+    _           => true,
   ),
-  x => !{"kind": "argument_error", "origin": "stdlib", "operation": "@any", "status": 0, "input": x, "expected": ["{\"f\": _ ? @Function, \"xs\": _ ? @Array}"]}
+  x => !{"kind": "argument_error", "origin": "stdlib", "operation": "@any", "status": 0, "input": x, "expected": ["{\"f\": _ ? @Function, \"xs\": _ ? @Array}"]},
 )
