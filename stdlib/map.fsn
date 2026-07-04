@@ -1,8 +1,8 @@
 # Apply f to each element of an array, or to each value of an object (keeping the
-# keys). Input: {"f": fn, "xs": array-or-object}.
+# keys). Input: {"f": fn, "c": array-or-object}.
 (
-  {"f": _ ? @Function, "xs": []} => [],
-  {"f": f ? @Function, "xs": [x, ...rest]} => [x | f, ...({"f": f, "xs": rest} | @)],
-  {"f": f ? @Function, "xs": obj ? @Object} => {"f": (k => [k, [obj, k] | @get | f]), "xs": obj | @keys} | @ | @toObject,
-  x => !{"kind": "argument_error", "origin": "stdlib", "operation": "@map", "status": 0, "input": x, "expected": ["{\"f\": _ ? @Function, \"xs\": _ ? @Array}", "{\"f\": _ ? @Function, \"xs\": _ ? @Object}"]}
+  {"f": _ ? @Function, "c": []} => [],
+  {"f": f ? @Function, "c": [x, ...rest]} => [x | f, ...({"f": f, "c": rest} | @)],
+  {"f": f ? @Function, "c": obj ? @Object} => {"f": (k => [k, [obj, k] | @get | f]), "c": obj | @keys} | @ | @toObject,
+  x => !{"kind": "argument_error", "origin": "stdlib", "operation": "@map", "status": 0, "input": x, "expected": ["{\"f\": _ ? @Function, \"c\": _ ? @Array}", "{\"f\": _ ? @Function, \"c\": _ ? @Object}"]}
 )

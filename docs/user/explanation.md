@@ -47,7 +47,7 @@ everything else line up. With exactly one input and one output:
 - **Application has one shape:** `value | function`. There is no argument list, no
   call syntax, no arity to track. A pipeline `a | f | g | h` reads like a sentence.
 - **Multi-argument needs are met by data:** pass an array `[a, b]` or an object
-  `{"f": ..., "xs": ...}`. The "arguments" become a value you can also store, inspect,
+  `{"f": ..., "c": ...}`. The "arguments" become a value you can also store, inspect,
   and destructure — there's no separate notion of "argument tuple."
 - **Pattern matching has one job:** match the single input. A function's clauses are
   just alternative shapes that one input might have.

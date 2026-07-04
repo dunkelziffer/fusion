@@ -260,7 +260,7 @@ RSpec.describe "error kinds" do
     it "renders a function nested in input as \"<function>\"" do
       expect_pipe
         .code("(_ => [(y => y), 1] | @OP.sum)")
-        .out("❌", '{"kind":"argument_error","origin":"builtin","file":"<inline>","operation":"@OP.sum","status":0,"input":["<function>",1],"expected":["_ ? (xs => {\"xs\": xs, \"f\": @Number} | @all)"]}')
+        .out("❌", '{"kind":"argument_error","origin":"builtin","file":"<inline>","operation":"@OP.sum","status":0,"input":["<function>",1],"expected":["_ ? (xs => {\"c\": xs, \"f\": @Number} | @all)"]}')
     end
 
     it "renders a non-finite number in input as \"<Infinity>\"" do

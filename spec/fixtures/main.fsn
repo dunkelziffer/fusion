@@ -1,1 +1,1 @@
-(xs => {"f": @double, "xs": xs} | @map)
+(xs => {"f": @double, "c": xs} | @map)

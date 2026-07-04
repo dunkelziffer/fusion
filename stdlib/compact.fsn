@@ -1,5 +1,5 @@
 # Drop null elements from an array. Built on @filter.
 (
-  xs ? @Array => {"f": (x => x | @Null | @OP.not), "xs": xs} | @filter,
+  xs ? @Array => {"f": (x => x | @Null | @OP.not), "c": xs} | @filter,
   x => !{"kind": "argument_error", "origin": "stdlib", "operation": "@compact", "status": 0, "input": x, "expected": ["_ ? @Array"]}
 )

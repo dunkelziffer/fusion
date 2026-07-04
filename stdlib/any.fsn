@@ -1,10 +1,10 @@
-# True if any element satisfies the predicate. Input: {"f": predicate, "xs": array}.
+# True if any element satisfies the predicate. Input: {"f": predicate, "c": array}.
 # Short-circuits on the first truthy result.
 (
-  {"f": _ ? @Function, "xs": []} => false,
-  {"f": f ? @Function, "xs": [x, ...rest]} => x | f | (
-    _ ? @falsey => {"f": f, "xs": rest} | @,
+  {"f": _ ? @Function, "c": []} => false,
+  {"f": f ? @Function, "c": [x, ...rest]} => x | f | (
+    _ ? @falsey => {"f": f, "c": rest} | @,
     _           => true,
   ),
-  x => !{"kind": "argument_error", "origin": "stdlib", "operation": "@any", "status": 0, "input": x, "expected": ["{\"f\": _ ? @Function, \"xs\": _ ? @Array}"]},
+  x => !{"kind": "argument_error", "origin": "stdlib", "operation": "@any", "status": 0, "input": x, "expected": ["{\"f\": _ ? @Function, \"c\": _ ? @Array}"]},
 )

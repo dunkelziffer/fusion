@@ -62,14 +62,14 @@ RSpec.describe "builtins" do
       expect_pipe
         .in("✅", '[[1,2],","]')
         .code("(p => p | @join)")
-        .out("❌", '{"kind":"argument_error","origin":"builtin","file":"<inline>","operation":"@join","status":0,"input":[[1,2],","],"expected":["[_ ? (xs => {\"xs\": xs, \"f\": @String} | @all), _ ? @String]"]}')
+        .out("❌", '{"kind":"argument_error","origin":"builtin","file":"<inline>","operation":"@join","status":0,"input":[[1,2],","],"expected":["[_ ? (xs => {\"c\": xs, \"f\": @String} | @all), _ ? @String]"]}')
     end
 
     it "errors with argument_error on a non-pair" do
       expect_pipe
         .in("✅", '[["a"]]')
         .code("(p => p | @join)")
-        .out("❌", '{"kind":"argument_error","origin":"builtin","file":"<inline>","operation":"@join","status":0,"input":[["a"]],"expected":["[_ ? (xs => {\"xs\": xs, \"f\": @String} | @all), _ ? @String]"]}')
+        .out("❌", '{"kind":"argument_error","origin":"builtin","file":"<inline>","operation":"@join","status":0,"input":[["a"]],"expected":["[_ ? (xs => {\"c\": xs, \"f\": @String} | @all), _ ? @String]"]}')
     end
   end
 
@@ -381,14 +381,14 @@ RSpec.describe "builtins" do
       expect_pipe
         .in("✅", "5")
         .code("(es => es | @toObject)")
-        .out("❌", '{"kind":"argument_error","origin":"builtin","file":"<inline>","operation":"@toObject","status":0,"input":5,"expected":["_ ? (xs => {\"xs\": xs, \"f\": ([_ ? @String, _] => true)} | @all)"]}')
+        .out("❌", '{"kind":"argument_error","origin":"builtin","file":"<inline>","operation":"@toObject","status":0,"input":5,"expected":["_ ? (xs => {\"c\": xs, \"f\": ([_ ? @String, _] => true)} | @all)"]}')
     end
 
     it "errors on a malformed entry" do
       expect_pipe
         .in("✅", '[["a",1],5]')
         .code("(es => es | @toObject)")
-        .out("❌", '{"kind":"argument_error","origin":"builtin","file":"<inline>","operation":"@toObject","status":0,"input":[["a",1],5],"expected":["_ ? (xs => {\"xs\": xs, \"f\": ([_ ? @String, _] => true)} | @all)"]}')
+        .out("❌", '{"kind":"argument_error","origin":"builtin","file":"<inline>","operation":"@toObject","status":0,"input":[["a",1],5],"expected":["_ ? (xs => {\"c\": xs, \"f\": ([_ ? @String, _] => true)} | @all)"]}')
     end
   end
 

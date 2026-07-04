@@ -22,7 +22,7 @@ RSpec.describe "the error `file` (innermost user-code call site)" do
       expect_pipe
         .in("✅", "5")
         .code("@map")
-        .out("❌", '{"kind":"argument_error","origin":"stdlib","file":"<fusion>","operation":"@map","status":0,"input":5,"expected":["{\"f\": _ ? @Function, \"xs\": _ ? @Array}","{\"f\": _ ? @Function, \"xs\": _ ? @Object}"]}')
+        .out("❌", '{"kind":"argument_error","origin":"stdlib","file":"<fusion>","operation":"@map","status":0,"input":5,"expected":["{\"f\": _ ? @Function, \"c\": _ ? @Array}","{\"f\": _ ? @Function, \"c\": _ ? @Object}"]}')
     end
 
     it "piping the input into a non-function program" do
@@ -38,14 +38,14 @@ RSpec.describe "the error `file` (innermost user-code call site)" do
       expect_pipe
         .in("✅", '["a","b"]')
         .code("(p => p | @OP.sum)")
-        .out("❌", '{"kind":"argument_error","origin":"builtin","file":"<inline>","operation":"@OP.sum","status":0,"input":["a","b"],"expected":["_ ? (xs => {\"xs\": xs, \"f\": @Number} | @all)"]}')
+        .out("❌", '{"kind":"argument_error","origin":"builtin","file":"<inline>","operation":"@OP.sum","status":0,"input":["a","b"],"expected":["_ ? (xs => {\"c\": xs, \"f\": @Number} | @all)"]}')
     end
 
     it "a stdlib function piped directly" do
       expect_pipe
         .in("✅", "5")
         .code("(x => x | @map)")
-        .out("❌", '{"kind":"argument_error","origin":"stdlib","file":"<inline>","operation":"@map","status":0,"input":5,"expected":["{\"f\": _ ? @Function, \"xs\": _ ? @Array}","{\"f\": _ ? @Function, \"xs\": _ ? @Object}"]}')
+        .out("❌", '{"kind":"argument_error","origin":"stdlib","file":"<inline>","operation":"@map","status":0,"input":5,"expected":["{\"f\": _ ? @Function, \"c\": _ ? @Array}","{\"f\": _ ? @Function, \"c\": _ ? @Object}"]}')
     end
 
     it "a member access (.name)" do
@@ -65,14 +65,14 @@ RSpec.describe "the error `file` (innermost user-code call site)" do
     it "a builtin reached through @map" do
       expect_pipe
         .in("✅", '[["a","b"]]')
-        .code('(xs => {"f": @OP.sum, "xs": xs} | @map)')
-        .out("❌", '{"kind":"argument_error","origin":"builtin","file":"<inline>","operation":"@OP.sum","status":0,"input":["a","b"],"expected":["_ ? (xs => {\"xs\": xs, \"f\": @Number} | @all)"]}')
+        .code('(xs => {"f": @OP.sum, "c": xs} | @map)')
+        .out("❌", '{"kind":"argument_error","origin":"builtin","file":"<inline>","operation":"@OP.sum","status":0,"input":["a","b"],"expected":["_ ? (xs => {\"c\": xs, \"f\": @Number} | @all)"]}')
     end
 
     it "a stdlib function reached through @map" do
       expect_pipe
         .in("✅", '["x"]')
-        .code('(xs => {"f": @range, "xs": xs} | @map)')
+        .code('(xs => {"f": @range, "c": xs} | @map)')
         .out("❌", '{"kind":"argument_error","origin":"stdlib","file":"<inline>","operation":"@range","status":0,"input":"x","expected":["_ ? (m ? @Integer => [m, -1] | @OP.compare | @gt)"]}')
     end
   end
@@ -84,14 +84,14 @@ RSpec.describe "the error `file` (innermost user-code call site)" do
       expect_pipe
         .in("✅", '["a","b"]')
         .file_path("callsite/builtin.fsn")
-        .out("❌", '{"kind":"argument_error","origin":"builtin","file":"spec/fixtures/callsite/builtin.fsn","operation":"@OP.sum","status":0,"input":["a","b"],"expected":["_ ? (xs => {\"xs\": xs, \"f\": @Number} | @all)"]}')
+        .out("❌", '{"kind":"argument_error","origin":"builtin","file":"spec/fixtures/callsite/builtin.fsn","operation":"@OP.sum","status":0,"input":["a","b"],"expected":["_ ? (xs => {\"c\": xs, \"f\": @Number} | @all)"]}')
     end
 
     it "a stdlib function piped directly" do
       expect_pipe
         .in("✅", "5")
         .file_path("callsite/stdlib.fsn")
-        .out("❌", '{"kind":"argument_error","origin":"stdlib","file":"spec/fixtures/callsite/stdlib.fsn","operation":"@map","status":0,"input":5,"expected":["{\"f\": _ ? @Function, \"xs\": _ ? @Array}","{\"f\": _ ? @Function, \"xs\": _ ? @Object}"]}')
+        .out("❌", '{"kind":"argument_error","origin":"stdlib","file":"spec/fixtures/callsite/stdlib.fsn","operation":"@map","status":0,"input":5,"expected":["{\"f\": _ ? @Function, \"c\": _ ? @Array}","{\"f\": _ ? @Function, \"c\": _ ? @Object}"]}')
     end
 
     it "a member access (.name)" do
@@ -105,7 +105,7 @@ RSpec.describe "the error `file` (innermost user-code call site)" do
       expect_pipe
         .in("✅", '[["a","b"]]')
         .file_path("callsite/nested.fsn")
-        .out("❌", '{"kind":"argument_error","origin":"builtin","file":"spec/fixtures/callsite/nested.fsn","operation":"@OP.sum","status":0,"input":["a","b"],"expected":["_ ? (xs => {\"xs\": xs, \"f\": @Number} | @all)"]}')
+        .out("❌", '{"kind":"argument_error","origin":"builtin","file":"spec/fixtures/callsite/nested.fsn","operation":"@OP.sum","status":0,"input":["a","b"],"expected":["_ ? (xs => {\"c\": xs, \"f\": @Number} | @all)"]}')
     end
   end
 end

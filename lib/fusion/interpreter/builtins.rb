@@ -83,7 +83,7 @@ module Fusion
       # --- math (reached as `@math.round`, `@math.divide`, `@math.pi`, …) ---
 
       NUMBER_PAIR = ["[_ ? @Number, _ ? @Number]"].freeze
-      NUMBER_ARRAY = ['_ ? (xs => {"xs": xs, "f": @Number} | @all)'].freeze
+      NUMBER_ARRAY = ['_ ? (xs => {"c": xs, "f": @Number} | @all)'].freeze
       NUMBER = ["_ ? @Number"].freeze
 
       # `round`/`floor`/`ceil` return an integer; a non-finite input is a math_error
@@ -324,7 +324,7 @@ module Fusion
       # is the stdlib pair-case built on this.
       def join(v)
         return v if v.is_a?(ErrorVal)
-        expected = ['[_ ? (xs => {"xs": xs, "f": @String} | @all), _ ? @String]']
+        expected = ['[_ ? (xs => {"c": xs, "f": @String} | @all), _ ? @String]']
         return argument_error("join", v, expected) unless pair?(v)
 
         array, separator = v
@@ -439,7 +439,7 @@ module Fusion
       def to_object(v)
         return v if v.is_a?(ErrorVal)
         # Each entry must be a [string, _] pair.
-        expected = ['_ ? (xs => {"xs": xs, "f": ([_ ? @String, _] => true)} | @all)']
+        expected = ['_ ? (xs => {"c": xs, "f": ([_ ? @String, _] => true)} | @all)']
         unless v.is_a?(Array) && v.all? { |entry| pair?(entry) && entry[0].is_a?(String) }
           return argument_error("toObject", v, expected)
         end

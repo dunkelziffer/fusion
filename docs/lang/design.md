@@ -928,7 +928,8 @@ TODO: Under `-!` the input is the error payload, so empty stdin is a usage error
 
 - 🧑 ✅ The standard library is a directory of `.fsn` files reached via `@name` (the designer's file-reference scheme — "this should also solve how we build our standard library").
 - 🤖 ✅ Each stdlib file is typically one function written in Fusion; only true primitives that cannot be written in Fusion are built into the interpreter.
-- 🧑 ✅ `@map` is polymorphic on its `xs`: an array maps elementwise, an object maps over the values keeping the keys. The former separate `@mapValues` is folded in (one name, dispatched by collection type).
+- 🧑 ✅ `@map` is polymorphic on its collection: an array maps elementwise, an object maps over the values keeping the keys. The former separate `@mapValues` is folded in (one name, dispatched by collection type).
+- 🧑 ✅ Collection-taking stdlib functions (`@map`, `@filter`, `@reduce`, `@all`, `@any`) name the collection argument key `"c"` (not `"xs"`), since it may be an array or an object.
 
 ### Alternatives
 

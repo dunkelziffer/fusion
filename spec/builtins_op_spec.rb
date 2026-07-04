@@ -42,21 +42,21 @@ RSpec.describe "@OP builtin" do
       expect_pipe
         .in("✅", '[1,"a"]')
         .code("(v => v | @OP.sum)")
-        .out("❌", '{"kind":"argument_error","origin":"builtin","file":"<inline>","operation":"@OP.sum","status":0,"input":[1,"a"],"expected":["_ ? (xs => {\"xs\": xs, \"f\": @Number} | @all)"]}')
+        .out("❌", '{"kind":"argument_error","origin":"builtin","file":"<inline>","operation":"@OP.sum","status":0,"input":[1,"a"],"expected":["_ ? (xs => {\"c\": xs, \"f\": @Number} | @all)"]}')
     end
 
     it "treats a boolean element as the wrong type" do
       expect_pipe
         .in("✅", "[true,1]")
         .code("(v => v | @OP.sum)")
-        .out("❌", '{"kind":"argument_error","origin":"builtin","file":"<inline>","operation":"@OP.sum","status":0,"input":[true,1],"expected":["_ ? (xs => {\"xs\": xs, \"f\": @Number} | @all)"]}')
+        .out("❌", '{"kind":"argument_error","origin":"builtin","file":"<inline>","operation":"@OP.sum","status":0,"input":[true,1],"expected":["_ ? (xs => {\"c\": xs, \"f\": @Number} | @all)"]}')
     end
 
     it "errors on a non-array" do
       expect_pipe
         .in("✅", "5")
         .code("(v => v | @OP.sum)")
-        .out("❌", '{"kind":"argument_error","origin":"builtin","file":"<inline>","operation":"@OP.sum","status":0,"input":5,"expected":["_ ? (xs => {\"xs\": xs, \"f\": @Number} | @all)"]}')
+        .out("❌", '{"kind":"argument_error","origin":"builtin","file":"<inline>","operation":"@OP.sum","status":0,"input":5,"expected":["_ ? (xs => {\"c\": xs, \"f\": @Number} | @all)"]}')
     end
   end
 
@@ -93,14 +93,14 @@ RSpec.describe "@OP builtin" do
       expect_pipe
         .in("✅", '["a",2]')
         .code("(v => v | @OP.product)")
-        .out("❌", '{"kind":"argument_error","origin":"builtin","file":"<inline>","operation":"@OP.product","status":0,"input":["a",2],"expected":["_ ? (xs => {\"xs\": xs, \"f\": @Number} | @all)"]}')
+        .out("❌", '{"kind":"argument_error","origin":"builtin","file":"<inline>","operation":"@OP.product","status":0,"input":["a",2],"expected":["_ ? (xs => {\"c\": xs, \"f\": @Number} | @all)"]}')
     end
 
     it "errors on a non-array" do
       expect_pipe
         .in("✅", "5")
         .code("(v => v | @OP.product)")
-        .out("❌", '{"kind":"argument_error","origin":"builtin","file":"<inline>","operation":"@OP.product","status":0,"input":5,"expected":["_ ? (xs => {\"xs\": xs, \"f\": @Number} | @all)"]}')
+        .out("❌", '{"kind":"argument_error","origin":"builtin","file":"<inline>","operation":"@OP.product","status":0,"input":5,"expected":["_ ? (xs => {\"c\": xs, \"f\": @Number} | @all)"]}')
     end
   end
 

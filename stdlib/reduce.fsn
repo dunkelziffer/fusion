@@ -1,8 +1,8 @@
 # Left fold over a NON-EMPTY array with no seed: combine the first two elements
-# with f, then fold that result with the rest. Input: {"f": binaryFn, "xs": array}.
+# with f, then fold that result with the rest. Input: {"f": binaryFn, "c": array}.
 # `f` receives the pair [acc, element]. An empty list is an error.
 (
-  {"f": _ ? @Function, "xs": [x]} => x,
-  {"f": f ? @Function, "xs": [x, y, ...rest]} => {"f": f, "xs": [[x, y] | f, ...rest]} | @,
-  x => !{"kind": "argument_error", "origin": "stdlib", "operation": "@reduce", "status": 0, "input": x, "expected": ["{\"f\": _ ? @Function, \"xs\": [_, ...]}"]}
+  {"f": _ ? @Function, "c": [x]} => x,
+  {"f": f ? @Function, "c": [x, y, ...rest]} => {"f": f, "c": [[x, y] | f, ...rest]} | @,
+  x => !{"kind": "argument_error", "origin": "stdlib", "operation": "@reduce", "status": 0, "input": x, "expected": ["{\"f\": _ ? @Function, \"c\": [_, ...]}"]}
 )

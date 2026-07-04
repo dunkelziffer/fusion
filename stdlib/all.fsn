@@ -1,11 +1,11 @@
-# Return true if every item of "xs" satisfies the predicate "f" (a truthy
-# result). Input: {"f": predicate, "xs": array}. Short-circuits: the first item
+# Return true if every item of "c" satisfies the predicate "f" (a truthy
+# result). Input: {"f": predicate, "c": array}. Short-circuits: the first item
 # whose predicate is falsey yields false without testing the rest.
 (
-  {"f": _ ? @Function, "xs": []} => true,
-  {"f": f ? @Function, "xs": [x, ...rest]} => (x | f) | (
+  {"f": _ ? @Function, "c": []} => true,
+  {"f": f ? @Function, "c": [x, ...rest]} => (x | f) | (
     _ ? @falsey => false,
-    _           => {"f": f, "xs": rest} | @,
+    _           => {"f": f, "c": rest} | @,
   ),
-  x => !{"kind": "argument_error", "origin": "stdlib", "operation": "@all", "status": 0, "input": x, "expected": ["{\"f\": _ ? @Function, \"xs\": _ ? @Array}"]},
+  x => !{"kind": "argument_error", "origin": "stdlib", "operation": "@all", "status": 0, "input": x, "expected": ["{\"f\": _ ? @Function, \"c\": _ ? @Array}"]},
 )

@@ -1,1 +1,1 @@
-(xs => {"f": @OP.sum, "xs": xs} | @map)
+(xs => {"f": @OP.sum, "c": xs} | @map)

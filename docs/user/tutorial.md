@@ -234,7 +234,7 @@ standard library and are reached with a plain `@name` — the same `@map` you'd 
 a sibling file. The classic `map` is in the standard library. Create `doubler.fsn`:
 
 ```fusion
-(xs => {"f": (n => [n, 2] | @OP.product), "xs": xs} | @map)
+(xs => {"f": (n => [n, 2] | @OP.product), "c": xs} | @map)
 ```
 
 ```sh
@@ -242,7 +242,7 @@ echo '[1, 2, 3]' | fusion doubler.fsn    # => [2, 4, 6]
 ```
 
 Because every Fusion function takes exactly one argument, `map` takes an *object*
-bundling the function `f` and the list `xs`. You just passed a function as a value
+bundling the function `f` and the collection `c`. You just passed a function as a value
 nested within an object — functions are values like any other.
 
 Now the payoff for using `@` everywhere. A bare `@name` is resolved in the following
