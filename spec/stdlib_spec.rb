@@ -20,14 +20,14 @@ RSpec.describe "stdlib error handling" do
       expect_pipe
         .in("✅", '"hi"')
         .code("(x => x | @range)")
-        .out("❌", '{"kind":"argument_error","origin":"stdlib","file":"<inline>","operation":"@range","status":0,"input":"hi","expected":["_ ? (m ? @Integer => [m, -1] | @OP.compare | @gt)"]}')
+        .out("❌", '{"kind":"argument_error","origin":"stdlib","file":"<inline>","operation":"@range","status":0,"input":"hi","expected":["_ ? (m ? @Integer => [m, 0] | @OP.compare | @gte)"]}')
     end
 
     it "errors on a negative integer (rather than recursing forever)" do
       expect_pipe
         .in("✅", "-1")
         .code("(x => x | @range)")
-        .out("❌", '{"kind":"argument_error","origin":"stdlib","file":"<inline>","operation":"@range","status":0,"input":-1,"expected":["_ ? (m ? @Integer => [m, -1] | @OP.compare | @gt)"]}')
+        .out("❌", '{"kind":"argument_error","origin":"stdlib","file":"<inline>","operation":"@range","status":0,"input":-1,"expected":["_ ? (m ? @Integer => [m, 0] | @OP.compare | @gte)"]}')
     end
   end
 
@@ -97,7 +97,7 @@ RSpec.describe "stdlib error handling" do
       expect_pipe
         .in("✅", "null")
         .code("(_ => 1e400 | @range)")
-        .out("❌", '{"kind":"argument_error","origin":"stdlib","file":"<inline>","operation":"@range","status":0,"input":"<Infinity>","expected":["_ ? (m ? @Integer => [m, -1] | @OP.compare | @gt)"]}')
+        .out("❌", '{"kind":"argument_error","origin":"stdlib","file":"<inline>","operation":"@range","status":0,"input":"<Infinity>","expected":["_ ? (m ? @Integer => [m, 0] | @OP.compare | @gte)"]}')
     end
 
     it "@map of a {f} missing c echoes the function placeholder" do

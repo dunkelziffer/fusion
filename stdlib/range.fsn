@@ -1,5 +1,5 @@
 (
   0 => [],
-  n ? (m ? @Integer => [m, -1] | @OP.compare | @gt) => [...([n, -1] | @OP.sum | @), [n, -1] | @OP.sum],
-  x => !{"kind": "argument_error", "origin": "stdlib", "operation": "@range", "status": 0, "input": x, "expected": ["_ ? (m ? @Integer => [m, -1] | @OP.compare | @gt)"]}
+  n ? (m ? @Integer => [m, 0] | @OP.compare | @gt) => [...([n, -1] | @OP.sum | @), [n, -1] | @OP.sum],
+  x => !{"kind": "argument_error", "origin": "stdlib", "operation": "@range", "status": 0, "input": x, "expected": ["_ ? (m ? @Integer => [m, 0] | @OP.compare | @gte)"]}
 )
