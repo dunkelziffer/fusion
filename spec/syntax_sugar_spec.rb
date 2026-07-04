@@ -1,8 +1,8 @@
 # frozen_string_literal: true
 
-# Operator and access syntax sugar (reference §2.7). Every operator desugars to a
-# pipe into an `@OP.*` member (or a stdlib call for the map-pipes); `[]`/`[=]` are
-# core syntax. These specs drive the real behavior through the pipe, using the
+# Operator syntax sugar (reference §2.7). Every operator desugars to a
+# pipe into an `@OP.*` member (or a stdlib call for the map-pipes).
+# These specs drive the real behavior through the pipe, using the
 # sugar exclusively — the sugar-free forms are covered by the other specs.
 RSpec.describe "syntax sugar" do
   describe "arithmetic" do
