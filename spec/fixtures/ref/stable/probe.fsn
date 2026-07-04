@@ -1,0 +1,1 @@
+(xs => [null | @all, {"f": @String, "c": xs} | @@all])

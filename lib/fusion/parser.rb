@@ -130,9 +130,26 @@ module Fusion
       when :lparen then parse_function_or_group
       when :ident then advance; Expression::Ident.new(name: t.value)
       when :at then parse_fileref
-      when :atat then advance; Expression::FileRef.new(variety: :super, path: nil)
+      when :atat then parse_superref
       else raise ParseError, "Unexpected token #{t.type} (#{t.value.inspect}) at #{t.pos}"
       end
+    end
+
+    # `@@` is super. Bare `@@` is super of the current file's own name; `@@name`
+    # (or a downward `@@dir/name`) is a *stable* reference to that name — it skips
+    # the sibling `name.fsn`, resolving builtin → stdlib, so a user's local shadow
+    # can't intercept it. `@@../…` is meaningless (super of an upward path) and
+    # falls through to a parse error.
+    def parse_superref
+      expect(:atat)
+      return Expression::FileRef.new(variety: :super, path: nil) unless at?(:ident)
+
+      parts = [expect(:ident).value]
+      while at?(:slash)
+        advance
+        parts << expect(:ident).value
+      end
+      Expression::FileRef.new(variety: :super_name, path: parts.join("/"))
     end
 
     def parse_fileref

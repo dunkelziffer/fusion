@@ -16,7 +16,7 @@ Fusion programs read JSON on standard input and write JSON on standard output. L
 create our first program. Create a file `lesson.fsn` containing exactly:
 
 ```fusion
-(n => [n, 2] | @multiply)
+(n => [n, 2] | @OP.product)
 ```
 
 Now run it:
@@ -32,10 +32,11 @@ being told:
   statements. The file *is* the program.
 - The input `21` was piped *into* the function. That is what `|` means: **`value |
   function`** applies the function to the value.
-- `[n, 2] | @multiply` built a two-element array and piped it into the built-in
-  `@multiply`. Fusion has no `*` operator (yet); arithmetic is done by piping a pair
-  into a named function. **Built-ins are reached with an `@` prefix**, just like files
-  — `@multiply`, `@add`, and so on. (You'll see why `@` is used for both in Step 8.)
+- `[n, 2] | @OP.product` built a two-element array and piped it into `@OP.product`, a
+  member of the built-in operator object `@OP`. Fusion has no `*` operator (yet);
+  arithmetic is done by piping a pair into a built-in. **Built-ins are reached with an
+  `@` prefix**, just like files — `@OP.product`, `@OP.sum`, and so on. (You'll see why
+  `@` is used for both in Step 8.)
 
 Note: on the right side of `=>` you can use regular parentheses `()` to group
 expressions and influence execution order.
@@ -126,8 +127,8 @@ number's absolute value:
 
 ```fusion
 (n =>
-  [n, 0] | @lessThan | (
-    true  => [0, n] | @subtract,
+  [n, 0] | @OP.compare | @lt | (
+    true  => n | @OP.negate,
     false => n
   )
 )
@@ -140,9 +141,10 @@ echo '-5' | fusion lesson.fsn    # => 5
 echo '5'  | fusion lesson.fsn    # => 5
 ```
 
-Read the middle line carefully: `[n, 0] | @lessThan` produces `true` or `false`. That
-boolean is then piped into a *second, inline function* whose two clauses are the two
-branches. **An `if` is just a function with a `true` clause and a `false` clause.**
+Read the middle line carefully: `[n, 0] | @OP.compare` orders the pair as `-1`/`0`/`1`,
+and `@lt` turns that into `true`/`false`. That boolean is then piped into a *second,
+inline function* whose two clauses are the two branches. **An `if` is just a function
+with a `true` clause and a `false` clause.**
 
 Note: you don't need to restrict yourself to the two values `true` and `false` as
 an intermediate result. Don't use it purely as an `if / else`. Use it like a `case`
@@ -161,7 +163,7 @@ To make recursion easier, `@` always means *the current file*. Create a new file
 ```fusion
 (
   [] => 0,
-  [x, ...rest] => [x, rest | @ ] | @add
+  [x, ...rest] => [x, rest | @ ] | @OP.sum
 )
 ```
 
@@ -198,7 +200,7 @@ Let's compute the factorial:
 ```fusion
 (
   0 => 1,
-  n ? @Integer => [n, [n, 1] | @subtract | @] | @multiply
+  n ? @Integer => [n, [n, -1] | @OP.sum | @] | @OP.product
 )
 ```
 
@@ -214,7 +216,7 @@ Create a function that sorts a pair of values:
 
 ```fusion
 (
-  [a, b] ? @lessThan => [a, b],
+  [a, b] ? (p => p | @OP.compare | @lt) => [a, b],
   [a, b] => [b, a]
 )
 ```
@@ -232,7 +234,7 @@ standard library and are reached with a plain `@name` — the same `@map` you'd 
 a sibling file. The classic `map` is in the standard library. Create `doubler.fsn`:
 
 ```fusion
-(xs => {"f": (n => [n, 2] | @multiply), "xs": xs} | @map)
+(xs => {"f": (n => [n, 2] | @OP.product), "c": xs} | @map)
 ```
 
 ```sh
@@ -240,7 +242,7 @@ echo '[1, 2, 3]' | fusion doubler.fsn    # => [2, 4, 6]
 ```
 
 Because every Fusion function takes exactly one argument, `map` takes an *object*
-bundling the function `f` and the list `xs`. You just passed a function as a value
+bundling the function `f` and the collection `c`. You just passed a function as a value
 nested within an object — functions are values like any other.
 
 Now the payoff for using `@` everywhere. A bare `@name` is resolved in the following
@@ -249,7 +251,7 @@ order:
 2. A **built-in** called `name`.
 3. A **standard-library** file `name.fsn`.
 
-The first match wins. So `@multiply` finds the built-in and `@map` falls through to
+The first match wins. So `@OP` finds the built-in and `@map` falls through to
 the standard library. And if *you* put a `map.fsn` next to your program, *your* `map`
 shadows the standard one — but only for files in that directory.
 
@@ -264,7 +266,7 @@ So far you have written programs that succeed. What happens when something goes
 wrong? Try dividing by zero. Save as `boom.fsn`:
 
 ```fusion
-(n => [n, 0] | @divide)
+(n => [n, 0] | @math.divide)
 ```
 
 ```sh
@@ -307,7 +309,7 @@ Catching is done with an error pattern:
 Here's `safeDivide` that returns `null` instead of failing:
 
 ```fusion
-(p => p | @divide | (! => null, n => n))
+(p => p | @math.divide | (! => null, n => n))
 ```
 
 Run `echo '[10, 0]' | fusion safeDivide.fsn` and you get `null` rather than an
@@ -331,7 +333,7 @@ In about an hour you have used every major feature of the language:
 - `if` is a function matching `true`/`false`; a loop is recursion via `@` (a bare
   `@` means "this file").
 - `?` attaches a predicate to refine a match, and predicates double as types.
-- Everything reachable lives in one `@` namespace: built-ins (`@add`, `@Integer`),
+- Everything reachable lives in one `@` namespace: built-ins (`@OP`, `@Integer`),
   the standard library (`@map`), sibling files (`@helper`), and the current file
   (`@`). A bare `@name` checks sibling → built-in → standard library, so you can
   locally shadow a built-in or stdlib function per directory.

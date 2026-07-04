@@ -1,4 +1,4 @@
 # JSON with comments, trailing commas and inline computation.
 {
-  "duration": [24, 60] | @multiply,
+  "duration": [24, 60] | @OP.product,
 }

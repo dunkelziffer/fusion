@@ -231,7 +231,7 @@ Rules:
 `p_core ? predicate` matches when `p_core` matches structurally **and** piping the
 matched value through `predicate` yields a **truthy** result. Truthiness is
 Ruby-style: every value is truthy except `false` and `null` (so `0` and `""` are
-truthy). The built-ins `@and` / `@or` / `@not` apply the same test.
+truthy). The operators `@OP.and` / `@OP.or` / `@OP.not` apply the same test.
 
 The predicate is a `|` chain of functions, and the matched value flows in from the
 left: `a ? b | c` matches when `a` matches and `a | b | c` is truthy. A single-stage
@@ -313,7 +313,7 @@ particular built-ins:
   is per-call: it is not enough for the function to have *some* error clause;
   that clause must match the specific error received. An error of a shape no
   clause catches propagates unchanged.
-- **Built-in operations (`@add`, `@divide`, `@equals`, `@Integer`, …) all
+- **Built-in and stdlib operations (`@math.divide`, `@OP.sum`, `@Integer`, …) all
   propagate** their input error without examining it. To inspect or compare an
   error's payload, you must catch it first and operate on the extracted payload:
   `!42 | (!a => a) | @Integer` returns `true` (the payload `42` *is* an integer);
@@ -323,7 +323,7 @@ particular built-ins:
   evaluating an element/member. `[1, !"bad", 2]` evaluates to `!"bad"`, not to
   an array of three things.
 - **Constructing an error from an erroring expression** propagates the inner
-  error rather than wrapping it. `!([5,0] | @divide)` evaluates to the division
+  error rather than wrapping it. `!([5,0] | @math.divide)` evaluates to the division
   error itself (a `math_error`, §6.5), never to an error wrapping an error. (This
   preserves the rule that there is never more than one error simultaneously.)
 - **When the function value itself is an error** (e.g. `value | @undefined_name`
@@ -355,7 +355,7 @@ There are two origins of error values, and they differ in payload:
 #### Payload shape
 
 ```json
-{"kind": "argument_error", "origin": "builtin", "operation": "@add", "status": 0, "input": [1, "x"], "expected": ["[_ ? @Number, _ ? @Number]"]}
+{"kind": "argument_error", "origin": "builtin", "operation": "@math.divide", "status": 0, "input": [1, "x"], "expected": ["[_ ? @Number, _ ? @Number]"]}
 ```
 
 | Field       | Required | Meaning                                                                                                                    |
@@ -405,52 +405,60 @@ User errors don't have to adhere to this standard.
 ## 7. Built-in functions
 
 All built-ins are ordinary one-argument functions, **reached with an `@` prefix**
-(`@add`, `@Integer`, …); see §9.2 for how `@name` resolves. The names in the tables
+(`@size`, `@Integer`, …); see §9.2 for how `@name` resolves. The names in the tables
 below are the built-in names; write `@` before them to use them. **Operations** return
 `!` on type-invalid or domain-invalid input. **Predicates** return `false` on any
 input that is not of the queried type (they never return `!`).
 
-### 7.1 Arithmetic (operations)
+The operators (`+ - * / == < …` and the boolean ops) live in the shadowable `@OP`
+object (§7.6); a directory reskins them by placing an `OP.fsn`. Their **named** forms
+below are stdlib functions built on `@OP.*`, so they follow a per-directory override.
 
-| Name       | Input             | Result                                                                 |
-| ---------- | ----------------- | ---------------------------------------------------------------------- |
-| `add`      | `[number, number]`| sum                                                                    |
-| `subtract` | `[number, number]`| difference                                                             |
-| `multiply` | `[number, number]`| product                                                                |
-| `divide`   | `[number, number]`| quotient; integer if evenly divisible, else float; `!` if divisor is 0 |
-| `mod`      | `[number, number]`| remainder; `!` if divisor is 0                                         |
-| `negate`   | `number`          | negation                                                               |
-| `floor`    | `number`          | floor (integer)                                                        |
+### 7.1 Arithmetic
 
-### 7.2 Comparison (operations)
+Addition, multiplication and negation are `@OP.sum` / `@OP.product` / `@OP.negate`
+(§7.6); subtraction is `[a, b | @OP.negate] | @OP.sum`. There are no named `@add` /
+`@subtract` / `@multiply` helpers — pipe a pair into the `@OP` member directly.
+Integer division/remainder are `@OP.quotient` / `@OP.modulo`. Division and the other
+numeric functions live in `@math` (§7.6a): `@math.divide`, `@math.floor`,
+`@math.round`, `@math.abs`, `@math.log`, `@math.sqrt`, etc.
 
-| Name        | Input                                   | Result                                   |
-| ----------- | --------------------------------------- | ---------------------------------------- |
-| `equals`    | `[any, any]`                            | deep structural equality (boolean)       |
-| `lessThan`  | `[number, number]` or `[string, string]`| boolean; `!` on mismatched/invalid types |
+### 7.2 Comparison
 
-Other comparisons (`lessEq`, `greaterThan`, `greaterEq`, `notEquals`) are specified
-for the standard library, derivable from `equals` and `lessThan`.
+Equality is `@OP.equal` (deep structural equality of a pair; §7.6) — used directly,
+there is no `@eq` helper. Ordering is `@OP.compare`, which returns `-1`/`0`/`1`. The
+named boolean forms **interpret that result** and are applied *after* it:
 
-### 7.3 Boolean (operations)
+| Name  | `-1`   | `0`    | `1`    | `null` |
+| ----- | ------ | ------ | ------ | ------ |
+| `lt`  | `true` | `false`| `false`| `null` |
+| `gt`  | `false`| `false`| `true` | `null` |
+| `lte` | `true` | `true` | `false`| `null` |
+| `gte` | `false`| `true` | `true` | `null` |
 
-These judge **truthiness** (the same Ruby-style test as `?` predicates: every value
-is truthy except `false` and `null`), not strict booleans, and always return a boolean.
+So `a < b` is written `[a, b] | @OP.compare | @lt`. Because the caller invokes
+`@OP.compare`, the ordering follows a per-directory `@OP` override while the helper
+itself is fixed and shadow-independent. A partial order whose `compare` returns `null`
+for incomparable operands passes that `null` straight through; any other input is an
+`argument_error`. A type mismatch surfaces as `@OP.compare`'s own error, before the
+helper runs.
 
-| Name  | Input    | Result                                              |
-| ----- | -------- | --------------------------------------------------- |
-| `and` | `[_, _]` | `true` if both operands are truthy                  |
-| `or`  | `[_, _]` | `true` if either operand is truthy                  |
-| `not` | `_`      | `true` if the operand is falsey (`false` or `null`) |
+### 7.3 Boolean
+
+The truthiness operators live in `@OP` (§7.6): `@OP.and`, `@OP.or`, `@OP.not`. They
+judge truthiness (every value is truthy except `false` and `null`), not strict
+booleans, and always return a boolean. There are no top-level `@and`/`@or`/`@not`.
+The stdlib helpers `@truthy` and `@falsey` reduce any single value to its truthiness
+by **pattern matching** (independent of any `@OP` override): `@truthy` is `true` for
+everything except `false`/`null`, and `@falsey` is its complement.
 
 ### 7.4 Strings and structure bridges (operations)
 
 | Name          | Input                       | Result                                  |
 | ------------- | --------------------------- | --------------------------------------- |
-| `length`      | string / array / object     | element/character/key count (integer)   |
-| `concat`      | `[string, string]`          | concatenation                           |
-| `chars`       | string                      | array of single-character strings       |
-| `join`        | `[array-of-strings, string]`| joined string                           |
+| `size`        | string / array / object     | element/character/key count (integer)   |
+| `join`        | `[array-of-strings, separator]` | the elements joined by the separator string |
+| `split`       | `[string, separator]`       | array split on the **literal** separator (an empty separator splits into characters), keeping empty fields |
 | `toString`    | any                         | string form of the value                |
 | `parseNumber` | string                      | integer or float; `!` if not numeric    |
 | `keys`        | object                      | array of key strings                    |
@@ -458,6 +466,10 @@ is truthy except `false` and `null`), not strict booleans, and always return a b
 | `get`         | `[array, int]` or `[object, string-key]` | element at that index/key (like `[]`, §8); `!` if out of range / missing |
 | `set`         | `[array, int, value]` or `[object, string-key, value]` | a **new** array/object with that entry set; an array index must already exist, an object key may be new |
 | `toObject`    | `[[string-key, value], …]`  | object built from entries; later duplicate keys win |
+
+`concat` (`[string, string]` → concatenation) and `chars` (string → array of its
+characters) are **standard-library** functions built on `join` / `split`, not
+built-ins.
 
 ### 7.5 Type predicates (predicates)
 
@@ -481,7 +493,59 @@ Notes:
 - Booleans are separate from numbers. There's no automatic type conversion (`false` <-> `0`, `true` <-> `1`).
 - The set of values without JSON representation (§9.3) is exactly `Function` + `NonFinite`
 
-### 7.6 Special built-ins: `ENV` and `load`
+### 7.6 The `@OP` object (the operators)
+
+`@OP` is a built-in **object**, reached by member access (`@OP.sum`, `@OP.and`, …),
+holding the arithmetic/comparison/boolean operators. Its members generalise to an
+**array of any length** (`sum`/`product`/`and`/`or` fold; `equal` is deep over all
+elements); `compare` reports an ordering. Infix sugar (once built) desugars to `@OP.*`.
+
+`@OP` is **shadowable per directory**: place an `OP.fsn` sibling that overrides members
+(spread the originals with `@@`) to reskin the operators — complex numbers, matrices,
+ternary logic — for that directory only. The comparison helpers in §7.2 (`@lt`, `@gt`, …)
+interpret an `@OP.compare` result, so ordering follows a local override the moment the
+caller pipes through `@OP.compare` (see the how-to guide).
+
+| Member        | Input                                    | Result                                                   |
+| ------------- | ---------------------------------------- | -------------------------------------------------------- |
+| `OP.sum`      | array of numbers                         | sum (`0` for `[]`)                                        |
+| `OP.product`  | array of numbers                         | product (`1` for `[]`)                                    |
+| `OP.negate`   | number                                   | negation                                                 |
+| `OP.invert`   | number                                   | reciprocal `1/x`, always a float; `!` if `0`             |
+| `OP.quotient` | `[integer, integer]`                     | integer division; `!` on a non-integer or a `0` divisor  |
+| `OP.modulo`   | `[integer, integer]`                     | integer remainder; `!` on a non-integer or a `0` divisor |
+| `OP.equal`    | array (any element types)                | deep equality: `true` iff every element equals the first |
+| `OP.compare`  | `[number, number]` or `[string, string]` | `-1` / `0` / `1` (first smaller / equal / larger)        |
+| `OP.and`      | array                                    | `true` if every element is truthy (`true` for `[]`)      |
+| `OP.or`       | array                                    | `true` if any element is truthy (`false` for `[]`)       |
+| `OP.not`      | `_`                                      | `true` if the operand is falsey                          |
+
+### 7.6a The `@math` object (numeric functions and constants)
+
+`@math` is a built-in object (shadowable like `@OP`) of numeric functions and two
+constants. `pi`/`e` are plain values; the rest are one-argument functions. A
+non-finite input to `round`/`floor`/`ceil`, a `log` of a non-positive number, and a
+`pow` with a complex result are `math_error`s.
+
+| Member        | Input                | Result                                                     |
+| ------------- | -------------------- | ---------------------------------------------------------- |
+| `math.pi`     | —                    | `3.141592653589793` (a value, not a function)              |
+| `math.e`      | —                    | `2.718281828459045` (a value)                              |
+| `math.round`  | number               | nearest integer (half away from zero)                      |
+| `math.floor`  | number               | floor (integer)                                            |
+| `math.ceil`   | number               | ceiling (integer)                                          |
+| `math.divide` | `[number, number]`   | quotient, always a **float**; `!` if divisor is 0          |
+| `math.sign`   | number               | `-1` / `0` / `1`                                           |
+| `math.abs`    | number               | absolute value (keeps int/float)                           |
+| `math.rand`   | `null` or a positive integer `n` | float in `[0, 1)`, or integer in `[0, n)`      |
+| `math.sin`    | number               | sine (radians), float                                      |
+| `math.cos`    | number               | cosine (radians), float                                    |
+| `math.exp`    | number               | `e^x`, float                                               |
+| `math.log`    | positive number      | natural log, float; `!` on a non-positive number           |
+| `math.pow`    | `[base, exponent]`   | `base^exp` (integer when base and non-negative integer exponent; else float); `!` on a complex result |
+| `math.sqrt`   | non-negative number  | square root (float); `!` on a negative number              |
+
+### 7.7 Special built-ins: `ENV` and `load`
 
 These resolve in the `@name` chain like other built-ins (so a sibling file of the
 same name shadows them), but they are not plain unary value functions:
@@ -524,9 +588,13 @@ A `@` reference takes one of these forms:
 - **`@@`** (super) — the built-in or standard-library value the current file
   **shadows**: the file's own name resolved by steps 2–3 below, skipping the
   sibling step (which would be the file itself). Lets an override refer to the
-  original method, e.g. `add.fsn` containing `@@` refers to the builtin `add`.
+  original method, e.g. `add.fsn` containing `@@` refers to the stdlib `add`.
   Outside a file (inline `-e` / REPL) there is no name to take super of, so it is a
   `reference_error` (`no enclosing file`).
+- **`@@name`, `@@dir/name`** — super with an explicit name: resolve `name` by
+  steps 2–3 below, skipping its sibling. The **stable** form of a reference — a
+  local shadow cannot intercept it (used inside an `OP.fsn` as `@@OP`, and by
+  error patterns that must stay canonical). `@@../…` is a syntax error.
 - **`@ENV`** — an object of all environment variables (string keys, string values;
   no parsing). Resolved in the `@name` chain below, so it is shadowable.
 - **`@name`** — a single bare identifier (no `/`, no `../`).
@@ -540,9 +608,9 @@ in order, first match winning:
 2. a **built-in** of that exact name (including `ENV` and `load`);
 3. a **standard-library file** at `<stdlib root>/<name>.fsn`.
 
-If none match, the result is `!`. Downward paths participate fully: `@math/sqrt`
-checks a sibling `math/sqrt.fsn`, then a built-in named `math/sqrt`, then a stdlib
-`math/sqrt.fsn`.
+If none match, the result is `!`. Downward paths participate fully: `@util/helper`
+checks a sibling `util/helper.fsn`, then a built-in named `util/helper`, then a stdlib
+`util/helper.fsn`.
 
 **Resolution of upward paths** (any reference containing `../`) is **file-only**: it
 resolves solely to a file relative to the referencing directory and never falls back
@@ -566,7 +634,7 @@ Confinement is lexical (it normalises `..`) and follows existing symlinks. It co
 references to a directory tree; it is not a security sandbox and needs none, since Fusion
 cannot write files. Pass `--jail '*'` to disable confinement entirely.
 
-**Built-ins are reached through this same mechanism**: `@add`, `@Integer`, etc. are
+**Built-ins are reached through this same mechanism**: `@size`, `@Integer`, etc. are
 `@name` references that resolve at step 2. A *bare* identifier (without `@`) is only
 a pattern hole; it never denotes a built-in.
 
@@ -729,7 +797,7 @@ relative to the working directory.
   statement is an assignment, not a pattern match.)
 - Rebinding a name is allowed; later entries see the new value.
 - A bound function can call itself through its own name
-  (`fact = (0 => 1, n => [n, [n,1] | @subtract | fact] | @multiply)`), because
+  (`fact = (0 => 1, n => [n, [n,-1] | @OP.sum | fact] | @OP.product)`), because
   the name is looked up at application time.
 - Entries report errors at `origin: "code"` with `file: "<inline>"`, like `-e` programs.
 

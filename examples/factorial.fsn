@@ -1,6 +1,6 @@
 # Factorial: n! for a non-negative integer.
 (
-  _ ? (i ? @Integer => [i, 0] | @lessThan, _ => true) => !"Only non-negative integers, please!",
+  _ ? (i ? @Integer => [i, 0] | @OP.compare | @lt, _ => true) => !"Only non-negative integers, please!",
   0 => 1,
-  n => [n, [n, 1] | @subtract | @] | @multiply
+  n => [n, [n, -1] | @OP.sum | @] | @OP.product
 )

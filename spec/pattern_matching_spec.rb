@@ -119,14 +119,14 @@ RSpec.describe "pattern matching" do
     it "applies a relational guard to the parent container (a<b)" do
       expect_pipe
         .in("✅", "[1,2]")
-        .code('([a,b] ? ([x,y] => [x,y] | @lessThan) => "asc", _ => "not")')
+        .code('([a,b] ? ([x,y] => [x,y] | @OP.compare | (-1 => true)) => "asc", _ => "not")')
         .out("✅", '"asc"')
     end
 
     it "rejects when the relational guard fails (a>=b)" do
       expect_pipe
         .in("✅", "[2,1]")
-        .code('([a,b] ? ([x,y] => [x,y] | @lessThan) => "asc", _ => "not")')
+        .code('([a,b] ? ([x,y] => [x,y] | @OP.compare | (-1 => true)) => "asc", _ => "not")')
         .out("✅", '"not"')
     end
 
@@ -155,10 +155,10 @@ RSpec.describe "pattern matching" do
     end
 
     it "chains functions in the predicate: a ? b | c tests a | b | c" do
-      # 5 | @not = false, false | @not = true → truthy → matches.
+      # 5 | @OP.not = false, false | @OP.not = true → truthy → matches.
       expect_pipe
         .in("✅", "5")
-        .code('(x ? @not | @not => "even-negations", _ => "no")')
+        .code('(x ? @OP.not | @OP.not => "even-negations", _ => "no")')
         .out("✅", '"even-negations"')
     end
 

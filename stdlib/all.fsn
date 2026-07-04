@@ -1,12 +1,13 @@
-# Return true if every item of "xs" satisfies the predicate "f" (a truthy
-# result). Input: {"f": predicate, "xs": array}. Short-circuits: the first item
-# whose predicate is falsey yields false without testing the rest.
+# Return true if every item satisfies the predicate "f" (a truthy result) — over an
+# array's elements or an object's values. Input: {"f": predicate, "c": array-or-object}.
+# Short-circuits: the first item whose predicate is falsey yields false without testing
+# the rest.
 (
-  {"f": _ ? @Function, "xs": []} => true,
-  {"f": f ? @Function, "xs": [x, ...rest]} => (x | f) | (
-    false => false,
-    null => false,
-    _ => {"f": f, "xs": rest} | @
+  {"f": _ ? @Function, "c": []} => true,
+  {"f": f ? @Function, "c": [x, ...rest]} => (x | f) | (
+    _ ? @falsey => false,
+    _           => {"f": f, "c": rest} | @,
   ),
-  x => !{"kind": "argument_error", "origin": "stdlib", "operation": "@all", "status": 0, "input": x, "expected": ["{\"f\": _ ? @Function, \"xs\": _ ? @Array}"]}
+  {"f": f ? @Function, "c": obj ? @Object} => {"f": f, "c": obj | @values} | @,
+  x => !{"kind": "argument_error", "origin": "stdlib", "operation": "@all", "status": 0, "input": x, "expected": ["{\"f\": _ ? @Function, \"c\": _ ? @Array}", "{\"f\": _ ? @Function, \"c\": _ ? @Object}"]},
 )

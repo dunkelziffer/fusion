@@ -17,7 +17,7 @@ RSpec.describe Fusion::CLI::Repl do
   let(:environment) { Fusion::Interpreter::Env.new.set_context(:dir, Dir.pwd) }
 
   let(:division_by_zero) do
-    '{"kind":"math_error","origin":"builtin","file":"<inline>","operation":"@divide","status":0,"input":[1,0],"message":"division by zero"}'
+    '{"kind":"math_error","origin":"builtin","file":"<inline>","operation":"@math.divide","status":0,"input":[1,0],"message":"division by zero"}'
   end
 
   let(:self_cycle) do
@@ -32,7 +32,7 @@ RSpec.describe Fusion::CLI::Repl do
 
     it "is complete for a whole statement or expression" do
       expect(repl.complete?("x = 5")).to be(true)
-      expect(repl.complete?("[1, 2, 3] | @length")).to be(true)
+      expect(repl.complete?("[1, 2, 3] | @size")).to be(true)
       expect(repl.complete?("[\n  1,\n  2\n]")).to be(true)
     end
 
@@ -51,19 +51,19 @@ RSpec.describe Fusion::CLI::Repl do
 
   describe "#handle (expressions)" do
     it "evaluates and renders an expression without binding anything" do
-      expect(repl.handle("[1, 2, 3] | @length", environment)).to eq("3")
+      expect(repl.handle("[1, 2, 3] | @size", environment)).to eq("3")
     end
 
     it "renders an error expression with a `!` prefix" do
-      expect(repl.handle("[1, 0] | @divide", environment)).to eq("!#{division_by_zero}")
+      expect(repl.handle("[1, 0] | @math.divide", environment)).to eq("!#{division_by_zero}")
     end
 
     it "renders a function leniently" do
-      expect(repl.handle("(n => [n, 2] | @multiply)", environment)).to eq('"<function>"')
+      expect(repl.handle("(n => [n, 2] | @OP.product)", environment)).to eq('"<function>"')
     end
 
     it "renders an @-using function leniently — the @ is deferred until it is applied" do
-      expect(repl.handle("(0 => 1, n => [n, [n, 1] | @subtract | @] | @multiply)", environment)).to eq('"<function>"')
+      expect(repl.handle("(0 => 1, n => [n, [n, -1] | @OP.sum | @] | @OP.product)", environment)).to eq('"<function>"')
     end
 
     it "resolves a bare @ to the entry's own value (forcing it in data position is a self-data-cycle)" do
@@ -74,7 +74,7 @@ RSpec.describe Fusion::CLI::Repl do
   describe "#handle (statements)" do
     it "evaluates, renders, and binds the identifier for later entries" do
       expect(repl.handle("x = 5", environment)).to eq("5")
-      expect(repl.handle("[x, 1] | @add", environment)).to eq("6")
+      expect(repl.handle("[x, 1] | @OP.sum", environment)).to eq("6")
     end
 
     it "allows rebinding a name" do
@@ -84,17 +84,17 @@ RSpec.describe Fusion::CLI::Repl do
     end
 
     it "supports recursion through the bound name" do
-      repl.handle("fact = (0 => 1, n => [n, [n, 1] | @subtract | fact] | @multiply)", environment)
+      repl.handle("fact = (0 => 1, n => [n, [n, -1] | @OP.sum | fact] | @OP.product)", environment)
       expect(repl.handle("5 | fact", environment)).to eq("120")
     end
 
     it "supports recursion through a bare @ (the entry's own value)" do
-      repl.handle("fact = (0 => 1, n => [n, [n, 1] | @subtract | @] | @multiply)", environment)
+      repl.handle("fact = (0 => 1, n => [n, [n, -1] | @OP.sum | @] | @OP.product)", environment)
       expect(repl.handle("5 | fact", environment)).to eq("120")
     end
 
     it "allows binding errors to identifiers and renders errors with a `!` prefix" do
-      expect(repl.handle("bad = [1, 0] | @divide", environment)).to eq("!#{division_by_zero}")
+      expect(repl.handle("bad = [1, 0] | @math.divide", environment)).to eq("!#{division_by_zero}")
       expect(repl.handle("bad", environment)).to eq("!#{division_by_zero}")
     end
   end

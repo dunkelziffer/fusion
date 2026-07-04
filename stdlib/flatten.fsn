@@ -1,0 +1,7 @@
+# Recursively flatten nested arrays into one flat array.
+(
+  [] => [],
+  [x ? @Array, ...rest] => [...(x | @), ...(rest | @)],
+  [x, ...rest] => [x, ...(rest | @)],
+  x => !{"kind": "argument_error", "origin": "stdlib", "operation": "@flatten", "status": 0, "input": x, "expected": ["_ ? @Array"]}
+)

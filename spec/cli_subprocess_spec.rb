@@ -19,7 +19,7 @@ RSpec.describe "CLI (exe/fusion)" do
   FIX  = File.expand_path("fixtures", __dir__)
 
   let(:division_by_zero) do
-    '{"kind":"math_error","origin":"builtin","file":"<inline>","operation":"@divide","status":0,"input":[1,0],"message":"division by zero"}'
+    '{"kind":"math_error","origin":"builtin","file":"<inline>","operation":"@math.divide","status":0,"input":[1,0],"message":"division by zero"}'
   end
 
   # Run the binary with the given args and stdin; returns [stdout, stderr, status].
@@ -44,7 +44,7 @@ RSpec.describe "CLI (exe/fusion)" do
     end
 
     it "prints only the payload to stderr (stdout empty) and exits 1 on error" do
-      out, err, status = run_cli("-e", "(p => p | @divide)", stdin: "[1,0]")
+      out, err, status = run_cli("-e", "(p => p | @math.divide)", stdin: "[1,0]")
       expect(out).to eq("")
       expect(err).to eq("#{division_by_zero}\n")
       expect(status.exitstatus).to eq(1)
@@ -53,19 +53,19 @@ RSpec.describe "CLI (exe/fusion)" do
 
   describe "use case selection" do
     it "starts the REPL when run with no arguments at all" do
-      out, _err, status = run_cli(stdin: "[1, 2, 3] | @length\n")
+      out, _err, status = run_cli(stdin: "[1, 2, 3] | @size\n")
       expect(out).to eq("3\n")
       expect(status.exitstatus).to eq(0)
     end
 
     it "defaults to the pipe use case once any argument is given" do
-      out, _err, status = run_cli("-e", "(n => [n, 1] | @add)", stdin: "5")
+      out, _err, status = run_cli("-e", "(n => [n, 1] | @OP.sum)", stdin: "5")
       expect(out).to eq("6\n")
       expect(status.exitstatus).to eq(0)
     end
 
     it "runs the pipe use case under an explicit --pipe" do
-      out, _err, status = run_cli("--pipe", "-e", "(n => [n, 1] | @add)", stdin: "5")
+      out, _err, status = run_cli("--pipe", "-e", "(n => [n, 1] | @OP.sum)", stdin: "5")
       expect(out).to eq("6\n")
       expect(status.exitstatus).to eq(0)
     end
@@ -79,7 +79,7 @@ RSpec.describe "CLI (exe/fusion)" do
     end
 
     it "accepts --execute as the long form of -e" do
-      out, _err, status = run_cli("--execute", "(n => [n, 1] | @add)", stdin: "5")
+      out, _err, status = run_cli("--execute", "(n => [n, 1] | @OP.sum)", stdin: "5")
       expect(out).to eq("6\n")
       expect(status.exitstatus).to eq(0)
     end
@@ -99,14 +99,14 @@ RSpec.describe "CLI (exe/fusion)" do
 
   describe "the pipe use case with no input" do
     it "emits the program's own value when stdin is empty" do
-      out, err, status = run_cli("-e", "[1, [2, 3] | @add]")
+      out, err, status = run_cli("-e", "[1, [2, 3] | @OP.sum]")
       expect(out).to eq("[1,5]\n")
       expect(err).to eq("")
       expect(status.exitstatus).to eq(0)
     end
 
     it "still pipes stdin through the program when input is present" do
-      out, _err, status = run_cli("-e", "(n => [n, 1] | @add)", stdin: "5")
+      out, _err, status = run_cli("-e", "(n => [n, 1] | @OP.sum)", stdin: "5")
       expect(out).to eq("6\n")
       expect(status.exitstatus).to eq(0)
     end
@@ -129,14 +129,14 @@ RSpec.describe "CLI (exe/fusion)" do
 
   describe "bare @ in inline (-e) source" do
     it "recurses through a bare @ when the unit is a function applied to stdin" do
-      out, err, status = run_cli("-e", "(0 => [0], n ? @Integer => [n, ...([n,1] | @subtract | @)])", stdin: "3")
+      out, err, status = run_cli("-e", "(0 => [0], n ? @Integer => [n, ...([n, -1] | @OP.sum | @)])", stdin: "3")
       expect(out).to eq("[3,2,1,0]\n")
       expect(err).to eq("")
       expect(status.exitstatus).to eq(0)
     end
 
     it "yields the unit's own function value (a serialization_error) when no stdin applies it" do
-      out, err, status = run_cli("-e", "(0 => 1, n => [n, [n,1] | @subtract | @] | @multiply)")
+      out, err, status = run_cli("-e", "(0 => 1, n => [n, [n, -1] | @OP.sum | @] | @OP.product)")
       expect(out).to eq("")
       expect(err).to eq(
         %({"kind":"serialization_error","origin":"output","operation":"serializing result","status":0,"input":"<function>","message":"cannot serialize a function"}\n)
@@ -194,7 +194,7 @@ RSpec.describe "CLI (exe/fusion)" do
     end
 
     it "accepts --jail with --repl" do
-      out, _err, status = run_cli("--repl", "-j", ".", stdin: "[1, 2, 3] | @length\n")
+      out, _err, status = run_cli("--repl", "-j", ".", stdin: "[1, 2, 3] | @size\n")
       expect(out).to eq("3\n")
       expect(status.exitstatus).to eq(0)
     end
@@ -416,7 +416,7 @@ RSpec.describe "CLI (exe/fusion)" do
     end
 
     it "prints an error as !payload on stdout and still exits 0" do
-      out, err, status = run_cli("--output", "bang", "-e", "(p => p | @divide)", stdin: "[1,0]")
+      out, err, status = run_cli("--output", "bang", "-e", "(p => p | @math.divide)", stdin: "[1,0]")
       expect(out).to eq("!#{division_by_zero}\n")
       expect(err).to eq("")
       expect(status.exitstatus).to eq(0)
@@ -440,7 +440,7 @@ RSpec.describe "CLI (exe/fusion)" do
     end
 
     it "wraps an error as [1, payload]" do
-      out, err, status = run_cli("--output", "array", "-e", "(p => p | @divide)", stdin: "[1,0]")
+      out, err, status = run_cli("--output", "array", "-e", "(p => p | @math.divide)", stdin: "[1,0]")
       expect(out).to eq("[1,#{division_by_zero}]\n")
       expect(err).to eq("")
       expect(status.exitstatus).to eq(0)
@@ -455,7 +455,7 @@ RSpec.describe "CLI (exe/fusion)" do
     end
 
     it 'wraps an error as {"error": _}' do
-      out, err, status = run_cli("--output", "object", "-e", "(p => p | @divide)", stdin: "[1,0]")
+      out, err, status = run_cli("--output", "object", "-e", "(p => p | @math.divide)", stdin: "[1,0]")
       expect(out).to eq(%({"error":#{division_by_zero}}\n))
       expect(err).to eq("")
       expect(status.exitstatus).to eq(0)
@@ -518,8 +518,8 @@ RSpec.describe "CLI (exe/fusion)" do
     end
 
     it "keeps a per-record error in-band and continues the stream" do
-      out, err, status = run_cli("--stream", "-e", "(p => p | @divide)", stdin: "[0,[4,2]]\n[0,[1,0]]\n[0,[9,3]]\n")
-      expect(out).to eq("[0,2]\n[1,#{division_by_zero}]\n[0,3]\n")
+      out, err, status = run_cli("--stream", "-e", "(p => p | @math.divide)", stdin: "[0,[4,2]]\n[0,[1,0]]\n[0,[9,3]]\n")
+      expect(out).to eq("[0,2.0]\n[1,#{division_by_zero}]\n[0,3.0]\n")
       expect(err).to eq("")
       expect(status.exitstatus).to eq(0)
     end
@@ -544,7 +544,7 @@ RSpec.describe "CLI (exe/fusion)" do
 
     it "combines --input array with --output object" do
       out, _err, status = run_cli(
-        "--stream", "--input", "array", "--output", "object", "-e", "(!payload => payload, n => [n, 2] | @multiply)",
+        "--stream", "--input", "array", "--output", "object", "-e", "(!payload => payload, n => [n, 2] | @OP.product)",
         stdin: %([0,5]\n[1,"boom"]\n)
       )
       expect(out).to eq(%({"value":10}\n{"value":"boom"}\n))
@@ -560,8 +560,8 @@ RSpec.describe "CLI (exe/fusion)" do
     end
 
     it "decodes the input as UTF-8 characters, not bytes" do
-      # "héllo ✓ 日本" is 10 characters but 17 bytes; @length must count characters.
-      out, _err, status = run_cli("-e", "(s => s | @length)", stdin: '"héllo ✓ 日本"')
+      # "héllo ✓ 日本" is 10 characters but 17 bytes; @size must count characters.
+      out, _err, status = run_cli("-e", "(s => s | @size)", stdin: '"héllo ✓ 日本"')
       expect(out).to eq("10\n")
       expect(status.exitstatus).to eq(0)
     end
@@ -579,13 +579,13 @@ RSpec.describe "CLI (exe/fusion)" do
   # results form a clean stdout stream, and the interactive UI lands on stderr.
   describe "--repl" do
     it "evaluates statements over one session, printing clean results to stdout" do
-      out, _err, status = run_cli("--repl", stdin: "x = 5\ny = [x, 1] | @add\n")
+      out, _err, status = run_cli("--repl", stdin: "x = 5\ny = [x, 1] | @OP.sum\n")
       expect(out).to eq("5\n6\n")
       expect(status.exitstatus).to eq(0)
     end
 
     it "evaluates a bare expression" do
-      out, _err, status = run_cli("--repl", stdin: "[1, 2, 3] | @length\n")
+      out, _err, status = run_cli("--repl", stdin: "[1, 2, 3] | @size\n")
       expect(out).to eq("3\n")
       expect(status.exitstatus).to eq(0)
     end

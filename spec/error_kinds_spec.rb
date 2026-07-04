@@ -163,8 +163,8 @@ RSpec.describe "error kinds" do
     it "a builtin given the wrong shape of arguments (not a pair)" do
       expect_pipe
         .in("✅", "[1,2,3]")
-        .code("(p => p | @add)")
-        .out("❌", '{"kind":"argument_error","origin":"builtin","file":"<inline>","operation":"@add","status":0,"input":[1,2,3],"expected":["[_ ? @Number, _ ? @Number]"]}')
+        .code("(p => p | @OP.compare)")
+        .out("❌", '{"kind":"argument_error","origin":"builtin","file":"<inline>","operation":"@OP.compare","status":0,"input":[1,2,3],"expected":["[_ ? @Number, _ ? @Number]","[_ ? @String, _ ? @String]"]}')
     end
   end
 
@@ -172,8 +172,8 @@ RSpec.describe "error kinds" do
     it "division by zero" do
       expect_pipe
         .in("✅", "[1,0]")
-        .code("(p => p | @divide)")
-        .out("❌", '{"kind":"math_error","origin":"builtin","file":"<inline>","operation":"@divide","status":0,"input":[1,0],"message":"division by zero"}')
+        .code("(p => p | @math.divide)")
+        .out("❌", '{"kind":"math_error","origin":"builtin","file":"<inline>","operation":"@math.divide","status":0,"input":[1,0],"message":"division by zero"}')
     end
   end
 
@@ -201,19 +201,19 @@ RSpec.describe "error kinds" do
 
     it "a non-finite number result (overflow to Infinity has no JSON form)" do
       expect_pipe
-        .code("(_ => [1e308, 10] | @multiply)")
+        .code("(_ => [1e308, 10] | @OP.product)")
         .out("❌", '{"kind":"serialization_error","origin":"output","operation":"serializing result","status":0,"input":"<Infinity>","message":"cannot serialize a non-finite number"}')
     end
 
     it "a -Infinity result" do
       expect_pipe
-        .code("(_ => [1e400, -1] | @multiply)")
+        .code("(_ => [1e400, -1] | @OP.product)")
         .out("❌", '{"kind":"serialization_error","origin":"output","operation":"serializing result","status":0,"input":"<-Infinity>","message":"cannot serialize a non-finite number"}')
     end
 
     it "a NaN result (Infinity - Infinity)" do
       expect_pipe
-        .code("(_ => [1e400, 1e400] | @subtract)")
+        .code("(_ => [1e400, 1e400 | @OP.negate] | @OP.sum)")
         .out("❌", '{"kind":"serialization_error","origin":"output","operation":"serializing result","status":0,"input":"<NaN>","message":"cannot serialize a non-finite number"}')
     end
 
@@ -253,20 +253,20 @@ RSpec.describe "error kinds" do
   describe "internal errors render their input leniently" do
     it "renders a function in input as \"<function>\"" do
       expect_pipe
-        .code("(_ => (y => y) | @floor)")
-        .out("❌", '{"kind":"argument_error","origin":"builtin","file":"<inline>","operation":"@floor","status":0,"input":"<function>","expected":["_ ? @Number"]}')
+        .code("(_ => (y => y) | @math.floor)")
+        .out("❌", '{"kind":"argument_error","origin":"builtin","file":"<inline>","operation":"@math.floor","status":0,"input":"<function>","expected":["_ ? @Number"]}')
     end
 
     it "renders a function nested in input as \"<function>\"" do
       expect_pipe
-        .code("(_ => [(y => y), 1] | @add)")
-        .out("❌", '{"kind":"argument_error","origin":"builtin","file":"<inline>","operation":"@add","status":0,"input":["<function>",1],"expected":["[_ ? @Number, _ ? @Number]"]}')
+        .code("(_ => [(y => y), 1] | @OP.sum)")
+        .out("❌", '{"kind":"argument_error","origin":"builtin","file":"<inline>","operation":"@OP.sum","status":0,"input":["<function>",1],"expected":["_ ? (xs => {\"c\": xs, \"f\": @Number} | @all)"]}')
     end
 
     it "renders a non-finite number in input as \"<Infinity>\"" do
       expect_pipe
-        .code("(_ => 1e400 | @floor)")
-        .out("❌", '{"kind":"math_error","origin":"builtin","file":"<inline>","operation":"@floor","status":0,"input":"<Infinity>","message":"not a finite number"}')
+        .code("(_ => 1e400 | @math.floor)")
+        .out("❌", '{"kind":"math_error","origin":"builtin","file":"<inline>","operation":"@math.floor","status":0,"input":"<Infinity>","message":"not a finite number"}')
     end
   end
 

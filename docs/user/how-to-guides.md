@@ -26,7 +26,7 @@ Compute a boolean, then pipe it into a two-clause function:
 
 ```fusion
 (n =>
-  [n, 0] | @lessThan | (
+  [n, 0] | @OP.compare | @lt | (
     true  => "negative",
     false => "non-negative"
   )
@@ -40,8 +40,8 @@ Here's an elegant way of writing FizzBuzz:
 (
   n =>
     [
-      [n, 3] | @mod,
-      [n, 5] | @mod,
+      [n, 3] | @OP.modulo,
+      [n, 5] | @OP.modulo,
     ]
       |
     (
@@ -61,7 +61,7 @@ You could write `sum` like this:
 ```fusion
 (
   [] => 0,
-  [x, ...rest] => [x, rest | @] | @add
+  [x, ...rest] => [x, rest | @] | @OP.sum
 )
 ```
 
@@ -78,7 +78,7 @@ A Fusion function takes exactly one input. Functions that require multiple input
 them into an array (or object) and destructure that in the pattern:
 
 ```fusion
-([a, b] => [a, b] | @add)
+([a, b] => [a, b] | @OP.sum)
 ```
 
 Call it as `[3, 4] | @thatFunction`
@@ -89,7 +89,7 @@ needs the remaining arguments (`y` in the example below). Each `=>` consumes one
 and hands back a function waiting for the next:
 
 ```fusion
-(x => (y => [x, y] | @add))
+(x => (y => [x, y] | @OP.sum))
 ```
 
 Call it as `4 | (3 | @thatFunction)`. `3 | f` yields a one-argument function that adds 3,
@@ -114,14 +114,14 @@ so guard the whole array instead:
 (
   []  => "palindrome",
   [_] => "palindrome",
-  [_, ...rest, _] ? ([first, ..., last] => [first, last] | @equals) => rest | @,
+  [_, ...rest, _] ? ([first, ..., last] => [first, last] | @OP.equal) => rest | @,
   _   => "not a palindrome"
 )
 ```
 
 The outer pattern `[_, ...rest, _]` is what you destructure for retrieving the middle
 of the array which you need to continue your recursion. The inline predicate
-`([first, ..., last] => [first, last] | @equals)` independently destructures the same
+`([first, ..., last] => [first, last] | @OP.equal)` independently destructures the same
 array again to compare its two ends.
 
 ---
@@ -130,8 +130,52 @@ array again to compare its two ends.
 
 Because a sibling file wins over a built-in or the standard library, you can override
 either — but only for files in the same directory, so you can't break things
-globally. Put an `add.fsn` next to your program and every `@add` *in that directory*
-uses yours; files elsewhere still get the built-in.
+globally. Put a `map.fsn` next to your program and every `@map` *in that directory*
+uses yours; files elsewhere still get the standard one.
+
+---
+
+## Reskin the operators (`@OP`) for a directory
+
+The arithmetic, comparison, and boolean operators live in one built-in object,
+`@OP` (`@OP.sum`, `@OP.compare`, `@OP.and`, …), and — like any `@`-name — it is
+resolved per directory. To change what the operators mean for the files in one
+directory (complex numbers, matrices, …), drop an `OP.fsn` there that overrides the
+members you want, reaching the originals with `@@`:
+
+```fusion
+# OP.fsn — this directory's arithmetic
+{ ...@@, "sum": (p => "my sum"), "product": (p => "my product") }
+```
+
+Only files in *that* directory are affected; everything else keeps the defaults. To
+check whether a directory changed the operators, look for an `OP.fsn` — there is no
+other way to change them.
+
+### Making a named derived helper follow your override
+
+Most stdlib helpers are deliberately **immune** to your override, so a reskin can't
+break them by accident: `@truthy`/`@falsey` decide truthiness by pattern matching,
+`@compact` drops nulls by pattern matching too, and the comparison helpers
+`@lt`/`@gt`/`@lte`/`@gte` interpret an `@OP.compare` *result* (you write
+`[a, b] | @OP.compare | @lt`, so the compare step already follows your override while
+the interpretation stays fixed).
+
+One helper still calls `@OP` internally — `@range` uses `@OP.sum` and `@OP.compare` —
+and, like `@`-names everywhere, it resolves `@OP` in *its own* directory (the stdlib),
+so it keeps the default even where you overrode `@OP`. To make it follow your override,
+copy the stdlib file to the directory containing your other overrides. It then
+resolves `@OP` locally:
+
+```sh
+# CAUTION: `fusion --stdlib-path` not implemented yet, determine manually
+
+# copy — portable, a frozen snapshot
+cp "$(fusion --stdlib-path)/range.fsn" .
+```
+
+Your copy of `range.fsn` now resolves `@OP` in its own directory first and will find
+your overrides before the original builtin implementations.
 
 ---
 
@@ -180,7 +224,7 @@ to be called) instead:
 
 ```fusion
 # factorial
-(0 => 1, n ? @Integer => [n, [n, 1] | @subtract | @] | @multiply)
+(0 => 1, n ? @Integer => [n, [n, -1] | @OP.sum | @] | @OP.product)
 ```
 
 If the file evaluates to an **object** and a recursive *helper* lives inside it as a
@@ -191,7 +235,7 @@ by a `.member` access — rather than `@filename.helper`:
 {
   "sumTo": (
     0 => 0,
-    n ? @Integer => [n, [n, 1] | @subtract | @.sumTo] | @add
+    n ? @Integer => [n, [n, -1] | @OP.sum | @.sumTo] | @OP.sum
   )
 }
 ```

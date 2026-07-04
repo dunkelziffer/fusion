@@ -47,12 +47,12 @@ everything else line up. With exactly one input and one output:
 - **Application has one shape:** `value | function`. There is no argument list, no
   call syntax, no arity to track. A pipeline `a | f | g | h` reads like a sentence.
 - **Multi-argument needs are met by data:** pass an array `[a, b]` or an object
-  `{"f": ..., "xs": ...}`. The "arguments" become a value you can also store, inspect,
+  `{"f": ..., "c": ...}`. The "arguments" become a value you can also store, inspect,
   and destructure — there's no separate notion of "argument tuple."
 - **Pattern matching has one job:** match the single input. A function's clauses are
   just alternative shapes that one input might have.
 
-The cost is verbosity in arithmetic (`[a, b] | @add` instead of `a + b`) and a little
+The cost is verbosity in arithmetic (`[a, b] | @OP.sum` instead of `a + b`) and a little
 ceremony for multi-argument library functions. The first is a candidate for later
 syntactic sugar; the second is mild. In exchange, the evaluation model is almost
 trivially simple, which is exactly what you want in a language meant to be small.
@@ -110,7 +110,7 @@ This also resolved the module system for free. If a file is a value, then refere
 a file *is* importing a value — no separate `import` construct, no namespace syntax.
 The directory tree becomes the namespace. The standard library is just a folder of
 files. One mechanism (`@`-references) now does top-level structure, modules, and
-library delivery — and, in the current design, built-in access too: `@add` and
+library delivery — and, in the current design, built-in access too: `@OP` and
 `@Integer` are looked up through the very same `@name` machinery as files. A bare
 `@name` checks for a sibling file, then a built-in, then a standard-library file, so
 your own files can locally shadow a built-in or a stdlib function without affecting
@@ -141,7 +141,7 @@ productive structure surrounds it.
 
 Two ideas were explored and deliberately set aside, both documented in the design doc.
 
-**Operator sugar.** We could write `a + b` and desugar it to `[a, b] | @add`. We rolled
+**Operator sugar.** We could write `a + b` and desugar it to `[a, b] | @OP.sum`. We rolled
 this back early to keep the core honest, with the explicit intent to reintroduce it
 once the semantics were settled. It is a pure ergonomics layer; it changes nothing
 underneath.

@@ -1,0 +1,9 @@
+# Strictly greater: interprets an @OP.compare result. Use as `[a, b] | @OP.compare | @gt`.
+# A partial order's compare may return null (incomparable); that propagates as null.
+(
+  -1 => false,
+  0 => false,
+  1 => true,
+  null => null,
+  x => !{"kind": "argument_error", "origin": "stdlib", "operation": "@gt", "status": 0, "input": x, "expected": ["-1", "0", "1", "null"]},
+)

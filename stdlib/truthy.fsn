@@ -1,0 +1,7 @@
+# True for every value except false and null — Fusion's own truthiness, decided by
+# pattern matching, so it is independent of any @OP override.
+(
+  false => false,
+  null => false,
+  _ => true,
+)

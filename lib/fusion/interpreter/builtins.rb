@@ -11,23 +11,14 @@ module Fusion
         @interp = interp
         define = ->(name, fn) { table[name] = NativeFunc.new(name, fn) }
 
-        # operations on a pair [a, b] (or a single value)
-        define.call("add", method(:add))
-        define.call("subtract", method(:subtract))
-        define.call("multiply", method(:multiply))
-        define.call("divide", method(:divide))
-        define.call("mod", method(:mod))
-        define.call("negate", method(:negate))
-        define.call("floor", method(:floor))
-        define.call("equals", method(:equals))
-        define.call("lessThan", method(:less_than))
-        define.call("and", method(:and_))
-        define.call("or", method(:or_))
-        define.call("not", method(:not_))
-        define.call("length", method(:length))
-        define.call("concat", method(:concat))
-        define.call("chars", method(:chars))
+        # Irreducible primitives kept as built-ins. The sugar-target operators
+        # (arithmetic/comparison/boolean) live in `@OP` below; their friendly
+        # derived forms (`@lt`, `@gt`, `@truthy`, …) are stdlib files that build on
+        # `@OP.*`, so they follow a per-directory `@OP` override. Numeric functions
+        # (`round`, `divide`, `sin`, …) and constants (`pi`, `e`) live in `@math`.
+        define.call("size", method(:size))
         define.call("join", method(:join))
+        define.call("split", method(:split))
         define.call("toString", method(:to_string))
         define.call("parseNumber", method(:parse_number))
         define.call("keys", method(:keys))
@@ -47,113 +38,274 @@ module Fusion
         define.call("Null", method(:null?))
         define.call("Function", method(:function?))
         define.call("NonFinite", method(:non_finite?))
+
+        # `OP` bundles the sugar-target operators as a shadowable builtin object,
+        # reached as `@OP.sum`, `@OP.and`, … A directory can swap the operators by
+        # placing an `OP.fsn` sibling that overrides members (reaching the
+        # originals with `@@`); infix sugar and the derived stdlib helpers resolve
+        # `@OP` per directory, so they follow the override.
+        table["OP"] = {
+          "sum"      => NativeFunc.new("OP.sum", method(:op_sum)),
+          "product"  => NativeFunc.new("OP.product", method(:op_product)),
+          "negate"   => NativeFunc.new("OP.negate", method(:op_negate)),
+          "invert"   => NativeFunc.new("OP.invert", method(:op_invert)),
+          "quotient" => NativeFunc.new("OP.quotient", method(:op_quotient)),
+          "modulo"   => NativeFunc.new("OP.modulo", method(:op_modulo)),
+          "equal"    => NativeFunc.new("OP.equal", method(:op_equal)),
+          "compare"  => NativeFunc.new("OP.compare", method(:op_compare)),
+          "and"      => NativeFunc.new("OP.and", method(:op_and)),
+          "or"       => NativeFunc.new("OP.or", method(:op_or)),
+          "not"      => NativeFunc.new("OP.not", method(:op_not)),
+        }
+
+        # `math` bundles numeric functions and constants, reached as `@math.round`,
+        # `@math.pi`, … Like `@OP`, it is a shadowable builtin object. `pi`/`e` are
+        # plain values; the rest are one-argument functions.
+        table["math"] = {
+          "round"  => NativeFunc.new("math.round", method(:math_round)),
+          "floor"  => NativeFunc.new("math.floor", method(:math_floor)),
+          "ceil"   => NativeFunc.new("math.ceil", method(:math_ceil)),
+          "divide" => NativeFunc.new("math.divide", method(:math_divide)),
+          "sign"   => NativeFunc.new("math.sign", method(:math_sign)),
+          "abs"    => NativeFunc.new("math.abs", method(:math_abs)),
+          "rand"   => NativeFunc.new("math.rand", method(:math_rand)),
+          "sin"    => NativeFunc.new("math.sin", method(:math_sin)),
+          "cos"    => NativeFunc.new("math.cos", method(:math_cos)),
+          "exp"    => NativeFunc.new("math.exp", method(:math_exp)),
+          "log"    => NativeFunc.new("math.log", method(:math_log)),
+          "pow"    => NativeFunc.new("math.pow", method(:math_pow)),
+          "sqrt"   => NativeFunc.new("math.sqrt", method(:math_sqrt)),
+          "pi"     => Math::PI,
+          "e"      => Math::E,
+        }
       end
 
-      # --- arithmetic ---
+      # --- math (reached as `@math.round`, `@math.divide`, `@math.pi`, …) ---
 
       NUMBER_PAIR = ["[_ ? @Number, _ ? @Number]"].freeze
+      NUMBER_ARRAY = ['_ ? (xs => {"c": xs, "f": @Number} | @all)'].freeze
+      NUMBER = ["_ ? @Number"].freeze
 
-      def add(v)
+      # `round`/`floor`/`ceil` return an integer; a non-finite input is a math_error
+      # (their Ruby forms raise `FloatDomainError` on it).
+      def math_round(v)
         return v if v.is_a?(ErrorVal)
-        return argument_error("add", v, NUMBER_PAIR) unless pair?(v) && numeric?(v[0]) && numeric?(v[1])
+        return argument_error("math.round", v, NUMBER) unless numeric?(v)
+        return error("math_error", "math.round", v, "not a finite number") if non_finite?(v)
 
-        v[0] + v[1]
+        v.round
       end
 
-      def subtract(v)
+      def math_floor(v)
         return v if v.is_a?(ErrorVal)
-        return argument_error("subtract", v, NUMBER_PAIR) unless pair?(v) && numeric?(v[0]) && numeric?(v[1])
-
-        v[0] - v[1]
-      end
-
-      def multiply(v)
-        return v if v.is_a?(ErrorVal)
-        return argument_error("multiply", v, NUMBER_PAIR) unless pair?(v) && numeric?(v[0]) && numeric?(v[1])
-
-        v[0] * v[1]
-      end
-
-      def divide(v)
-        return v if v.is_a?(ErrorVal)
-        return argument_error("divide", v, NUMBER_PAIR) unless pair?(v) && numeric?(v[0]) && numeric?(v[1])
-        return error("math_error", "divide", v, "division by zero") if v[1] == 0
-
-        a, b = v
-        if a.is_a?(Integer) && b.is_a?(Integer) && (a % b).zero?
-          a / b
-        else
-          a.to_f / b
-        end
-      end
-
-      def mod(v)
-        return v if v.is_a?(ErrorVal)
-        return argument_error("mod", v, NUMBER_PAIR) unless pair?(v) && numeric?(v[0]) && numeric?(v[1])
-        return error("math_error", "mod", v, "modulo by zero") if v[1] == 0
-
-        v[0] % v[1]
-      end
-
-      def negate(v)
-        return v if v.is_a?(ErrorVal)
-        return argument_error("negate", v, ["_ ? @Number"]) unless numeric?(v)
-
-        -v
-      end
-
-      def floor(v)
-        return v if v.is_a?(ErrorVal)
-        return argument_error("floor", v, ["_ ? @Number"]) unless numeric?(v)
-        return error("math_error", "floor", v, "not a finite number") if non_finite?(v)
+        return argument_error("math.floor", v, NUMBER) unless numeric?(v)
+        return error("math_error", "math.floor", v, "not a finite number") if non_finite?(v)
 
         v.floor
       end
 
-      # --- comparison ---
-
-      def equals(v)
+      def math_ceil(v)
         return v if v.is_a?(ErrorVal)
-        return argument_error("equals", v, ["[_, _]"]) unless pair?(v)
+        return argument_error("math.ceil", v, NUMBER) unless numeric?(v)
+        return error("math_error", "math.ceil", v, "not a finite number") if non_finite?(v)
 
-        @interp.deep_equal?(v[0], v[1])
+        v.ceil
       end
 
-      def less_than(v)
+      # `divide` always yields a float. Integer division is `@OP.quotient`, the
+      # remainder `@OP.modulo`.
+      def math_divide(v)
         return v if v.is_a?(ErrorVal)
-        expected = ["[_ ? @Number, _ ? @Number]", "[_ ? @String, _ ? @String]"]
-        return argument_error("lessThan", v, expected) unless pair?(v)
+        return argument_error("math.divide", v, NUMBER_PAIR) unless pair?(v) && numeric?(v[0]) && numeric?(v[1])
+        return error("math_error", "math.divide", v, "division by zero") if v[1] == 0
 
-        a, b = v
-        if numeric?(a) && numeric?(b)
-          a < b
-        elsif a.is_a?(String) && b.is_a?(String)
-          a < b
-        else
-          argument_error("lessThan", v, expected)
+        v[0].to_f / v[1]
+      end
+
+      # -1 / 0 / 1 (via `<`/`>`, so NaN → 0, never Ruby's `nil`).
+      def math_sign(v)
+        return v if v.is_a?(ErrorVal)
+        return argument_error("math.sign", v, NUMBER) unless numeric?(v)
+
+        if v < 0 then -1
+        elsif v > 0 then 1
+        else 0
         end
       end
 
-      # --- boolean ---
-
-      # `and`/`or`/`not` judge truthiness (Ruby-style: `false` and `null` are
-      # falsey, everything else truthy), not strict booleans, and always return a
-      # boolean. They share the interpreter's `truthy?`, the same test `?` guards use.
-      def and_(v)
+      def math_abs(v)
         return v if v.is_a?(ErrorVal)
-        return argument_error("and", v, ["[_, _]"]) unless pair?(v)
+        return argument_error("math.abs", v, NUMBER) unless numeric?(v)
 
-        @interp.truthy?(v[0]) && @interp.truthy?(v[1])
+        v.abs
       end
 
-      def or_(v)
+      # `null` → a float in `[0.0, 1.0)`; a positive integer `n` → an integer in
+      # `[0, n)`.
+      def math_rand(v)
         return v if v.is_a?(ErrorVal)
-        return argument_error("or", v, ["[_, _]"]) unless pair?(v)
+        return rand if v == NULL
+        return rand(v) if integer?(v) && v.positive?
 
-        @interp.truthy?(v[0]) || @interp.truthy?(v[1])
+        argument_error("math.rand", v, ["_ ? @Null", '_ ? (n ? @Integer => [0, n] | @OP.compare | (-1 => true))'])
       end
 
-      def not_(v)
+      def math_sin(v)
+        return v if v.is_a?(ErrorVal)
+        return argument_error("math.sin", v, NUMBER) unless numeric?(v)
+
+        Math.sin(v)
+      end
+
+      def math_cos(v)
+        return v if v.is_a?(ErrorVal)
+        return argument_error("math.cos", v, NUMBER) unless numeric?(v)
+
+        Math.cos(v)
+      end
+
+      def math_exp(v)
+        return v if v.is_a?(ErrorVal)
+        return argument_error("math.exp", v, NUMBER) unless numeric?(v)
+
+        Math.exp(v)
+      end
+
+      # Square root; the domain is non-negative numbers (a negative would be
+      # complex).
+      def math_sqrt(v)
+        return v if v.is_a?(ErrorVal)
+        return argument_error("math.sqrt", v, NUMBER) unless numeric?(v)
+        return error("math_error", "math.sqrt", v, "square root of a negative number") if v < 0
+
+        Math.sqrt(v)
+      end
+
+      # Natural logarithm; the domain is positive numbers (`Math.log` raises on a
+      # negative and gives `-Infinity` at 0).
+      def math_log(v)
+        return v if v.is_a?(ErrorVal)
+        return argument_error("math.log", v, NUMBER) unless numeric?(v)
+        return error("math_error", "math.log", v, "log of a non-positive number") if v <= 0
+
+        Math.log(v)
+      end
+
+      # `base ** exponent`: integer when the base and a non-negative integer
+      # exponent are integers, a float otherwise. A negative base with a fractional
+      # exponent (a complex result) is a math_error.
+      def math_pow(v)
+        return v if v.is_a?(ErrorVal)
+        return argument_error("math.pow", v, NUMBER_PAIR) unless pair?(v) && numeric?(v[0]) && numeric?(v[1])
+
+        a, b = v
+        result = a.is_a?(Integer) && b.is_a?(Integer) && !b.negative? ? a**b : a.to_f**b
+        return error("math_error", "math.pow", v, "not in domain (complex result)") if result.is_a?(Complex)
+
+        result
+      end
+
+      # --- OP: the sugar-target operators (reached as `@OP.sum`, `@OP.and`, …) ---
+      #
+      # The arithmetic, boolean, and equality members take an array of ANY length;
+      # the unary ones take a single value; `compare` returns -1 / 0 / 1. The
+      # friendly derived forms (`@lt`, `@gt`, `@truthy`, …) are stdlib files built on
+      # these.
+
+      def op_sum(v)
+        return v if v.is_a?(ErrorVal)
+        return argument_error("OP.sum", v, NUMBER_ARRAY) unless v.is_a?(Array) && v.all? { |x| numeric?(x) }
+
+        v.sum(0)
+      end
+
+      def op_product(v)
+        return v if v.is_a?(ErrorVal)
+        return argument_error("OP.product", v, NUMBER_ARRAY) unless v.is_a?(Array) && v.all? { |x| numeric?(x) }
+
+        v.reduce(1, :*)
+      end
+
+      def op_negate(v)
+        return v if v.is_a?(ErrorVal)
+        return argument_error("OP.negate", v, ["_ ? @Number"]) unless numeric?(v)
+
+        -v
+      end
+
+      # The unary reciprocal 1/x, always a float; 0 is a math_error.
+      def op_invert(v)
+        return v if v.is_a?(ErrorVal)
+        return argument_error("OP.invert", v, ["_ ? @Number"]) unless numeric?(v)
+        return error("math_error", "OP.invert", v, "division by zero") if v == 0
+
+        1.0 / v
+      end
+
+      INTEGER_PAIR = ["[_ ? @Integer, _ ? @Integer]"].freeze
+
+      # Integer division and its remainder — integers only (`@divide` handles the
+      # float case). Ruby's `/` and `%` agree in sign, so `q*b + r == a` holds.
+      def op_quotient(v)
+        return v if v.is_a?(ErrorVal)
+        return argument_error("OP.quotient", v, INTEGER_PAIR) unless pair?(v) && integer?(v[0]) && integer?(v[1])
+        return error("math_error", "OP.quotient", v, "division by zero") if v[1] == 0
+
+        v[0] / v[1]
+      end
+
+      def op_modulo(v)
+        return v if v.is_a?(ErrorVal)
+        return argument_error("OP.modulo", v, INTEGER_PAIR) unless pair?(v) && integer?(v[0]) && integer?(v[1])
+        return error("math_error", "OP.modulo", v, "modulo by zero") if v[1] == 0
+
+        v[0] % v[1]
+      end
+
+      # Deep, exact equality across the whole array: true iff every element
+      # equals the first (so 0 and 1 elements are vacuously equal). Any types.
+      def op_equal(v)
+        return v if v.is_a?(ErrorVal)
+        return argument_error("OP.equal", v, ["_ ? @Array"]) unless v.is_a?(Array)
+
+        v.all? { |x| @interp.deep_equal?(v[0], x) }
+      end
+
+      COMPARE_PAIR = ["[_ ? @Number, _ ? @Number]", "[_ ? @String, _ ? @String]"].freeze
+
+      # Order two numbers or two strings: -1, 0, or 1 (no deep equality). Built on
+      # `<` rather than `<=>` so a NaN operand yields 0 (unordered), never Ruby's
+      # `nil` — NaN is a reachable value (`Infinity - Infinity`).
+      def op_compare(v)
+        return v if v.is_a?(ErrorVal)
+        return argument_error("OP.compare", v, COMPARE_PAIR) unless pair?(v)
+
+        a, b = v
+        unless (numeric?(a) && numeric?(b)) || (a.is_a?(String) && b.is_a?(String))
+          return argument_error("OP.compare", v, COMPARE_PAIR)
+        end
+
+        if a < b then -1
+        elsif b < a then 1
+        else 0
+        end
+      end
+
+      def op_and(v)
+        return v if v.is_a?(ErrorVal)
+        return argument_error("OP.and", v, ["_ ? @Array"]) unless v.is_a?(Array)
+
+        v.all? { |x| @interp.truthy?(x) }
+      end
+
+      def op_or(v)
+        return v if v.is_a?(ErrorVal)
+        return argument_error("OP.or", v, ["_ ? @Array"]) unless v.is_a?(Array)
+
+        v.any? { |x| @interp.truthy?(x) }
+      end
+
+      def op_not(v)
         return v if v.is_a?(ErrorVal)
 
         !@interp.truthy?(v)
@@ -161,30 +313,18 @@ module Fusion
 
       # --- strings and structure bridges ---
 
-      def length(v)
+      def size(v)
         return v if v.is_a?(ErrorVal)
-        return argument_error("length", v, ["_ ? @String", "_ ? @Array", "_ ? @Object"]) unless v.is_a?(String) || v.is_a?(Array) || v.is_a?(Hash)
+        return argument_error("size", v, ["_ ? @String", "_ ? @Array", "_ ? @Object"]) unless v.is_a?(String) || v.is_a?(Array) || v.is_a?(Hash)
 
         v.length
       end
 
-      def concat(v)
-        return v if v.is_a?(ErrorVal)
-        return argument_error("concat", v, ["[_ ? @String, _ ? @String]"]) unless pair?(v) && v[0].is_a?(String) && v[1].is_a?(String)
-
-        v[0] + v[1]
-      end
-
-      def chars(v)
-        return v if v.is_a?(ErrorVal)
-        return argument_error("chars", v, ["_ ? @String"]) unless v.is_a?(String)
-
-        v.chars
-      end
-
+      # `[items, separator]`: join an array of strings into one string. `@concat`
+      # is the stdlib pair-case built on this.
       def join(v)
         return v if v.is_a?(ErrorVal)
-        expected = ['[_ ? (xs => {"xs": xs, "f": @String} | @all), _ ? @String]']
+        expected = ['[_ ? (xs => {"c": xs, "f": @String} | @all), _ ? @String]']
         return argument_error("join", v, expected) unless pair?(v)
 
         array, separator = v
@@ -193,6 +333,21 @@ module Fusion
         end
 
         array.join(separator)
+      end
+
+      # `[string, separator]`: the inverse of `@join`. Splits on the LITERAL
+      # separator (Ruby's `" "` whitespace special-case does not apply) and keeps
+      # empty fields; an empty separator splits into characters. `@chars` is the
+      # stdlib single-string case built on this.
+      def split(v)
+        return v if v.is_a?(ErrorVal)
+        expected = ["[_ ? @String, _ ? @String]"]
+        return argument_error("split", v, expected) unless pair?(v) && v[0].is_a?(String) && v[1].is_a?(String)
+
+        string, separator = v
+        return string.chars if separator.empty?
+
+        string.split(Regexp.new(Regexp.escape(separator)), -1)
       end
 
       def to_string(v)
@@ -237,6 +392,9 @@ module Fusion
 
       # Read from an array (integer index, negative counts from the end) or an
       # object (string key) — mirroring the `[]` operator (reference §8).
+      # Read from an array (integer index, negative counts from the end) or an
+      # object (string key) — the functional form of `[]` (reference §8), which
+      # desugars to `@get`.
       def get(v)
         return v if v.is_a?(ErrorVal)
         expected = ["[_ ? @Array, _ ? @Integer]", "[_ ? @Object, _ ? @String]"]
@@ -281,7 +439,7 @@ module Fusion
       def to_object(v)
         return v if v.is_a?(ErrorVal)
         # Each entry must be a [string, _] pair.
-        expected = ['_ ? (xs => {"xs": xs, "f": ([_ ? @String, _] => true)} | @all)']
+        expected = ['_ ? (xs => {"c": xs, "f": ([_ ? @String, _] => true)} | @all)']
         unless v.is_a?(Array) && v.all? { |entry| pair?(entry) && entry[0].is_a?(String) }
           return argument_error("toObject", v, expected)
         end

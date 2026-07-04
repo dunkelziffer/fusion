@@ -64,7 +64,7 @@ RSpec.describe Fusion::CLI do
     before { allow(described_class).to receive(:prepare!) }
 
     it "applies the program to the decoded stdin and emits the result" do
-      options = Fusion::CLI::Options.parse(["-e", "(n => [n, 1] | @add)"])
+      options = Fusion::CLI::Options.parse(["-e", "(n => [n, 1] | @OP.sum)"])
       allow(described_class).to receive(:load_input).and_return(Fusion::WirePair.new(status: 0, data: "5"))
       emitted = nil
       allow(described_class).to receive(:emit_output) { |wire, **| emitted = wire }
@@ -75,7 +75,7 @@ RSpec.describe Fusion::CLI do
     end
 
     it "emits the program's own value when there is no input" do
-      options = Fusion::CLI::Options.parse(["-e", "[1, [2, 3] | @add]"])
+      options = Fusion::CLI::Options.parse(["-e", "[1, [2, 3] | @OP.sum]"])
       allow(described_class).to receive(:load_input).and_return(nil)
       emitted = nil
       allow(described_class).to receive(:emit_output) { |wire, **| emitted = wire }
@@ -88,7 +88,7 @@ RSpec.describe Fusion::CLI do
 
   describe ".run_stream" do
     it "transforms each NDJSON record through the program" do
-      options = Fusion::CLI::Options.parse(["--stream", "-e", "(n => [n, 1] | @add)"])
+      options = Fusion::CLI::Options.parse(["--stream", "-e", "(n => [n, 1] | @OP.sum)"])
       allow(described_class).to receive(:prepare!)
 
       output = with_stdio(stdin: "[0,5]\n[0,9]\n") { described_class.run_stream(options) }
@@ -148,7 +148,7 @@ RSpec.describe Fusion::CLI do
 
   describe ".load_source" do
     it "evaluates inline source to a runtime value" do
-      result = described_class.load_source("[1, [2, 3] | @add]", described_class.root_environment)
+      result = described_class.load_source("[1, [2, 3] | @OP.sum]", described_class.root_environment)
       expect(result).to eq([1, 5])
     end
 
@@ -225,7 +225,7 @@ RSpec.describe Fusion::CLI do
 
   describe ".evaluate" do
     it "evaluates an expression to a value" do
-      result = described_class.evaluate(parse_entry("[1, 2, 3] | @length"), described_class.root_environment)
+      result = described_class.evaluate(parse_entry("[1, 2, 3] | @size"), described_class.root_environment)
       expect(result).to eq(3)
     end
 
@@ -248,7 +248,7 @@ RSpec.describe Fusion::CLI do
     end
 
     it "serializes an error into a status-1 WirePair carrying its payload" do
-      error = described_class.evaluate(parse_entry("[1, 0] | @divide"), described_class.root_environment)
+      error = described_class.evaluate(parse_entry("[1, 0] | @math.divide"), described_class.root_environment)
       wire = described_class.serialize(error)
       expect(wire.status).to eq(1)
       expect(wire.data).to include('"kind":"math_error"')
