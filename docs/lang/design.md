@@ -79,9 +79,9 @@ Future work and open questions are tracked separately in our [Roadmap](./roadmap
 ### Decisions
 
 - 🧑 ✅ Integers and floats are distinct kinds.
-- 🤖 ⏪ `divide` returned an integer when evenly divisible, a float otherwise; it is now always a float, with integer division split out to `@OP.quotient` (§5.5).
-- 🤖 ✅ `floor` returns an integer.
-- 🤖 ✅ `eq` is exact.
+- 🤖 ⏪ `@OP.divide` returned an integer when evenly divisible, a float otherwise. Reverted in §5.5. It is now always a float, with integer division split out to `@OP.quotient` (§5.5).
+- 🤖 ✅ `@math.floor` returns an integer.
+- 🤖 ✅ `@OP.equal` is exact.
 
 ### Alternatives
 
@@ -232,7 +232,7 @@ Future work and open questions are tracked separately in our [Roadmap](./roadmap
 - Unifies three things (structural matching, type checks, value guards) into one mechanism.
 - The "type system" is user-extensible with ordinary functions.
 - Nothing new to learn beyond `?`.
-- Predicates compose directly (`a ? @ends | @truthy`) instead of requiring a wrapping function (`a ? (x => x | @ends | @truthy)`).
+- Predicates compose directly (`a ? @ends | @OP.equal`) instead of requiring a wrapping function (`a ? (x => x | @ends | @OP.equal)`).
 
 ### Cons
 
@@ -738,9 +738,8 @@ All access goes through `@`:
 
 ### Decisions
 
-- 🧑 ✅ `@@` is the "super" method. It allows access to the built-in/stdlib shadowed by the current file.
+- 🧑 ✅ `@@name` (and downward `@@dir/name`) resolves `@name` while *skipping its sibling files*. It always references a builtin/stdlib and is immune to local shadowing. Bare `@@` is the special case `@@<current-file>`.
 - 🧑 ✅ Inline/REPL `@@` is a `reference_error` (`no enclosing file`). There is no filename to take "super" of.
-- 🧑 ✅ `@@name` (and downward `@@dir/name`) generalizes super to an explicit name: resolve `name` skipping *its* sibling — the stable built-in/stdlib, immune to a local shadow. Used for escape hatches (`@@OP` inside an `OP.fsn` override) and for error-payload patterns that must stay canonical regardless of a caller's shadows. `@@../…` is meaningless (super of an upward path) and is a syntax error. Bare `@@` is the special case `@@<current-file>`.
 
 ### Alternatives
 
@@ -750,6 +749,7 @@ All access goes through `@`:
 
 - An override delegates to the original without a separate handle, and `@name` semantics are untouched.
 - Relocatable: no file names itself.
+- `@@name` provides a stable mechanism for error-payload patterns that must stay canonical regardless of a caller's shadows.
 
 ### Cons
 
@@ -903,9 +903,8 @@ TODO: Under `-!` the input is the error payload, so empty stdin is a usage error
 
 ### Decisions
 
-- 🧑 ✅ No infix `+ - * / == < && …`.
-- 🧑 ✅ Arithmetic, comparison, and boolean operations are built-in functions applied to a pair, e.g. `[a, b] | @OP.sum`.
-- 🧑 ✅ Sugar is explicitly deferred, not rejected; the operations it will desugar to are grouped under `@OP` (§5.5).
+- 🧑 ✅ No infix `+ - * / == < && …` until the core semantics are settled. Syntax sugar is explicitly deferred, not rejected.
+- 🧑 ✅ Arithmetic, comparison, and boolean operations are built-in functions reached via an `@-reference`, e.g. `[a, b] | @OP.sum`.
 
 ### Alternatives
 
@@ -928,8 +927,6 @@ TODO: Under `-!` the input is the error payload, so empty stdin is a usage error
 
 - 🧑 ✅ The standard library is a directory of `.fsn` files reached via `@name` (the designer's file-reference scheme — "this should also solve how we build our standard library").
 - 🤖 ✅ Each stdlib file is typically one function written in Fusion; only true primitives that cannot be written in Fusion are built into the interpreter.
-- 🧑 ✅ `@map`/`@filter`/`@all`/`@any` are polymorphic on their collection: an array is processed elementwise, an object by its values (`@map`/`@filter` keep the keys). The former separate `@mapValues` is folded into `@map`.
-- 🧑 ✅ Collection-taking stdlib functions (`@map`, `@filter`, `@reduce`, `@all`, `@any`) name the collection argument key `"c"` (not `"xs"`), since it may be an array or an object.
 
 ### Alternatives
 
@@ -953,17 +950,10 @@ TODO: Under `-!` the input is the error payload, so empty stdin is a usage error
 ### Decisions
 
 - 🤖 ✅ Only things that can't be built in Fusion itself become a builtin. Other frequently used functions become part of the standard library.
-- 🤖 ✅ The interpreter provides these builtins:
-  - bridges (`size`, `join`, `split`, `toString`, `parseNumber`, `keys`, `values`, `get`, `set`, `toObject`);
-  - predicates (`Integer`, `Float`, `Number`, `String`, `Boolean`, `Array`, `Object`, `Null`, `Function`, `NonFinite`);
-  - the `@OP` operator object (§5.5) and the `@math` numeric object (§5.6).
-  The friendly operators (`add`, `subtract`, `multiply`, `eq`, `lt`, `gt`, `lte`, `gte`) are stdlib files built on `@OP.*` (§5.5), not built-ins.
 - 🤖 ✅ `keys` must be a builtin: pattern matching can pull *known* object keys but cannot enumerate *unknown* ones, so iterating an object of unknown shape is impossible without it.
-- 🧑 ⏪ The set was reworked in §5.5: sugar-target operators moved into the shadowable `@OP`; their friendly forms (`add`/`eq`/`lt`/…) became stdlib derivations; `and`/`or`/`not`/`negate` are `@OP`-only; `equals`/`lessThan`/`length` renamed to `eq`/`lt`/`size`; `mod`/`concat`/`chars` dropped (`concat`/`chars` are stdlib).
 
 ### Alternatives
 
-- 🧑 ✅ `lessEq`/`greaterThan`/etc. as stdlib derivations of `@OP.compare` (§5.5) — the original "leave the derivations to the library" call, once `@OP.compare` gave them a base to build on.
 - 🤖 ❌ Omit `values` (derivable from `keys`).
 
 ### Pros
@@ -1010,59 +1000,28 @@ TODO: Under `-!` the input is the error payload, so empty stdin is a usage error
 
 ---
 
-## 5.5 `@OP`: a shadowable operator object
+## 5.5 Reworking the builtins and standard library
 
 ### Decisions
 
-- 🧑 ✅ `@OP` is a **shadowable** built-in object holding the sugar-target operators (`sum product negate invert quotient modulo equal compare and or not`). A directory *reskins* the operators — complex numbers, matrices, ternary logic — by placing an `OP.fsn` sibling that overrides members (spreading the originals via `@@`); the override is confined to that directory (per §3.6 resolution). Infix sugar (once built) desugars to `@OP.*`, so `OP.fsn` is the single place a directory can change what `+`, `<`, `and`, … mean.
-- 🧑 ✅ Members generalize to arrays: `sum`/`product` fold a numeric array (`[]` → `0`/`1`), `and`/`or` fold truthiness (`[]` → `true`/`false`), `equal` is deep and true iff every element equals the first. `compare` returns `-1`/`0`/`1` for a pair of numbers or strings, built on `<` so a NaN operand gives `0`, never a non-value.
-- 🧑 ✅ Stdlib helpers are designed to be **immune** to a caller's `@OP` reskin, so a directory's override can't silently corrupt them. `@truthy`/`@falsey` decide truthiness by pattern matching (`false`/`null` vs. everything else), not by calling `@OP.not`. The comparison helpers `lt`/`gt`/`lte`/`gte` are stdlib files that **interpret an `@OP.compare` result**, applied as `[a, b] | @OP.compare | @lt`: the caller invokes `@OP.compare`, so ordering follows a local override, while the helper's mapping is fixed. Each maps `-1`/`0`/`1` explicitly and passes `null` through as `null` (a partial order's "incomparable"); any other input is an `argument_error`.
-- 🧑 ⏪ The named arithmetic helpers `@add`/`@subtract`/`@multiply` are dropped; arithmetic is `@OP.sum`/`@OP.product`/`@OP.negate` directly (subtraction is `[a, b | @OP.negate] | @OP.sum`). `@eq` is dropped too — equality is `@OP.equal` directly. Comparison keeps `lt`/`gt`/`lte`/`gte` because a boolean reads better than a raw `-1`/`0`/`1`.
-- 🧑 ✅ Each operator has exactly one shadowable reference. `negate`/`and`/`or`/`not` live **only** in `@OP` (their top-level duplicates are dropped). Structural/utility functions (`map`, `get`, `size`, `keys`, `join`, `split`, …) live **only** at top level, never in `@OP`; `@get` stays a Ruby built-in (`[]` desugars to `@get`, not the reverse). Numeric functions, including division, live in `@math` (§5.6).
-- 🧑 ✅ Division/reciprocal are float-only (`@math.divide`, `@OP.invert`); integer division is the integer-only pair `@OP.quotient` / `@OP.modulo`. `@mod` is dropped.
-- 🧑 ✅ Renames `lessThan`→`lt`, `length`→`size`; new comparisons `gt`/`lte`/`gte`. `@join` is `[items, separator]`; the new inverse `@split` is `[string, separator]` (literal separator, empty fields kept, empty separator = characters). `@concat`/`@chars` are stdlib over `@join`/`@split`.
+- 🧑 ✅ Bundle the most important arithmetic and logic operations together into a single `@OP` reference.
+- 🧑 ✅ Make the `stdlib` as orthogonal as possible to `@OP`.
+- 🧑 ✅ Higher-order helpers (`map`, `filter`, `reduce`, `compact`, `flatten`, `any`, `all`) are implemented via recursion in Fusion, not hidden in Ruby. They work for both arrays and objects where possible.
+- 🧑 ✅ Provide access to more advanced mathematical operations in `@math`.
+- 🧑 ✅ Where possible, builtins and stdlib functions are n-ary instead of binary.
 
 ### Alternatives
 
-- 🤖 ⏪ Keep every operator as its own two-argument built-in (the §5.3 set). Superseded: a shadowable `@OP` plus stdlib derivations lets a directory reskin all operators from one place, with the derived helpers following.
-- 🤖 ⏪ Hook `map`/`get` into `@OP` (with error re-tagging so `@OP.map` reports as `@OP.map`). Reverted: a member that duplicates a top-level name is an independent shadow point that can diverge; structural methods stay top-level only — which also deletes the re-tagging machinery (`needs_call_site`, `apply_op_member`, `retag`).
-- 🤖 ❌ Resolve `@OP` **dynamically** (at the call site) so stdlib helpers follow a foreign override. Rejected: it breaks the per-directory confinement — a library's own helpers would leak the *caller's* arithmetic. Lexical resolution keeps overrides confined; a helper follows a reskin only in the directory it's resolved in (ship the helper alongside `OP.fsn`).
-- 🤖 ❌ Derive division literally as `product(a, invert(b))`. Rejected: double-rounding makes some results wrong in the last digit (`3/5` → `0.6000000000000001`); `@math.divide` computes `a/b` directly.
-- 🤖 ❌ Let `@OP.compare` return Ruby's `nil` for a NaN operand. Rejected: `nil` is not a Fusion value; `0` keeps the result total.
+- 🤖 ⏪ Keep every operator as its own builtin (the §5.3 set). Superseded: bundling into `@OP` gives a directory one place to shadow them all.
+- 🤖 ❌ Resolve `@OP` **dynamically** (at the call site) so stdlib helpers follow a foreign override. Rejected: it breaks per-directory confinement.
 
 ### Pros
 
-- One shadowable object defines the operators; `OP.fsn` is the single thing to check to know whether a directory changed them, and the override is confined there.
-- No operator has two divergent references; derived helpers follow a reskin by the same lexical rule as everything else.
+- By bundling operators into `@OP`, the presence of an `OP.fsn` file will immediately become a warning sign that core operations might behave differently in a given directory.
+- By making the `stdlib` orthogonal to `@OP`, a shadowed `@OP` will not create footguns where `stdlib` functions still refer to the original implementation.
 
 ### Cons
 
-- A directory that reskins and wants a *named* helper (not just sugar) to follow must ship the one-line helper too (copy or symlink).
-
----
-
-## 5.6 The `@math` object
-
-### Decisions
-
-- 🧑 ✅ Numeric functions and constants live in a shadowable builtin object `@math` (like `@OP`): `round`, `floor`, `ceil`, `divide`, `sign`, `abs`, `rand`, `sin`, `cos`, `exp`, `log`, `pow`, `sqrt`, and the values `pi`/`e`. `@floor`/`@divide` moved here from the top level; the former `@math/square` stdlib file was replaced by `@math.sqrt`, so all of `math` is now the object (no `stdlib/math/` directory).
-- 🧑 ✅ `round`/`floor`/`ceil` return an integer and a non-finite input is a `math_error`; `log` and `sqrt` require a positive / non-negative number; `pow` is integer for an integer base with a non-negative integer exponent (else float) and a complex result is a `math_error`; `rand` maps `null` → float `[0,1)` and a positive integer `n` → integer `[0, n)`.
-- 🧑 ✅ The safety net maps `Math::DomainError` (alongside `FloatDomainError`/`ZeroDivisionError`) to `math_error`, so an unguarded numeric domain failure is a clean `math_error`, not `internal_error`.
-
-### Alternatives
-
-- 🤖 ❌ Keep `@floor`/`@divide` as top-level builtins, or `square` as a `@math/` stdlib file. Rejected: grouping every numeric function under the `@math` object mirrors `@OP` and keeps one `math` namespace.
-
-### Pros
-
-- One namespace for numeric functions, shadowable per directory like `@OP`.
-
----
-
-## 5.7 Tier-1 stdlib higher-order functions
-
-### Decisions
-
-- 🧑 ✅ `@filter` (array or object, like `@map`), `@reduce`, `@compact` (drop `null` from an array or object, built on `@filter`), `@flatten` (recursive), and `@any` (existential, short-circuiting) are stdlib Fusion files — recursion over data written in the language, not hidden in Ruby.
-- 🧑 ✅ `@reduce` folds a **non-empty** array with no seed: it combines the first two elements with `f` (which receives the pair `[acc, x]`), then folds the rest; a one-element array returns that element, and an empty array is an `argument_error`.
-- 🧑 ✅ `@truthy`/`@falsey` are stdlib files that reduce any value to its Ruby-truthiness by pattern matching on `false`/`null` (see §5.5 for why they avoid `@OP.not`).
+- Not all operators with syntax sugar have been grouped into `@OP`. Notable exceptions are structural operators like `@map`, `@filter`, `@reduce` and `@get`.
+- The few helpers that still reference `@OP` (currently only `@range`) will ignore `@OP` overrides. To make them aware of `@OP` overrides, create a copy of their `stdlib` source code next to your `OP.fsn`.
+- The native way of writing division `[a, b | @OP.negate] | @OP.product` is numerically incorrect and might produce a double rounding error. For the numerically correct division you have to use `@math.divide`.
