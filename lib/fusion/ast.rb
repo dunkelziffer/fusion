@@ -52,6 +52,7 @@ module Fusion
       Pipe      = TypedData.define(left: Expression, right: Expression)                              # left | right
       Member    = TypedData.define(obj: Expression, key: Identifier)                                 # obj.key
       Index     = TypedData.define(obj: Expression, idx: Expression)                                 # obj[expr]
+      IndexSet  = TypedData.define(obj: Expression, idx: Expression, value: Expression)               # obj[expr = expr]
 
       constants.each do |name|
         node = const_get(name)

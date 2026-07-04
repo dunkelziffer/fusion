@@ -7,6 +7,6 @@
     _           => [x, ...({"f": f, "c": rest} | @)],
   ),
   {"f": f ? @Function, "c": obj ? @Object} =>
-    {"f": (e => e | ([_, v] => v | f)), "c": {"f": (k => [k, [obj, k] | @get]), "c": obj | @keys} | @map} | @ | @toObject,
+    {"f": (e => e | ([_, v] => v | f)), "c": {"f": (k => [k, obj[k]]), "c": obj | @keys} | @map} | @ | @toObject,
   x => !{"kind": "argument_error", "origin": "stdlib", "operation": "@filter", "status": 0, "input": x, "expected": ["{\"f\": _ ? @Function, \"c\": _ ? @Array}", "{\"f\": _ ? @Function, \"c\": _ ? @Object}"]}
 )

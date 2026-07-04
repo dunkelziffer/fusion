@@ -1,10 +1,7 @@
 # FizzBuzz for a single integer
 (
   n =>
-    [
-      [n, 3] | @OP.modulo,
-      [n, 5] | @OP.modulo,
-    ]
+    [n % 3, n % 5]
       |
     (
       [0, 0] => "FizzBuzz",

@@ -15,9 +15,11 @@ module Fusion
       "[" => :lbracket, "]" => :rbracket,
       "{" => :lbrace, "}" => :rbrace,
       "," => :comma, ":" => :colon,
-      "|" => :pipe, "?" => :question, "." => :dot,
+      "?" => :question, "." => :dot,
       "@" => :at, "/" => :slash,
       "=" => :equals,
+      "+" => :plus, "-" => :minus, "*" => :star,
+      "%" => :percent, "~" => :tilde,
     }.freeze
 
     def initialize(src)
@@ -31,6 +33,11 @@ module Fusion
       loop do
         t = next_token
         out << t
+        # A file-reference path is one tight token, lexed only right after `@`/`@@`.
+        if t.type == :at || t.type == :atat
+          p = try_lex_path
+          out << p unless p.nil?
+        end
         break if t.type == :eof
       end
       out
@@ -59,6 +66,32 @@ module Fusion
         @i += 2
         return Token.new(type: :atat, value: "@@", pos: start)
       end
+      # Two-character operators, matched before their single-char prefixes.
+      if c == "=" && peek(1) == "="
+        @i += 2
+        return Token.new(type: :eqeq, value: "==", pos: start)
+      end
+      if c == "/" && peek(1) == "/"
+        @i += 2
+        return Token.new(type: :slashslash, value: "//", pos: start)
+      end
+      if c == "?" && peek(1) == "?"
+        @i += 2
+        return Token.new(type: :qq, value: "??", pos: start)
+      end
+      if c == "&" && peek(1) == "&"
+        @i += 2
+        return Token.new(type: :andand, value: "&&", pos: start)
+      end
+      if c == "|"
+        case peek(1)
+        when "|" then @i += 2; return Token.new(type: :oror, value: "||", pos: start)
+        when ":" then @i += 2; return Token.new(type: :pipemap, value: "|:", pos: start)
+        when "?" then @i += 2; return Token.new(type: :pipefilter, value: "|?", pos: start)
+        when "+" then @i += 2; return Token.new(type: :pipereduce, value: "|+", pos: start)
+        else @i += 1; return Token.new(type: :pipe, value: "|", pos: start)
+        end
+      end
       if c == "!"
         @i += 1
         return Token.new(type: :bang, value: "!", pos: start)
@@ -66,7 +99,7 @@ module Fusion
       if c == '"'
         return lex_string(start)
       end
-      if digit?(c) || (c == "-" && digit?(peek(1)))
+      if digit?(c)
         return lex_number(start)
       end
       if ident_start?(c)
@@ -147,7 +180,6 @@ module Fusion
 
     def lex_number(start)
       j = @i
-      j += 1 if @src[j] == "-"
       j += 1 while j < @n && digit?(@src[j])
       is_float = false
       if @src[j] == "." && digit?(@src[j + 1])
@@ -178,6 +210,36 @@ module Fusion
       when "null"  then Token.new(type: :null_kw, value: NULL, pos: start)
       else Token.new(type: :ident, value: text, pos: start)
       end
+    end
+
+    # Path lexing — see `tokens`. Only called immediately after `@`/`@@`, with no
+    # whitespace skipped, so the path must be tight. Returns nil (position restored)
+    # when nothing path-like follows, i.e. a bare `@`/`@@`.
+    def try_lex_path
+      start = @i
+      buf = +""
+      while peek == "." && peek(1) == "." && peek(2) == "/"
+        buf << "../"
+        @i += 3
+      end
+      unless ident_start?(peek)
+        @i = start
+        return nil
+      end
+      buf << lex_ident_text
+      while peek == "/" && ident_start?(peek(1))
+        @i += 1
+        buf << "/" << lex_ident_text
+      end
+      Token.new(type: :path, value: buf, pos: start)
+    end
+
+    def lex_ident_text
+      j = @i
+      j += 1 while j < @n && ident_part?(@src[j])
+      text = @src[@i...j]
+      @i = j
+      text
     end
 
     def digit?(c) = c && c >= "0" && c <= "9"

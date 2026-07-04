@@ -350,6 +350,7 @@ module Fusion
       when Expression::Pipe then eval_pipe(node, env)
       when Expression::Member then eval_member(node, env)
       when Expression::Index then eval_index(node, env)
+      when Expression::IndexSet then eval_index_set(node, env)
       else
         raise Unreachable, "Unknown AST node #{node.class}"
       end
@@ -471,6 +472,35 @@ module Fusion
         end
       else
         ErrorVal.from_runtime(kind: "argument_error", **site, operation: "[]", input: [obj, idx], expected: ["[_ ? @Array, _ ? @Integer]", "[_ ? @Object, _ ? @String]"])
+      end
+    end
+
+    # `obj[idx = value]` — returns a new array/object with one entry set (the setter
+    # counterpart of eval_index). An array index must already exist (arrays are not
+    # extended; negative indices count from the end); an object key may be new. The
+    # original `obj` is unchanged.
+    def eval_index_set(node, env)
+      obj = eval_expr(node.obj, env)
+      return obj if obj.is_a?(ErrorVal)
+
+      idx = eval_expr(node.idx, env)
+      return idx if idx.is_a?(ErrorVal)
+
+      value = eval_expr(node.value, env)
+      return value if value.is_a?(ErrorVal)
+
+      site = code_site(env)
+      if obj.is_a?(Array) && idx.is_a?(Integer)
+        i = idx >= 0 ? idx : obj.length + idx
+        if i >= 0 && i < obj.length
+          obj.dup.tap { |copy| copy[i] = value }
+        else
+          ErrorVal.from_runtime(kind: "access_error", **site, operation: "[=]", input: [obj, idx, value], message: "index out of range")
+        end
+      elsif obj.is_a?(Hash) && idx.is_a?(String)
+        obj.merge(idx => value)
+      else
+        ErrorVal.from_runtime(kind: "argument_error", **site, operation: "[=]", input: [obj, idx, value], expected: ["[_ ? @Array, _ ? @Integer, _]", "[_ ? @Object, _ ? @String, _]"])
       end
     end
 
