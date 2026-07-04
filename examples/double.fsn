@@ -1,4 +1,4 @@
 (
   [] => [],
-  [first, ...rest] => [2 * first, ...rest | @]
+  [first, ...rest] => [2 * first, ...rest|@]
 )
