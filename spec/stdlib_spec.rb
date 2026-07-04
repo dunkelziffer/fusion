@@ -163,18 +163,40 @@ RSpec.describe "stdlib error handling" do
         .out("✅", "false")
     end
 
+    # Like @map/@filter, @all is polymorphic on c: an object is tested by its values.
+    it "is true when every value of an object satisfies the predicate" do
+      expect_pipe
+        .in("✅", '{"a":"x","b":"y"}')
+        .code('(o => {"f": @String, "c": o} | @all)')
+        .out("✅", "true")
+    end
+
+    it "is false when an object value fails the predicate" do
+      expect_pipe
+        .in("✅", '{"a":"x","b":1}')
+        .code('(o => {"f": @String, "c": o} | @all)')
+        .out("✅", "false")
+    end
+
+    it "is true for the empty object" do
+      expect_pipe
+        .in("✅", "{}")
+        .code('(o => {"f": @String, "c": o} | @all)')
+        .out("✅", "true")
+    end
+
     it "errors on a non-{f,c} value" do
       expect_pipe
         .in("✅", "5")
         .code("(x => x | @all)")
-        .out("❌", '{"kind":"argument_error","origin":"stdlib","file":"<inline>","operation":"@all","status":0,"input":5,"expected":["{\"f\": _ ? @Function, \"c\": _ ? @Array}"]}')
+        .out("❌", '{"kind":"argument_error","origin":"stdlib","file":"<inline>","operation":"@all","status":0,"input":5,"expected":["{\"f\": _ ? @Function, \"c\": _ ? @Array}","{\"f\": _ ? @Function, \"c\": _ ? @Object}"]}')
     end
 
     it "validates f eagerly: a non-function f errors even when c is empty" do
       expect_pipe
         .in("✅", "[]")
         .code('(xs => {"f": 5, "c": xs} | @all)')
-        .out("❌", '{"kind":"argument_error","origin":"stdlib","file":"<inline>","operation":"@all","status":0,"input":{"f":5,"c":[]},"expected":["{\"f\": _ ? @Function, \"c\": _ ? @Array}"]}')
+        .out("❌", '{"kind":"argument_error","origin":"stdlib","file":"<inline>","operation":"@all","status":0,"input":{"f":5,"c":[]},"expected":["{\"f\": _ ? @Function, \"c\": _ ? @Array}","{\"f\": _ ? @Function, \"c\": _ ? @Object}"]}')
     end
 
     # Proper recursion short-circuits: once an item is falsey the result is
@@ -381,11 +403,27 @@ RSpec.describe "stdlib error handling" do
         .out("✅", "[0,false,1]")
     end
 
-    it "errors on a non-array" do
+    # Polymorphic like @filter: an object drops entries whose value is null,
+    # keeping the surviving keys.
+    it "drops null values from an object, keeping the keys" do
+      expect_pipe
+        .in("✅", '{"a":1,"b":null,"c":3}')
+        .code("(o => o | @compact)")
+        .out("✅", '{"a":1,"c":3}')
+    end
+
+    it "keeps a falsey non-null value in an object like false or 0" do
+      expect_pipe
+        .in("✅", '{"a":0,"b":false,"c":null,"d":1}')
+        .code("(o => o | @compact)")
+        .out("✅", '{"a":0,"b":false,"d":1}')
+    end
+
+    it "errors on a non-collection" do
       expect_pipe
         .in("✅", "5")
         .code("(x => x | @compact)")
-        .out("❌", '{"kind":"argument_error","origin":"stdlib","file":"<inline>","operation":"@compact","status":0,"input":5,"expected":["_ ? @Array"]}')
+        .out("❌", '{"kind":"argument_error","origin":"stdlib","file":"<inline>","operation":"@compact","status":0,"input":5,"expected":["_ ? @Array","_ ? @Object"]}')
     end
   end
 
@@ -450,11 +488,33 @@ RSpec.describe "stdlib error handling" do
         .out("✅", "true")
     end
 
+    # Like @map/@filter, @any is polymorphic on c: an object is tested by its values.
+    it "is true when some object value satisfies the predicate" do
+      expect_pipe
+        .in("✅", '{"a":1,"b":-3}')
+        .code('(o => {"f": (n => [n, 0] | @OP.compare | @lt), "c": o} | @any)')
+        .out("✅", "true")
+    end
+
+    it "is false when no object value satisfies it" do
+      expect_pipe
+        .in("✅", '{"a":1,"b":2}')
+        .code('(o => {"f": (n => [n, 0] | @OP.compare | @lt), "c": o} | @any)')
+        .out("✅", "false")
+    end
+
+    it "is false for the empty object" do
+      expect_pipe
+        .in("✅", "{}")
+        .code('(o => {"f": (n => n), "c": o} | @any)')
+        .out("✅", "false")
+    end
+
     it "errors on a non-{f,c} value" do
       expect_pipe
         .in("✅", "5")
         .code("(x => x | @any)")
-        .out("❌", '{"kind":"argument_error","origin":"stdlib","file":"<inline>","operation":"@any","status":0,"input":5,"expected":["{\"f\": _ ? @Function, \"c\": _ ? @Array}"]}')
+        .out("❌", '{"kind":"argument_error","origin":"stdlib","file":"<inline>","operation":"@any","status":0,"input":5,"expected":["{\"f\": _ ? @Function, \"c\": _ ? @Array}","{\"f\": _ ? @Function, \"c\": _ ? @Object}"]}')
     end
   end
 

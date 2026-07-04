@@ -928,7 +928,7 @@ TODO: Under `-!` the input is the error payload, so empty stdin is a usage error
 
 - 🧑 ✅ The standard library is a directory of `.fsn` files reached via `@name` (the designer's file-reference scheme — "this should also solve how we build our standard library").
 - 🤖 ✅ Each stdlib file is typically one function written in Fusion; only true primitives that cannot be written in Fusion are built into the interpreter.
-- 🧑 ✅ `@map` is polymorphic on its collection: an array maps elementwise, an object maps over the values keeping the keys. The former separate `@mapValues` is folded in (one name, dispatched by collection type).
+- 🧑 ✅ `@map`/`@filter`/`@all`/`@any` are polymorphic on their collection: an array is processed elementwise, an object by its values (`@map`/`@filter` keep the keys). The former separate `@mapValues` is folded into `@map`.
 - 🧑 ✅ Collection-taking stdlib functions (`@map`, `@filter`, `@reduce`, `@all`, `@any`) name the collection argument key `"c"` (not `"xs"`), since it may be an array or an object.
 
 ### Alternatives
@@ -1063,6 +1063,6 @@ TODO: Under `-!` the input is the error payload, so empty stdin is a usage error
 
 ### Decisions
 
-- 🧑 ✅ `@filter` (array or object, like `@map`), `@reduce`, `@compact` (drop `null` from an array, built on `@filter`), `@flatten` (recursive), and `@any` (existential, short-circuiting) are stdlib Fusion files — recursion over data written in the language, not hidden in Ruby.
+- 🧑 ✅ `@filter` (array or object, like `@map`), `@reduce`, `@compact` (drop `null` from an array or object, built on `@filter`), `@flatten` (recursive), and `@any` (existential, short-circuiting) are stdlib Fusion files — recursion over data written in the language, not hidden in Ruby.
 - 🧑 ✅ `@reduce` folds a **non-empty** array with no seed: it combines the first two elements with `f` (which receives the pair `[acc, x]`), then folds the rest; a one-element array returns that element, and an empty array is an `argument_error`.
 - 🧑 ✅ `@truthy`/`@falsey` are stdlib files that reduce any value to its Ruby-truthiness by pattern matching on `false`/`null` (see §5.5 for why they avoid `@OP.not`).
