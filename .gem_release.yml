@@ -1,5 +1,5 @@
 bump:
-  file: lib/static_db/version.rb
+  file: lib/fusion/version.rb
   skip_ci: false
 
 release:
