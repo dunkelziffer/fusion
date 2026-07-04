@@ -37,8 +37,7 @@ Errors are not regular values:
 
 ### 2.1 Expressions
 
-Precedence, tightest to loosest (everything below the postfix level is syntactic
-sugar — see §2.7):
+Precedence, tightest to loosest:
 
 1. Primary: literals, `[...]`, `{...}`, `(...)` grouping, function literals,
    identifiers, `@`-references.
@@ -182,12 +181,7 @@ literal in expressions, and `p_literal` admits it directly in patterns.
 ### 2.7 Operators (syntactic sugar)
 
 Every operator here is **pure syntactic sugar**: it desugars to a pipe into an `@OP.*`
-member (§7.6), or, for the map-pipes, into a stdlib call. The runtime has no operators of
-its own. Because the targets are `@OP.*`, a directory that shadows `@OP` reskins the
-operators too.
-
-House style: write pipes tight (`x|@f`) and value operators spaced (`a + b`), so spacing
-mirrors precedence.
+member (§7.6), or, for the map-pipes, into a stdlib call.
 
 ```
   -a           →  negative literal if a is a number, else  a | @OP.negate
@@ -206,8 +200,6 @@ mirrors precedence.
   xs |: f      →  {"c": xs, "f": f} | @map
   xs |? f      →  {"c": xs, "f": f} | @filter
   xs |+ f      →  {"c": xs, "f": f} | @reduce
-  c[k]         →  index read  (core syntax, §8)
-  c[k = v]     →  index write (core syntax, §8)
 ```
 
 Folding and associativity:
@@ -223,8 +215,9 @@ Folding and associativity:
 Because pipe binds tighter than the value operators, `x|@f + 1` is `(x|@f) + 1`; to pipe a
 computed value onward, parenthesize it: `(a + b)|@f`, `(a ?? b)|@gt`.
 
-Comparisons: `a == b` is equality directly; `a < b` is `(a ?? b) | @lt` (likewise `@gt` /
-`@lte` / `@gte`), since `??` yields the `-1`/`0`/`1` ordering those stdlib helpers interpret.
+Comparisons: `a == b` is equality. `a < b` needs to be expressed as `(a ?? b) | @lt`
+(likewise `@gt` / `@lte` / `@gte`), since `??` yields the `-1`/`0`/`1` ordering those
+stdlib helpers interpret.
 
 ---
 
@@ -491,10 +484,9 @@ below are stdlib functions built on `@OP.*`, so they follow a per-directory over
 In source you normally write the infix sugar of §2.7 — `a + b`, `-a`, `a * b`, `a % b`,
 `a // b` — which desugars to the members below. Addition, multiplication and negation are
 `@OP.sum` / `@OP.product` / `@OP.negate` (§7.6); subtraction is `[a, b | @OP.negate] | @OP.sum`.
-There are no named `@add` / `@subtract` / `@multiply` helpers — pipe a pair into the `@OP`
-member directly. Integer division/remainder are `@OP.quotient` / `@OP.modulo`. Division and
-the other numeric functions live in `@math` (§7.6a): `@math.divide`, `@math.floor`,
-`@math.round`, `@math.abs`, `@math.log`, `@math.sqrt`, etc.
+Integer division/remainder are `@OP.quotient` / `@OP.modulo`. Numerically correct
+division and the other numeric functions live in `@math` (§7.6a): `@math.divide`,
+`@math.floor`, `@math.round`, `@math.abs`, `@math.log`, `@math.sqrt`, etc.
 
 ### 7.2 Comparison
 
