@@ -155,30 +155,27 @@ other way to change them.
 ### Making a named derived helper follow your override
 
 Most stdlib helpers are deliberately **immune** to your override, so a reskin can't
-break them by accident: `@truthy`/`@falsey` decide truthiness by pattern matching, and
-the comparison helpers `@lt`/`@gt`/`@lte`/`@gte` interpret an `@OP.compare` *result*
-(you write `[a, b] | @OP.compare | @lt`, so the compare step already follows your
-override while the interpretation stays fixed).
+break them by accident: `@truthy`/`@falsey` decide truthiness by pattern matching,
+`@compact` drops nulls by pattern matching too, and the comparison helpers
+`@lt`/`@gt`/`@lte`/`@gte` interpret an `@OP.compare` *result* (you write
+`[a, b] | @OP.compare | @lt`, so the compare step already follows your override while
+the interpretation stays fixed).
 
-A few helpers still call `@OP` internally — `@compact` uses `@OP.not`, `@range` uses
-`@OP.sum` — and, like `@`-names everywhere, they resolve `@OP` in *their own* directory
-(the stdlib), so they keep the default even where you overrode `@OP`. To make one follow
-your override, put the stdlib file into your directory — it then resolves `@OP` locally:
+One helper still calls `@OP` internally — `@range` uses `@OP.sum` and `@OP.compare` —
+and, like `@`-names everywhere, it resolves `@OP` in *its own* directory (the stdlib),
+so it keeps the default even where you overrode `@OP`. To make it follow your override,
+copy the stdlib file to the directory containing your other overrides. It then
+resolves `@OP` locally:
 
 ```sh
-# copy — portable, a frozen snapshot
-cp "$(fusion --stdlib-path)/compact.fsn" .
+# CAUTION: `fusion --stdlib-path` not implemented yet, determine manually
 
-# or symlink — tracks stdlib updates, but re-create it after an upgrade
-ln -s "$(fusion --stdlib-path)/compact.fsn" ./compact.fsn
+# copy — portable, a frozen snapshot
+cp "$(fusion --stdlib-path)/range.fsn" .
 ```
 
-Both work by the same rule: Fusion resolves module paths **lexically** — it never
-calls `realpath` — so a file, *or a symlink*, named `compact.fsn` in your directory
-resolves its `@OP` reference against *your* directory, while its bytes come from the
-stdlib. A symlink to a versioned install path can dangle after an upgrade; re-create
-it, or copy instead. (`fusion --stdlib-path` and a `fusion vendor` scaffold are
-planned — see the roadmap.)
+Your copy of `range.fsn` now resolves `@OP` in its own directory first and will find
+your overrides before the original builtin implementations.
 
 ---
 
