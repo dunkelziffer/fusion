@@ -77,7 +77,8 @@ Refer to the [Documentation](docs/index.md) for further information.
 
 ## Development
 
-After checking out the repo, run `bin/setup` to install dependencies. Run `bin/console` for an interactive prompt that will allow you to experiment.
+- Run `bundle install` to install dependencies.
+- Run `bin/console` for an interactive prompt that will allow you to experiment.
 
 ### Tests
 
