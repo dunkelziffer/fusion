@@ -1,5 +1,11 @@
 # frozen_string_literal: true
 
+# Configured in `.simplecov`.
+if ENV["COVERAGE"]
+  require "simplecov"
+  SimpleCov.start
+end
+
 require_relative "../lib/fusion"
 
 Dir[File.expand_path("support/**/*.rb", __dir__)].sort.each { |f| require f }
