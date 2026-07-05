@@ -35,6 +35,7 @@ jobs:
       contents: read
       checks: write # the "Coverage" check run
     strategy:
+      # Coverage is collected only for the last matrix entry.
       matrix:
         ruby:
           - '4.0.1'
@@ -50,12 +51,17 @@ jobs:
           ruby-version: ${{ matrix.ruby }}
           bundler-cache: true
 
+      - name: Enable coverage on the newest Ruby
+        env:
+          JOB_INDEX: ${{ strategy.job-index }}
+          JOB_TOTAL: ${{ strategy.job-total }}
+        run: if [ "$JOB_INDEX" -eq "$((JOB_TOTAL - 1))" ]; then echo 'COVERAGE=1' >> "$GITHUB_ENV"; fi
+
       - name: Run specs
         run: bundle exec rake spec:all
-        env:
-          COVERAGE: "1"
 
       - name: Report the coverage as a check run
+        if: env.COVERAGE == '1'
         env:
           GH_TOKEN: ${{ github.token }}
           REPOSITORY: ${{ github.repository }}
@@ -67,7 +73,7 @@ jobs:
           summary=$(ruby -rjson -e 'JSON.parse(File.read("coverage/.last_run.json"))["result"].each { |criterion, percent| puts "- #{criterion}: #{percent}%" }')
           gh api "repos/$REPOSITORY/check-runs" \
             --method POST \
-            -f name="Coverage ${{ matrix.ruby }}" \
+            -f name="Coverage" \
             -f head_sha="$HEAD_SHA" \
             -f status=completed \
             -f conclusion=success \
@@ -77,7 +83,8 @@ jobs:
           The full HTML report is in the run's \`coverage-report\` artifact."
 
       - name: Upload the coverage report
+        if: env.COVERAGE == '1'
         uses: actions/upload-artifact@v7
         with:
-          name: coverage-report-ruby-${{ matrix.ruby }}
+          name: coverage-report
           path: coverage/
