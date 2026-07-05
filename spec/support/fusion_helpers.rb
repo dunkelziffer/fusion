@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
-# Helpers for driving the Fusion interpreter from specs.
+# Helpers for driving Fusion from specs.
+# Composed from the public `Fusion::CLI` building blocks.
 #
 # A Fusion program is a single value; an "executable" file is one whose value is
 # a function. Specs describe a run as a pipe — input | program = output — via a
@@ -41,7 +42,7 @@ module FusionHelpers
       @example  = example
       @env_vars = {}
       @jail     = :default # :default (the program's dir) | nil (no jail) | absolute path
-      @input    = [OK, "null"]
+      @input    = nil
       @code     = nil
       @used     = []
     end
@@ -86,19 +87,25 @@ module FusionHelpers
       @example.instance_exec { expect(actual).to match(expected) }
     end
 
-    # Evaluate the program against the input, mapping the result to
-    # (marker, payload) exactly as exe/fusion does.
-    def run
-      root = Fusion::Interpreter::Env.new.set_context(:jail, resolved_jail)
-      env = root.child
-      env.set_context(:dir, FIXTURES) # inline @-refs resolve here; files set their own
-      interp = Fusion::Interpreter.new(env, env_vars: @env_vars)
-      value = interp.apply(program(interp), input_value)
-      pair = Fusion::CLI.serialize(value)
-      [pair.status.zero? ? OK : ERR, pair.data]
-    end
-
     private
+
+    # Evaluate the program against the input with the `Fusion::CLI` building
+    # blocks, composed as in `run_pipe`, mapping the result to (marker, payload)
+    # exactly as exe/fusion does.
+    def run
+      @example.instance_exec(@env_vars) { |variables| stub_const("ENV", variables) }
+
+      root = Fusion::CLI.root_environment(jail: resolved_jail)
+      program = program(root)
+
+      output = if @input.nil?
+        program
+      else
+        Fusion::CLI.apply(spec_input(*@input), program, environment: root)
+      end
+
+      spec_output(output)
+    end
 
     # The default jail is the program's directory — FIXTURES for inline `.code`,
     # mirroring the CLI's cwd default — so specs run jailed just like real use.
@@ -120,23 +127,26 @@ module FusionHelpers
       @used << slot
     end
 
-    def program(interp)
+    # The program value, loaded with the CLI's own building blocks. Inline
+    # source is loaded from the fixtures directory — like a user launching
+    # `fusion -e` there — so its @-references resolve against the fixtures.
+    def program(root_environment)
       if @file_path
-        interp.load_file(File.join(FIXTURES, @file_path)).force
+        Fusion::CLI.load_file(File.join(FIXTURES, @file_path), root_environment)
       else
-        ast = Fusion::Parser.parse_file(@code, site: { origin: "code", file: "<inline>" })
-        return ast if ast.is_a?(Fusion::Interpreter::ErrorVal) # a parse error
-
-        interp.evaluate_unit(ast)
+        Dir.chdir(FIXTURES) { Fusion::CLI.load_source(@code, root_environment) }
       end
     end
 
-    # An input may itself be an error ("❌"); all current specs use "✅". The
-    # (marker, payload) pair mirrors the CLI's wire pair, so `parse` does the
-    # error-wrapping from the status.
-    def input_value
-      marker, payload = @input
+    # (marker, payload) -> runtime_value
+    def spec_input(marker, payload)
       Fusion::CLI.parse(Fusion::WirePair.new(status: marker == ERR ? 1 : 0, data: payload))
+    end
+
+    # runtime_value -> (marker, payload)
+    def spec_output(output)
+      wire_pair = Fusion::CLI.serialize(output)
+      [wire_pair.status.zero? ? OK : ERR, wire_pair.data]
     end
   end
 end
