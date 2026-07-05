@@ -33,9 +33,9 @@ module Fusion
           @state = :forcing
           begin
             @value = @compute.call
-          rescue ReadFailure => failure
+          rescue ReadFailure => e
             # Memoize the Ruby error itself. Turn it into a Fusion runtime error below.
-            @value = failure
+            @value = e
           end
           @state = :done
           @value

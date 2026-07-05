@@ -14,7 +14,7 @@ module Fusion
     # A syntactic identifier: a bound/looked-up name, a `.key`, or a `...rest`
     # binder. Mirrors the lexer's ident rule (Lexer#ident_start? / #ident_part?).
     # Object *keys* are arbitrary strings, not identifiers, so they stay `String`.
-    Identifier = /\A[A-Za-z_][A-Za-z0-9_]*\z/
+    IDENTIFIER = /\A[A-Za-z_][A-Za-z0-9_]*\z/
 
     # Expression and Pattern nodes each form a closed family, declared up front
     # (empty) so a member of either may reference the other. Each module is
@@ -28,31 +28,66 @@ module Fusion
     # Auxiliary typed parts: the elements a collection node holds. NOT themselves
     # expressions or patterns, so they live outside the marker families and never
     # satisfy an `Expression`/`Pattern` field.
-    ArrayItem    = TypedData.define(value: Expression)                            # an array element
-    ArraySpread  = TypedData.define(value: Expression)                            # ...expr inside an array
-    KeyValuePair = TypedData.define(key: String, value: Expression)               # "k": expr inside an object
-    ObjectSpread = TypedData.define(value: Expression)                            # ...expr inside an object
-    Clause       = TypedData.define(pattern: Pattern, body: Expression)           # one  pattern => body  of a function
-    PatternItem  = TypedData.define(pattern: Pattern)                             # a sub-pattern of an array pattern
-    PatternPair  = TypedData.define(key: String, pattern: Pattern)                # "k": pat inside an object pattern
-    PatternRest  = TypedData.define(name: ->(v) { Identifier === v || v.nil? })   # ...name (name nil = ignore) in either
+
+    # An array element
+    ArrayItem = TypedData.define(value: Expression)
+
+    # `...expr` inside an array
+    ArraySpread = TypedData.define(value: Expression)
+
+    # `"k": expr` inside an object
+    KeyValuePair = TypedData.define(key: String, value: Expression)
+
+    # `...expr` inside an object
+    ObjectSpread = TypedData.define(value: Expression)
+
+    # One `pattern => body` of a function
+    Clause = TypedData.define(pattern: Pattern, body: Expression)
+
+    # A sub-pattern of an array pattern
+    PatternItem = TypedData.define(pattern: Pattern)
+
+    # `"k": pat` inside an object pattern
+    PatternPair = TypedData.define(key: String, pattern: Pattern)
+
+    # `...name` in array/object pattern. (name nil = don't bind)
+    PatternRest = TypedData.define(name: ->(v) { IDENTIFIER === v || v.nil? })
 
     module Expression
-      Lit       = TypedData.define(value: Atom)                                                      # atom literal (incl NULL)
-      ErrLit    = TypedData.define(payload: ->(v) { Expression === v || v.nil? })                    # !expr or bare ! (payload nil = !null)
-      ArrLit    = TypedData.define(items: ->(v) { v.is_a?(Array) && v.all? { |e| ArrayItem === e || ArraySpread === e } })
-      ObjLit    = TypedData.define(pairs: ->(v) {                                                    # [KeyValuePair|ObjectSpread], distinct fixed keys
+      # Atom literal (incl NULL)
+      Lit = TypedData.define(value: Atom)
+
+      # `!expr` or bare `!` (payload nil = !null)
+      ErrLit = TypedData.define(payload: ->(v) { Expression === v || v.nil? })
+
+      ArrLit = TypedData.define(items: ->(v) { v.is_a?(Array) && v.all? { |e| ArrayItem === e || ArraySpread === e } })
+
+      # [KeyValuePair|ObjectSpread], distinct fixed keys
+      ObjLit = TypedData.define(pairs: ->(v) {
         v.is_a?(Array) &&
           v.all? { |m| KeyValuePair === m || ObjectSpread === m } &&
           v.filter_map { |m| m.key if KeyValuePair === m }.then { |keys| keys.uniq.size == keys.size }
       })
-      FuncLit   = TypedData.define(clauses: ->(v) { v.is_a?(Array) && v.all? { |c| Clause === c } }) # [] = the empty function
-      Ident     = TypedData.define(name: Identifier)                                                 # read a builtin/bound name
-      FileRef   = TypedData.define(variety: ->(v) { %i[self super super_name name path].include?(v) }, path: ->(v) { String === v || v.nil? })
-      Pipe      = TypedData.define(left: Expression, right: Expression)                              # left | right
-      Member    = TypedData.define(obj: Expression, key: Identifier)                                 # obj.key
-      Index     = TypedData.define(obj: Expression, idx: Expression)                                 # obj[expr]
-      IndexSet  = TypedData.define(obj: Expression, idx: Expression, value: Expression)              # obj[expr = expr]
+
+      # [] = the empty function
+      FuncLit = TypedData.define(clauses: ->(v) { v.is_a?(Array) && v.all? { |c| Clause === c } })
+
+      # Read a builtin/bound name
+      Ident = TypedData.define(name: IDENTIFIER)
+
+      FileRef = TypedData.define(variety: ->(v) { [:self, :super, :super_name, :name, :path].include?(v) }, path: ->(v) { String === v || v.nil? })
+
+      # `left | right`
+      Pipe = TypedData.define(left: Expression, right: Expression)
+
+      # `obj.key`
+      Member = TypedData.define(obj: Expression, key: IDENTIFIER)
+
+      # `obj[expr]`
+      Index = TypedData.define(obj: Expression, idx: Expression)
+
+      # `obj[expr = expr]`
+      IndexSet = TypedData.define(obj: Expression, idx: Expression, value: Expression)
 
       constants.each do |name|
         node = const_get(name)
@@ -61,22 +96,35 @@ module Fusion
     end
 
     module Pattern
-      PLit      = TypedData.define(value: Atom)                                                     # literal pattern
-      PErr      = TypedData.define(inner: Pattern)                                                  # ! or !pat ; inner=PWild matches any error
-      PBind     = TypedData.define(name: Identifier)                                                # binds
-      PWild     = TypedData.define(dummy: NilClass)                                                 # _
-      PArr      = TypedData.define(items: ->(v) {                                                   # [PatternItem|PatternRest], at most one rest
+      # literal pattern
+      PLit = TypedData.define(value: Atom)
+
+      # `!` or `!pat` ; inner=PWild matches any error
+      PErr = TypedData.define(inner: Pattern)
+
+      # binds
+      PBind = TypedData.define(name: IDENTIFIER)
+
+      # `_`
+      PWild = TypedData.define(dummy: NilClass)
+
+      # [PatternItem|PatternRest], at most one rest
+      PArr = TypedData.define(items: ->(v) {
         v.is_a?(Array) &&
           v.all? { |e| PatternItem === e || PatternRest === e } &&
           v.count { |e| PatternRest === e } <= 1
       })
-      PObj      = TypedData.define(pairs: ->(v) {                                                   # [PatternPair|PatternRest], one rest, distinct keys
+
+      # [PatternPair|PatternRest], one rest, distinct keys
+      PObj = TypedData.define(pairs: ->(v) {
         v.is_a?(Array) &&
           v.all? { |m| PatternPair === m || PatternRest === m } &&
           v.count { |m| PatternRest === m } <= 1 &&
           v.filter_map { |m| m.key if PatternPair === m }.then { |keys| keys.uniq.size == keys.size }
       })
-      PGuard    = TypedData.define(inner: Pattern, pred_expr: Expression)                           # inner ? predicate
+
+      # `inner ? predicate`
+      PGuard = TypedData.define(inner: Pattern, pred_expr: Expression)
 
       constants.each do |name|
         node = const_get(name)
@@ -86,7 +134,7 @@ module Fusion
 
     module Statement
       # The only statement. Only allowed in the REPL. `name = expression`.
-      Assignment = TypedData.define(name: Identifier, expression: Expression)
+      Assignment = TypedData.define(name: IDENTIFIER, expression: Expression)
 
       constants.each do |name|
         node = const_get(name)

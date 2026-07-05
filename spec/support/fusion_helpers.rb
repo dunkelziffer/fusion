@@ -103,13 +103,18 @@ module FusionHelpers
     # The default jail is the program's directory — FIXTURES for inline `.code`,
     # mirroring the CLI's cwd default — so specs run jailed just like real use.
     def resolved_jail
-      raw = @jail == :default ? (@file_path ? File.dirname(File.join(FIXTURES, @file_path)) : FIXTURES) : @jail
+      raw = if @jail == :default
+        @file_path ? File.dirname(File.join(FIXTURES, @file_path)) : FIXTURES
+      else
+        @jail
+      end
       raw && File.expand_path(raw)
     end
 
     # Record that a builder slot has been filled, rejecting a second use.
     def claim!(slot, label = slot)
       raise ArgumentError, "`#{label}` may be used only once per expect_pipe" if @used.include?(slot)
+
       @used << slot
     end
 
@@ -119,6 +124,7 @@ module FusionHelpers
       else
         ast = Fusion::Parser.parse_file(@code, site: { origin: "code", file: "<inline>" })
         return ast if ast.is_a?(Fusion::Interpreter::ErrorVal) # a parse error
+
         interp.evaluate_unit(ast)
       end
     end

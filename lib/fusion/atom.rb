@@ -11,7 +11,7 @@ module Fusion
   # A scalar literal value: the JSON atoms plus NULL (everything the lexer
   # emits as a token value, see Lexer#lex_number and #lex_word).
   Atom = ->(v) {
-    v == NULL ||  v == true || v == false ||
+    v == NULL || v == true || v == false ||
       v.is_a?(Integer) || v.is_a?(Float) || v.is_a?(String)
   }
 end

@@ -14,10 +14,10 @@ module Fusion
       GREEN      = "\e[32m"
       RED        = "\e[31m"
 
-      PROMPT              = "#{LIGHT_BLUE}fsn> #{RESET}"
-      CONTINUATION_PROMPT = "#{LIGHT_BLUE}...> #{RESET}"
-      VALUE_MARKER        = "#{GREEN}✔ #{RESET}"
-      ERROR_MARKER        = "#{RED}✗ #{RESET}"
+      PROMPT              = "#{LIGHT_BLUE}fsn> #{RESET}".freeze
+      CONTINUATION_PROMPT = "#{LIGHT_BLUE}...> #{RESET}".freeze
+      VALUE_MARKER        = "#{GREEN}✔ #{RESET}".freeze
+      ERROR_MARKER        = "#{RED}✗ #{RESET}".freeze
 
       # REPL entries report errors with the same site as inline (`-e`) code.
       SITE = { origin: "code", file: "<inline>" }.freeze
@@ -32,7 +32,7 @@ module Fusion
         require "reline"
         Reline.output = $stderr
         Reline.prompt_proc = proc do |lines|
-          lines.each_index.map { |i| i.zero? ? PROMPT : CONTINUATION_PROMPT }
+          lines.each_index.map { |i| i == 0 ? PROMPT : CONTINUATION_PROMPT }
         end
 
         # The session env is a child of the run's root, so it carries the jail;
@@ -43,7 +43,7 @@ module Fusion
           buffer = begin
             Reline.readmultiline(PROMPT, true) { complete?(_1) }
           rescue Interrupt
-            $stderr.puts("^C") # discard the half-typed entry and re-prompt
+            warn("^C") # discard the half-typed entry and re-prompt
             next
           end
 

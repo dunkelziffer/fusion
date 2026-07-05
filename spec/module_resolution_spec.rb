@@ -78,10 +78,7 @@ RSpec.describe "@-resolution" do
     it "rejects an upward @@../ path as a syntax error" do
       expect_pipe
         .code("(_ => @@../x)")
-        .out("❌", a_string_including(
-          '"kind":"syntax_error"', '"origin":"code"', '"file":"<inline>"', '"operation":"parsing code"',
-          '"message":'
-        ))
+        .out("❌", a_string_including('"kind":"syntax_error"', '"origin":"code"', '"file":"<inline>"', '"operation":"parsing code"', '"message":'))
     end
   end
 
@@ -112,9 +109,9 @@ RSpec.describe "@-resolution" do
     it "resolves to the real environment when not shadowed" do
       expect_pipe
         .in("✅", "null")
-        .env(CI: "1")
+        .env(CI: "real-env")
         .file_path("ref/readenv.fsn")
-        .out("✅", '"1"')
+        .out("✅", '"real-env"')
     end
   end
 
@@ -168,10 +165,7 @@ RSpec.describe "@-resolution" do
       expect_pipe
         .in("✅", "null")
         .code('(_ => [("ref/sub/../adir.fsn" | @load) | (! => "_"), "ref/adir.fsn" | @load])')
-        .out("❌", a_string_including(
-          '"kind":"reference_error"', '"origin":"builtin"', '"operation":"@load"', '"input":"ref/adir.fsn"',
-          /"message":"[^"]*directory[^"]*"/
-        ))
+        .out("❌", a_string_including('"kind":"reference_error"', '"origin":"builtin"', '"operation":"@load"', '"input":"ref/adir.fsn"', /"message":"[^"]*directory[^"]*"/))
     end
   end
 
@@ -207,10 +201,7 @@ RSpec.describe "@-resolution" do
         .in("✅", "null")
         .jail("ref")
         .file_path("ref/sub/usesDotDotDir.fsn")
-        .out("❌", a_string_including(
-          '"kind":"reference_error"', '"origin":"code"', '"file":"spec/fixtures/ref/sub/usesDotDotDir.fsn"', '"operation":"@../adir"', '"status":0', '"input":null',
-          /"message":"[^"]*directory[^"]*"/ # OS strerror text, kept loose
-        ))
+        .out("❌", a_string_including('"kind":"reference_error"', '"origin":"code"', '"file":"spec/fixtures/ref/sub/usesDotDotDir.fsn"', '"operation":"@../adir"', '"status":0', '"input":null', /"message":"[^"]*directory[^"]*"/))
     end
   end
 

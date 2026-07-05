@@ -30,8 +30,8 @@ module Fusion
       expr = p.parse_expr
       p.expect(:eof)
       expr
-    rescue ParseError => err
-      Interpreter::ErrorVal.from_runtime(kind: "syntax_error", **site, operation: "parsing code", input: src, message: err.message)
+    rescue ParseError => e
+      Interpreter::ErrorVal.from_runtime(kind: "syntax_error", **site, operation: "parsing code", input: src, message: e.message)
     end
 
     # Parse one REPL entry — a statement (`identifier "=" expr`) or a bare
@@ -45,8 +45,8 @@ module Fusion
       entry = p.parse_repl_entry
       p.expect(:eof)
       entry
-    rescue ParseError => err
-      Interpreter::ErrorVal.from_runtime(kind: "syntax_error", **site, operation: "parsing code", input: src, message: err.message)
+    rescue ParseError => e
+      Interpreter::ErrorVal.from_runtime(kind: "syntax_error", **site, operation: "parsing code", input: src, message: e.message)
     end
 
     # A leading `identifier =` marks a statement; anything else is an expression.
@@ -131,7 +131,7 @@ module Fusion
     # are binary and break the run. Standard left-to-right: `a * b % c` is `(a * b) % c`.
     def parse_multiplicative
       node = parse_pipe
-      run = nil                                  # accumulating product-run terms, or nil
+      run = nil # accumulating product-run terms, or nil
       loop do
         if at?(:star) || at?(:slash)
           inverted = at?(:slash)
@@ -165,10 +165,12 @@ module Fusion
         elsif at?(:pipemap) || at?(:pipefilter) || at?(:pipereduce)
           target = { pipemap: "map", pipefilter: "filter", pipereduce: "reduce" }[peek.type]
           advance
-          arg = Expression::ObjLit.new(pairs: [
-            KeyValuePair.new(key: "c", value: node),
-            KeyValuePair.new(key: "f", value: parse_unary),
-          ])
+          arg = Expression::ObjLit.new(
+            pairs: [
+              KeyValuePair.new(key: "c", value: node),
+              KeyValuePair.new(key: "f", value: parse_unary),
+            ],
+          )
           node = Expression::Pipe.new(left: arg, right: name_ref(target))
         else
           break
@@ -179,8 +181,7 @@ module Fusion
 
     # Tokens that can begin a unary operand — used to decide whether `!` has an
     # operand or is the bare `!null`.
-    PRIMARY_STARTERS = %i[number string true_kw false_kw null_kw bang minus slash tilde
-                          lbracket lbrace lparen ident at atat].freeze
+    PRIMARY_STARTERS = [:number, :string, :true_kw, :false_kw, :null_kw, :bang, :minus, :slash, :tilde, :lbracket, :lbrace, :lparen, :ident, :at, :atat].freeze
 
     # Unary prefixes: `!x` builds an error (bare `!` is `!null`); `-x` negates,
     # `/x` inverts, `~x` is logical not. All bind tighter than `|`.
@@ -261,12 +262,15 @@ module Fusion
     def parse_primary
       t = peek
       case t.type
-      when :number, :string then advance; Expression::Lit.new(value: t.value)
-      when :true_kw, :false_kw, :null_kw then advance; Expression::Lit.new(value: t.value)
+      when :number, :string, :true_kw, :false_kw, :null_kw
+        advance
+        Expression::Lit.new(value: t.value)
       when :lbracket then parse_array
       when :lbrace then parse_object
       when :lparen then parse_function_or_group
-      when :ident then advance; Expression::Ident.new(name: t.value)
+      when :ident
+        advance
+        Expression::Ident.new(name: t.value)
       when :at then parse_fileref
       when :atat then parse_superref
       else raise ParseError, "Unexpected token #{t.type} (#{t.value.inspect}) at #{t.pos}"
@@ -284,6 +288,7 @@ module Fusion
 
       tok = advance
       raise ParseError, "`@@` cannot take an upward path (at #{tok.pos})" if tok.value.include?("..")
+
       Expression::FileRef.new(variety: :super_name, path: tok.value)
     end
 
@@ -309,6 +314,7 @@ module Fusion
           items << ArrayItem.new(value: parse_expr)
         end
         break unless at?(:comma)
+
         advance
       end
       expect(:rbracket)
@@ -329,11 +335,13 @@ module Fusion
           key_tok = expect(:string)
           key = key_tok.value
           raise ParseError, "duplicate key #{key.inspect} (at #{key_tok.pos})" if keys.include?(key)
+
           keys << key
           expect(:colon)
           pairs << KeyValuePair.new(key: key, value: parse_expr)
         end
         break unless at?(:comma)
+
         advance
       end
       expect(:rbrace)
@@ -358,12 +366,11 @@ module Fusion
           expect(:arrow)
           body = parse_expr
           clauses << Clause.new(pattern: pat, body: body)
-          if at?(:comma)
-            advance
-            break if at?(:rparen) # trailing comma
-          else
-            break
-          end
+
+          break if !at?(:comma)
+
+          advance
+          break if at?(:rparen) # trailing comma
         end
         expect(:rparen)
         Expression::FuncLit.new(clauses: clauses)
@@ -384,10 +391,11 @@ module Fusion
         case t.type
         when :lparen, :lbracket, :lbrace then depth += 1
         when :rparen, :rbracket, :rbrace
-          return false if depth.zero? # hit our closing ) first
+          return false if depth == 0 # hit our closing ) first
+
           depth -= 1
         when :arrow
-          return true if depth.zero?
+          return true if depth == 0
         when :eof
           return false
         end
@@ -412,8 +420,7 @@ module Fusion
 
     # Tokens that can begin a `guardedpat` (used to detect whether `!` is
     # followed by a payload pattern or stands alone).
-    GUARDEDPAT_STARTERS = %i[number string true_kw false_kw null_kw minus
-                             lbracket lbrace ident].freeze
+    GUARDEDPAT_STARTERS = [:number, :string, :true_kw, :false_kw, :null_kw, :minus, :lbracket, :lbrace, :ident].freeze
 
     def parse_errpat
       expect(:bang)
@@ -440,9 +447,12 @@ module Fusion
     def parse_corepat
       t = peek
       case t.type
-      when :number, :string then advance; Pattern::PLit.new(value: t.value)
-      when :true_kw, :false_kw, :null_kw then advance; Pattern::PLit.new(value: t.value)
-      when :minus then advance; Pattern::PLit.new(value: -expect(:number).value)  # negative literal
+      when :number, :string, :true_kw, :false_kw, :null_kw
+        advance
+        Pattern::PLit.new(value: t.value)
+      when :minus
+        advance
+        Pattern::PLit.new(value: -expect(:number).value) # negative literal
       when :lbracket then parse_arraypat
       when :lbrace then parse_objectpat
       when :ident
@@ -473,12 +483,14 @@ module Fusion
             advance
             break if at?(:rbracket) # trailing comma
             raise ParseError, "a pattern may contain at most one `...rest` (at #{peek.pos})" if at?(:spread)
+
             items << PatternItem.new(pattern: parse_guardedpat)
           end
           break
         end
         items << PatternItem.new(pattern: parse_guardedpat)
         break unless at?(:comma)
+
         advance
       end
       expect(:rbracket)
@@ -499,14 +511,17 @@ module Fusion
           unless at?(:rbrace)
             raise ParseError, "in an object pattern, `...rest` must come last (at #{peek.pos})"
           end
+
           break
         end
         key_pos = peek.pos
         pair = parse_pattern_pair
         raise ParseError, "duplicate key #{pair.key.inspect} (at #{key_pos})" if keys.include?(pair.key)
+
         keys << pair.key
         pairs << pair
         break unless at?(:comma)
+
         advance
       end
       expect(:rbrace)
@@ -530,12 +545,22 @@ module Fusion
     end
 
     # ---- token helpers ----
-    def peek(o = 0) = @toks[@i + o]
-    def at?(type) = peek.type == type
-    def advance = (@toks[@i].tap { @i += 1 })
+    def peek(o = 0)
+      @toks[@i + o]
+    end
+
+    def at?(type)
+      peek.type == type
+    end
+
+    def advance
+      @toks[@i].tap { @i += 1 }
+    end
+
     def expect(type)
       t = peek
       raise ParseError, "Expected #{type} but got #{t.type} (#{t.value.inspect}) at #{t.pos}" unless t.type == type
+
       advance
     end
   end

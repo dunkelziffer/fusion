@@ -522,9 +522,7 @@ RSpec.describe "syntax sugar" do
     it "rejects whitespace between @ and its path" do
       expect_pipe
         .code("(_ => @ foo)")
-        .out("❌", a_string_including(
-          '"kind":"syntax_error"', '"origin":"code"', '"file":"<inline>"', '"operation":"parsing code"', '"status":0', '"message":'
-        ))
+        .out("❌", a_string_including('"kind":"syntax_error"', '"origin":"code"', '"file":"<inline>"', '"operation":"parsing code"', '"status":0', '"message":'))
     end
   end
 end

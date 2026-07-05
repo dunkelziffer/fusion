@@ -12,13 +12,15 @@ RSpec.describe Fusion::CLI do
   # Run a block with `$stdin`/`$stdout` swapped for in-memory streams; returns
   # whatever was written to `$stdout`.
   def with_stdio(stdin:)
-    original_in, original_out = $stdin, $stdout
+    original_in = $stdin
+    original_out = $stdout
     $stdin = StringIO.new(stdin)
     $stdout = StringIO.new
     yield
     $stdout.string
   ensure
-    $stdin, $stdout = original_in, original_out
+    $stdin = original_in
+    $stdout = original_out
   end
 
   describe ".prepare!" do
@@ -102,7 +104,10 @@ RSpec.describe Fusion::CLI do
       options = Fusion::CLI::Options.parse(["--repl"])
       repl = instance_double(Fusion::CLI::Repl, run: nil)
       root = nil
-      expect(Fusion::CLI::Repl).to receive(:new) { |root_env:| root = root_env; repl }
+      expect(Fusion::CLI::Repl).to receive(:new) { |root_env:|
+        root = root_env
+        repl
+      }
 
       described_class.run_repl(options)
 
@@ -171,7 +176,7 @@ RSpec.describe Fusion::CLI do
     it "reports an unreadable program as a 'loading code' reference_error naming the path" do
       result = described_class.load_file("spec/fixtures/does_not_exist.fsn", described_class.root_environment)
       expect(described_class.serialize(result).data).to eq(
-        '{"kind":"reference_error","origin":"code","operation":"loading code","status":0,"input":"spec/fixtures/does_not_exist.fsn","message":"file not found"}'
+        '{"kind":"reference_error","origin":"code","operation":"loading code","status":0,"input":"spec/fixtures/does_not_exist.fsn","message":"file not found"}',
       )
     end
   end
@@ -201,7 +206,7 @@ RSpec.describe Fusion::CLI do
       result = described_class.apply(Fusion::NULL, fn, environment: environment)
 
       expect(described_class.serialize(result).data).to eq(
-        '{"kind":"binding_error","origin":"code","file":"<inline>","operation":"reading identifier y","status":0,"input":"y","message":"unbound identifier"}'
+        '{"kind":"binding_error","origin":"code","file":"<inline>","operation":"reading identifier y","status":0,"input":"y","message":"unbound identifier"}',
       )
     end
 
@@ -210,15 +215,15 @@ RSpec.describe Fusion::CLI do
     # so the block below can only come from the jailed environment passed to #apply.
     it "confines @-resolution with the passed environment's jail, not the closure's" do
       fn = described_class.evaluate(
-        parse_entry(%q{(_ => "/nope/x.fsn" | @load)}),
-        described_class.root_environment(jail: nil) # unconfined closure
+        parse_entry('(_ => "/nope/x.fsn" | @load)'),
+        described_class.root_environment(jail: nil), # unconfined closure
       )
 
       jailed = described_class.root_environment(jail: Dir.pwd) # tight jail: the working dir
       result = described_class.apply(Fusion::NULL, fn, environment: jailed)
 
       expect(described_class.serialize(result).data).to eq(
-        '{"kind":"reference_error","origin":"builtin","file":"<inline>","operation":"@load","status":0,"input":"/nope/x.fsn","message":"outside the jail"}'
+        '{"kind":"reference_error","origin":"builtin","file":"<inline>","operation":"@load","status":0,"input":"/nope/x.fsn","message":"outside the jail"}',
       )
     end
   end
