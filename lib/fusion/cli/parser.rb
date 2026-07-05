@@ -19,7 +19,7 @@ module Fusion
           origin: "input",
           operation: "parsing JSON",
           input: wire_pair.data,
-          message: "input is not valid JSON"
+          message: "input is not valid JSON",
         )
       end
 

@@ -104,7 +104,7 @@ RSpec.describe Fusion::CLI::Repl do
       repl.handle("loop = (n => n | loop)", environment)
       expect(repl.handle("1 | loop", environment)).to eq(
         '!{"kind":"limit_error","origin":"interpreter",' \
-        '"operation":"running the program","status":0,"input":null,"message":"stack level too deep"}'
+        '"operation":"running the program","status":0,"input":null,"message":"stack level too deep"}',
       )
       expect(repl.handle('"still alive"', environment)).to eq('"still alive"')
     end

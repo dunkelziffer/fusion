@@ -143,7 +143,7 @@ module Fusion
       def math_rand(v)
         return v if v.is_a?(ErrorVal)
         return rand if v == NULL
-        return rand(v) if integer?(v) && v.positive?
+        return rand(v) if integer?(v) && v > 0
 
         argument_error("math.rand", v, ["_ ? @Null", '_ ? (n ? @Integer => [0, n] | @OP.compare | (-1 => true))'])
       end
@@ -197,7 +197,7 @@ module Fusion
         return argument_error("math.pow", v, NUMBER_PAIR) unless pair?(v) && numeric?(v[0]) && numeric?(v[1])
 
         a, b = v
-        result = a.is_a?(Integer) && b.is_a?(Integer) && !b.negative? ? a**b : a.to_f**b
+        result = a.is_a?(Integer) && b.is_a?(Integer) && b >= 0 ? a**b : a.to_f**b
         return error("math_error", "math.pow", v, "not in domain (complex result)") if result.is_a?(Complex)
 
         result
@@ -322,6 +322,7 @@ module Fusion
       # is the stdlib pair-case built on this.
       def join(v)
         return v if v.is_a?(ErrorVal)
+
         expected = ['[_ ? (xs => {"c": xs, "f": @String} | @all), _ ? @String]']
         return argument_error("join", v, expected) unless pair?(v)
 
@@ -339,6 +340,7 @@ module Fusion
       # stdlib single-string case built on this.
       def split(v)
         return v if v.is_a?(ErrorVal)
+
         expected = ["[_ ? @String, _ ? @String]"]
         return argument_error("split", v, expected) unless pair?(v) && v[0].is_a?(String) && v[1].is_a?(String)
 
@@ -390,6 +392,7 @@ module Fusion
 
       def to_object(v)
         return v if v.is_a?(ErrorVal)
+
         # Each entry must be a [string, _] pair.
         expected = ['_ ? (xs => {"c": xs, "f": ([_ ? @String, _] => true)} | @all)']
         unless v.is_a?(Array) && v.all? { |entry| pair?(entry) && entry[0].is_a?(String) }
@@ -420,7 +423,7 @@ module Fusion
       end
 
       def boolean?(v)
-        v == true || v == false
+        [true, false].include?(v)
       end
 
       def array?(v)

@@ -34,7 +34,7 @@ module Fusion
         t = next_token
         out << t
         # A file-reference path is one tight token, lexed only right after `@`/`@@`.
-        if t.type == :at || t.type == :atat
+        if [:at, :atat].include?(t.type)
           p = try_lex_path
           out << p unless p.nil?
         end
@@ -85,11 +85,21 @@ module Fusion
       end
       if c == "|"
         case peek(1)
-        when "|" then @i += 2; return Token.new(type: :oror, value: "||", pos: start)
-        when ":" then @i += 2; return Token.new(type: :pipemap, value: "|:", pos: start)
-        when "?" then @i += 2; return Token.new(type: :pipefilter, value: "|?", pos: start)
-        when "+" then @i += 2; return Token.new(type: :pipereduce, value: "|+", pos: start)
-        else @i += 1; return Token.new(type: :pipe, value: "|", pos: start)
+        when "|"
+          @i += 2
+          return Token.new(type: :oror, value: "||", pos: start)
+        when ":"
+          @i += 2
+          return Token.new(type: :pipemap, value: "|:", pos: start)
+        when "?"
+          @i += 2
+          return Token.new(type: :pipefilter, value: "|?", pos: start)
+        when "+"
+          @i += 2
+          return Token.new(type: :pipereduce, value: "|+", pos: start)
+        else
+          @i += 1
+          return Token.new(type: :pipe, value: "|", pos: start)
         end
       end
       if c == "!"
@@ -105,6 +115,7 @@ module Fusion
       if ident_start?(c)
         return lex_word(start)
       end
+
       if (type = PUNCT[c])
         @i += 1
         return Token.new(type: type, value: c, pos: start)
@@ -114,13 +125,13 @@ module Fusion
 
     def skip_trivia
       loop do
-        c = peek
-        if c == " " || c == "\t" || c == "\n" || c == "\r"
+        case peek
+        when " ", "\t", "\n", "\r"
           @i += 1
-        elsif c == "#" && at_line_start?
-          # A line is a comment iff its first non-whitespace char is "#".
-          # This also covers shebang lines (#!) for free.
-          @i += 1 until peek.nil? || peek == "\n"
+        when "#"
+          break if !at_line_start?
+
+          @i += 1 until [nil, "\n"].include?(peek)
         else
           break
         end
@@ -130,7 +141,7 @@ module Fusion
     # True when only whitespace precedes @i on the current physical line.
     def at_line_start?
       j = @i - 1
-      j -= 1 while j >= 0 && (@src[j] == " " || @src[j] == "\t")
+      j -= 1 while j >= 0 && [" ", "\t"].include?(@src[j])
       j < 0 || @src[j] == "\n" || @src[j] == "\r"
     end
 
@@ -138,37 +149,39 @@ module Fusion
       @i += 1 # opening quote
       buf = +""
       while (c = peek)
-        if c == '"'
+        case c
+        when '"'
           @i += 1
           return Token.new(type: :string, value: buf, pos: start)
-        elsif c == "\\"
+        when "\\"
           @i += 1
           e = peek
           buf << case e
-                 when '"' then '"'
-                 when "\\" then "\\"
-                 when "/" then "/"
-                 when "n" then "\n"
-                 when "t" then "\t"
-                 when "r" then "\r"
-                 when "b" then "\b"
-                 when "f" then "\f"
-                 when "u"
-                   hex = @src[@i + 1, 4]
-                   @i += 4
-                   code_point = hex.to_i(16)
-                   # Reject surrogates and out-of-range code points up front:
-                   # pack("U") would otherwise build an invalid-encoding string
-                   # whose malformed-UTF-8 error surfaces far downstream.
-                   if code_point.between?(0xD800, 0xDFFF) || code_point > 0x10FFFF
-                     raise ParseError, "Invalid unicode escape \\u#{hex}"
-                   end
-                   [code_point].pack("U")
-                 else
-                   raise ParseError, "Bad escape \\#{e}"
-                 end
+          when '"' then '"'
+          when "\\" then "\\"
+          when "/" then "/"
+          when "n" then "\n"
+          when "t" then "\t"
+          when "r" then "\r"
+          when "b" then "\b"
+          when "f" then "\f"
+          when "u"
+            hex = @src[@i + 1, 4]
+            @i += 4
+            code_point = hex.to_i(16)
+            # Reject surrogates and out-of-range code points up front:
+            # pack("U") would otherwise build an invalid-encoding string
+            # whose malformed-UTF-8 error surfaces far downstream.
+            if code_point.between?(0xD800, 0xDFFF) || code_point > 0x10FFFF
+              raise ParseError, "Invalid unicode escape \\u#{hex}"
+            end
+
+            [code_point].pack("U")
+          else
+            raise ParseError, "Bad escape \\#{e}"
+          end
           @i += 1
-        elsif c == "\n" || c == "\r"
+        when "\n", "\r"
           raise ParseError, "Raw newline in string starting at #{start}; use \\n"
         else
           buf << c
@@ -187,10 +200,10 @@ module Fusion
         j += 1
         j += 1 while j < @n && digit?(@src[j])
       end
-      if (@src[j] == "e" || @src[j] == "E")
+      if ["e", "E"].include?(@src[j])
         is_float = true
         j += 1
-        j += 1 if (@src[j] == "+" || @src[j] == "-")
+        j += 1 if ["+", "-"].include?(@src[j])
         j += 1 while j < @n && digit?(@src[j])
       end
       text = @src[@i...j]

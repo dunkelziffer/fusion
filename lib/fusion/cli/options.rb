@@ -52,7 +52,7 @@ module Fusion
           object  {"value": _} marks a value, {"error": _} an error
       TEXT
 
-      MODES = %w[unix bang array object].freeze
+      MODES = ['unix', 'bang', 'array', 'object'].freeze
 
       attr_reader :use_case, :input_mode, :output_mode, :inline_source, :program_path, :jail
 
@@ -138,12 +138,12 @@ module Fusion
       # exe/fusion reports them as plain usage text (never a payloaded error).
       def self.run_parser(parser, argv)
         parser.parse(argv)
-      rescue OptionParser::InvalidOption => error
-        raise UsageError, "unknown option #{error.args.join(' ')}"
-      rescue OptionParser::MissingArgument => error
-        raise UsageError, missing_argument_message(error.args.first)
-      rescue OptionParser::ParseError => error
-        raise UsageError, error.message
+      rescue OptionParser::InvalidOption => e
+        raise UsageError, "unknown option #{e.args.join(' ')}"
+      rescue OptionParser::MissingArgument => e
+        raise UsageError, missing_argument_message(e.args.first)
+      rescue OptionParser::ParseError => e
+        raise UsageError, e.message
       end
 
       # A MODE value -> its symbol, or a UsageError naming the valid modes.
@@ -174,12 +174,14 @@ module Fusion
           unless input_mode.nil? && output_mode.nil? && !error_input && inline_source.nil? && positional.empty?
             raise UsageError, "--repl takes no program, no input, and no modes"
           end
+
           program_path = nil
         when :stream
           input_mode ||= :array
           output_mode ||= :array
           raise UsageError, "--stream does not support the unix mode" if input_mode == :unix || output_mode == :unix
           raise UsageError, "-! requires the unix input mode" if error_input
+
           program_path = inline_source ? nil : positional.shift
           raise UsageError, "missing program (a .fsn file or -e)" unless inline_source || program_path
           raise UsageError, "too many positional arguments" unless positional.empty?
@@ -187,6 +189,7 @@ module Fusion
           input_mode ||= :unix
           output_mode ||= :unix
           raise UsageError, "-! requires the unix input mode" if error_input && input_mode != :unix
+
           program_path = inline_source ? nil : positional.shift
           raise UsageError, "missing program (a .fsn file or -e)" unless inline_source || program_path
           raise UsageError, "too many positional arguments" unless positional.empty?
@@ -202,7 +205,7 @@ module Fusion
           program_path: program_path,
           error_input: error_input,
           skip_blank_lines: skip_blank_lines,
-          jail: jail
+          jail: jail,
         )
       end
 

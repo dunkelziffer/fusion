@@ -140,7 +140,6 @@ RSpec.describe "stdlib error handling" do
     end
   end
 
-
   describe "@all" do
     it "is true when every item satisfies the predicate" do
       expect_pipe

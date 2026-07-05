@@ -10,19 +10,13 @@ RSpec.describe "error kinds" do
     it "from inline source (origin: code, file <inline>)" do
       expect_pipe
         .code("(_ => @")
-        .out("❌", a_string_including(
-          '"kind":"syntax_error"', '"origin":"code"', '"file":"<inline>"', '"operation":"parsing code"', '"status":0', '"input":"(_ => @"',
-          '"message":'
-        ))
+        .out("❌", a_string_including('"kind":"syntax_error"', '"origin":"code"', '"file":"<inline>"', '"operation":"parsing code"', '"status":0', '"input":"(_ => @"', '"message":'))
     end
 
     it "from a file (origin: code with file)" do
       expect_pipe
         .file_path("badsyntax.fsn")
-        .out("❌", a_string_including(
-          '"kind":"syntax_error"', '"origin":"code"', '"file":"spec/fixtures/badsyntax.fsn"', '"operation":"parsing code"', '"status":0',
-          '"input":', '"message":'
-        ))
+        .out("❌", a_string_including('"kind":"syntax_error"', '"origin":"code"', '"file":"spec/fixtures/badsyntax.fsn"', '"operation":"parsing code"', '"status":0', '"input":', '"message":'))
     end
 
     it "from non-JSON input (origin: input)" do
@@ -81,10 +75,7 @@ RSpec.describe "error kinds" do
       # and `input` echoes the argument "ref". The strerror is lowercased + loose.
       expect_pipe
         .code('(_ => "ref" | @load)')
-        .out("❌", a_string_including(
-          '"kind":"reference_error"', '"origin":"builtin"', '"file":"<inline>"', '"operation":"@load"', '"status":0', '"input":"ref"',
-          /"message":"[^"]*directory[^"]*"/ # OS strerror text, kept loose
-        ))
+        .out("❌", a_string_including('"kind":"reference_error"', '"origin":"builtin"', '"file":"<inline>"', '"operation":"@load"', '"status":0', '"input":"ref"', /"message":"[^"]*directory[^"]*"/))
     end
   end
 

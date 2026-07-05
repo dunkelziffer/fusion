@@ -44,28 +44,19 @@ RSpec.describe "comments" do
     it "rejects a trailing inline comment" do
       expect_pipe
         .code("(_ => 1) # nope")
-        .out("❌", a_string_including(
-          '"kind":"syntax_error"', '"origin":"code"', '"file":"<inline>"', '"operation":"parsing code"', '"status":0', '"input":"(_ => 1) # nope"',
-          '"message":'
-        ))
+        .out("❌", a_string_including('"kind":"syntax_error"', '"origin":"code"', '"file":"<inline>"', '"operation":"parsing code"', '"status":0', '"input":"(_ => 1) # nope"', '"message":'))
     end
 
     it "rejects a mid-line # comment" do
       expect_pipe
         .code("(_ => 1 # nope\n)")
-        .out("❌", a_string_including(
-          '"kind":"syntax_error"', '"origin":"code"', '"file":"<inline>"', '"operation":"parsing code"', '"status":0', '"input":"(_ => 1 # nope\n)"',
-          '"message":'
-        ))
+        .out("❌", a_string_including('"kind":"syntax_error"', '"origin":"code"', '"file":"<inline>"', '"operation":"parsing code"', '"status":0', '"input":"(_ => 1 # nope\n)"', '"message":'))
     end
 
     it "rejects a raw newline inside a string" do
       expect_pipe
         .code("(_ => \"line1\nline2\")")
-        .out("❌", a_string_including(
-          '"kind":"syntax_error"', '"origin":"code"', '"file":"<inline>"', '"operation":"parsing code"', '"status":0', '"input":"(_ => \"line1\nline2\")"',
-          '"message":'
-        ))
+        .out("❌", a_string_including('"kind":"syntax_error"', '"origin":"code"', '"file":"<inline>"', '"operation":"parsing code"', '"status":0', '"input":"(_ => \"line1\nline2\")"', '"message":'))
     end
   end
 end

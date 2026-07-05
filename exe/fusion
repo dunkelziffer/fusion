@@ -22,9 +22,9 @@ end
 begin
   options = Fusion::CLI::Options.parse(ARGV)
   Fusion::CLI.run(options)
-rescue Fusion::CLI::Options::UsageError => err
+rescue Fusion::CLI::Options::UsageError => e
   # A command-line misuse is plain text on stderr, not a payloaded Fusion error,
   # whether caught while parsing options or early during execution, e.g. by
   # detecting empty stdin plus "-!".
-  abort("fusion: #{err.message}\n\n#{Fusion::CLI::Options::USAGE}")
+  abort("fusion: #{e.message}\n\n#{Fusion::CLI::Options::USAGE}")
 end

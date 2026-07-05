@@ -60,7 +60,7 @@ RSpec.describe "REPL in a pseudo-terminal (exe/fusion --repl)", if: PTY_AVAILABL
     # Type a line, then block until its echo returns (proof Reline consumed it,
     # so the next write cannot coalesce with it into a "paste").
     def type_line(text)
-      @writer.write(text + "\n")
+      @writer.write("#{text}\n")
       expect(text)
     end
 
@@ -89,7 +89,7 @@ RSpec.describe "REPL in a pseudo-terminal (exe/fusion --repl)", if: PTY_AVAILABL
 
     # The captured output with terminal control codes (and bare CRs) stripped, so
     # it reads as plain text: the prompt, the echoed input, and the results.
-    def transcript = @raw.gsub(/\e\[[\d;?]*[ -\/]*[@-~]/, "").delete("\r")
+    def transcript = @raw.gsub(%r{\e\[[\d;?]*[ -/]*[@-~]}, "").delete("\r")
 
     private
 

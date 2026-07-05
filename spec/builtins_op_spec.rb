@@ -529,6 +529,7 @@ RSpec.describe "@OP builtin" do
         .out("✅", "false")
     end
   end
+
   # Errors propagate through an OP member just like any builtin: an error input is
   # returned untouched (the member is never invoked on it).
   describe "error propagation" do

@@ -1,0 +1,85 @@
+inherit_from: .rubocop_todo.yml
+
+plugins: rubocop-rspec
+
+AllCops:
+  SuggestExtensions: false
+  NewCops: disable # TODO
+
+Layout/CaseIndentation:
+  EnforcedStyle: end
+
+Layout/EndAlignment:
+  EnforcedStyleAlignWith: start_of_line
+
+Layout/HashAlignment:
+  EnforcedHashRocketStyle: table
+
+Layout/LineLength:
+  Enabled: false
+
+Layout/MultilineMethodCallIndentation:
+  EnforcedStyle: indented
+
+# Bullshit !!!
+Metrics:
+  Enabled: false
+
+Naming/MethodParameterName:
+  Enabled: false
+
+Style/CaseEquality:
+  Enabled: false
+
+Style/Documentation:
+  Enabled: false
+
+Style/NegatedIf:
+  Enabled: false
+
+Style/IfUnlessModifier:
+  Enabled: false
+
+Style/Lambda:
+  Enabled: false
+
+Style/ModuleFunction:
+  EnforcedStyle: extend_self
+
+Style/NumericPredicate:
+  EnforcedStyle: comparison
+
+Style/StringLiterals:
+  Enabled: false
+
+Style/SymbolArray:
+  EnforcedStyle: brackets
+
+Style/TrailingCommaInArguments:
+  EnforcedStyleForMultiline: diff_comma
+
+Style/TrailingCommaInArrayLiteral:
+  EnforcedStyleForMultiline: diff_comma
+
+Style/TrailingCommaInHashLiteral:
+  EnforcedStyleForMultiline: diff_comma
+
+Style/WordArray:
+  EnforcedStyle: brackets
+
+RSpec/DescribeClass:
+  Enabled: false
+
+# Bullshit !!!
+RSpec/ExampleLength:
+  Enabled: false
+
+RSpec/MessageSpies:
+  EnforcedStyle: receive
+
+# Bullshit !!!
+RSpec/MultipleExpectations:
+  Enabled: false
+
+RSpec/SpecFilePathFormat:
+  Enabled: false

@@ -13,7 +13,7 @@ module Fusion
       # Only use "lenient: true" in the REPL!
       def serialize(runtime_value, lenient: false)
         message = catch(:unserializable) do
-          if runtime_value.is_a?(Interpreter::ErrorVal)
+          if runtime_value.is_a?(Interpreter::ErrorVal) # rubocop:disable Style/GuardClause
             error = runtime_value
             data = convert(error.payload, lenient: lenient || error.runtime?).to_json
             return WirePair.new(status: 1, data: data)
@@ -27,7 +27,7 @@ module Fusion
           origin: "output",
           operation: "serializing result",
           input: runtime_value,
-          message: message
+          message: message,
         )
 
         serialize(runtime_error, lenient: true)
@@ -42,6 +42,7 @@ module Fusion
           nil
         when Float
           return runtime_value if runtime_value.finite?
+
           throw(:unserializable, "cannot serialize a non-finite number") unless lenient
 
           "<#{runtime_value}>" # "<Infinity>" / "<-Infinity>" / "<NaN>"
@@ -56,11 +57,9 @@ module Fusion
         when true, false, String, Numeric
           runtime_value
         when Interpreter::ErrorVal
-          if lenient
-            "!#{convert(runtime_value.payload, lenient:).to_json}"
-          else
-            raise Unreachable, "ErrorVal should have been handled at the top level of convert"
-          end
+          raise Unreachable, "ErrorVal should have been handled at the top level of convert" unless lenient
+
+          "!#{convert(runtime_value.payload, lenient:).to_json}"
         else
           raise Unreachable, "Unhandled type in convert: #{runtime_value.class}"
         end

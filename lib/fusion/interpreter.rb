@@ -80,10 +80,10 @@ module Fusion
     rescue Unreachable
       # An interpreter bug. Allowed to surface.
       raise
-    rescue StandardError => err
+    rescue StandardError => e
       Interpreter::ErrorVal.from_runtime(
         kind: "internal_error", origin: "interpreter", operation: "running the program",
-        input: NULL, message: err.message
+        input: NULL, message: e.message,
       )
     rescue SystemExit
       # Let exit/abort through.
@@ -91,13 +91,13 @@ module Fusion
     rescue SystemStackError
       Interpreter::ErrorVal.from_runtime(
         kind: "limit_error", origin: "interpreter", operation: "running the program",
-        input: NULL, message: "stack level too deep"
+        input: NULL, message: "stack level too deep",
       )
-    rescue Exception => err # rubocop:disable Lint/RescueException
+    rescue Exception => e # rubocop:disable Lint/RescueException
       # Final net: any other escaped Ruby error becomes a payloaded error too.
       Interpreter::ErrorVal.from_runtime(
         kind: "internal_error", origin: "interpreter", operation: "running the program",
-        input: NULL, message: err.message
+        input: NULL, message: e.message,
       )
     end
 
@@ -169,9 +169,9 @@ module Fusion
       end
     rescue Errno::ENOENT
       raise Thunk::ReadFailure, "file not found"
-    rescue SystemCallError => err # EISDIR, EACCES, ... (file-system access failures)
+    rescue SystemCallError => e # EISDIR, EACCES, ... (file-system access failures)
       # Drop Ruby's "@ io_fread - <path>" tail.
-      raise Thunk::ReadFailure, err.message.split(" @ ").first.downcase
+      raise Thunk::ReadFailure, e.message.split(" @ ").first.downcase
     end
 
     # Evaluate a top-level unit that has no file of its own:
@@ -191,7 +191,7 @@ module Fusion
     # `site` is the `{origin:, file:}` of the referencing code; `reference` is its
     # own source text (`"@name"`) — the single `operation` every failure reports.
     def resolve_name(name, dir, site, reference)
-      sibling_file = File.expand_path(name + ".fsn", dir)
+      sibling_file = File.expand_path("#{name}.fsn", dir)
       if File.exist?(sibling_file)
         return jail_error(site, reference, NULL) unless within_jail?(sibling_file)
 
@@ -251,7 +251,7 @@ module Fusion
         return @builtins[name]
       end
 
-      stdlib_file = File.join(@stdlib_dir, name + ".fsn")
+      stdlib_file = File.join(@stdlib_dir, "#{name}.fsn")
       if File.exist?(stdlib_file)
         # The reference reports the user's source text, not the internal stdlib path.
         return load_file(stdlib_file).force(operation: reference, input: NULL, site: site)
@@ -263,7 +263,7 @@ module Fusion
     # Resolve a pure path "@dir/a" or "@../a": file only, never builtin/stdlib.
     # `reference` is the source text (`"@../a"`), the single `operation` reported.
     def resolve_path(relpath, dir, site, reference)
-      target = File.expand_path(relpath + ".fsn", dir)
+      target = File.expand_path("#{relpath}.fsn", dir)
       return jail_error(site, reference, NULL) unless within_jail?(target)
 
       load_file(target).force(operation: reference, input: NULL, site: site)
@@ -374,11 +374,11 @@ module Fusion
         when ArrayItem
           out.append(value)
         when ArraySpread
-          if value.is_a?(Array)
-            out.concat(value)
-          else
+          if !value.is_a?(Array)
             return ErrorVal.from_runtime(kind: "argument_error", **code_site(env), operation: "[...] array spread", input: value, expected: ["_ ? @Array"])
           end
+
+          out.concat(value)
         else
           raise Unreachable, "Unknown array item #{item.class}"
         end
@@ -402,11 +402,11 @@ module Fusion
         when KeyValuePair
           out[pair.key] = value
         when ObjectSpread
-          if value.is_a?(Hash)
-            out.merge!(value)
-          else
+          if !value.is_a?(Hash)
             return ErrorVal.from_runtime(kind: "argument_error", **code_site(env), operation: "{...} object spread", input: value, expected: ["_ ? @Object"])
           end
+
+          out.merge!(value)
         else
           raise Unreachable, "Unknown object pair #{pair.class}"
         end
@@ -535,16 +535,21 @@ module Fusion
         # becomes a payloaded error rather than a raw backtrace on stderr.
         begin
           f.fn.call(v)
-        rescue StandardError => err
+        rescue StandardError => e
           # TODO: move math errors into the builtins. This should become a safety net for unpredicted errors.
-          kind = (err.is_a?(FloatDomainError) || err.is_a?(ZeroDivisionError) || err.is_a?(Math::DomainError)) ? "math_error" : "internal_error"
-          ErrorVal.from_runtime(kind: kind, origin: "builtin", operation: "@#{f.name}", input: v, message: err.message)
+          kind = case e
+          when FloatDomainError, ZeroDivisionError, Math::DomainError
+            "math_error"
+          else
+            "internal_error"
+          end
+          ErrorVal.from_runtime(kind: kind, origin: "builtin", operation: "@#{f.name}", input: v, message: e.message)
         end
       elsif f.is_a?(Func)
         # Stdlib code has no user file of its own: errors inside it (and in the
         # built-ins it calls) report the user `call_site` that reached it. User and
         # inline functions are their own call site (derived lexically from their env).
-        body_call_site = (code_site(f.env)[:origin] == "stdlib") ? call_site : nil
+        body_call_site = code_site(f.env)[:origin] == "stdlib" ? call_site : nil
 
         f.clauses.each do |clause|
           # Bindings are inserted directly into a fresh child env as the pattern
@@ -646,7 +651,7 @@ module Fusion
           if predicate_result.is_a?(ErrorVal)
             # An unresolved @-reference, or an error raised while applying the
             # predicate, becomes the clause's result.
-            return predicate_result
+            predicate_result
           else
             # Ruby-style truthiness: the clause matches unless the predicate
             # yields `false` or `null`.
@@ -672,11 +677,11 @@ module Fusion
           return r if r.is_a?(ErrorVal)
           return false unless r
         end
-        true
       else
         before = items[0...rest_index]
         after  = items[(rest_index + 1)..]
         return false if value.length < before.length + after.length
+
         before.each_with_index do |item, i|
           r = match(item.pattern, value[i], env)
           return r if r.is_a?(ErrorVal)
@@ -693,8 +698,8 @@ module Fusion
           mid = value[before.length...(value.length - after.length)]
           env.bind(rest_name, mid)
         end
-        true
       end
+      true
     end
 
     def match_object(pattern, value, env)
@@ -708,9 +713,11 @@ module Fusion
           rest_name = pair.name # may be nil (ignore) or a string
         when PatternPair
           return false unless value.key?(pair.key)
+
           r = match(pair.pattern, value[pair.key], env)
           return r if r.is_a?(ErrorVal)
           return false unless r
+
           matched_keys << pair.key
         else
           raise Unreachable, "Unknown object pattern pair #{pair.class}"
@@ -739,6 +746,7 @@ module Fusion
     def deep_equal?(a, b)
       return true if a.equal?(b)
       return false if a.class != b.class
+
       case a
       when Array
         a.length == b.length && a.each_index.all? { |i| deep_equal?(a[i], b[i]) }

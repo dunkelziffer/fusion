@@ -26,7 +26,7 @@ module Fusion
             next unless raw.is_a?(Array) && raw.length == 2 && raw[0].is_a?(Integer)
 
             # The tag must be exactly the integer 0 or 1 (no 0.0 — Fusion equality is exact).
-            [raw[0], raw[1]] if raw[0] == 0 || raw[0] == 1
+            [raw[0], raw[1]] if [0, 1].include?(raw[0])
           end
         when :object
           decode_envelope(text, mode) do |raw|
@@ -68,12 +68,12 @@ module Fusion
         return WirePair.new(status: status, data: JSON.generate(inner)) if status
 
         WirePair.new(status: 1, data: JSON.generate(
-          "kind" => "argument_error",
-          "origin" => "input",
+          "kind"      => "argument_error",
+          "origin"    => "input",
           "operation" => "decoding input",
-          "status" => 0,
-          "input" => raw,
-          "expected" => EXPECTED_ENVELOPE_SHAPES.fetch(mode)
+          "status"    => 0,
+          "input"     => raw,
+          "expected"  => EXPECTED_ENVELOPE_SHAPES.fetch(mode),
         ))
       rescue JSON::ParserError
         # TODO: BUG ???

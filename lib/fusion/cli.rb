@@ -173,7 +173,7 @@ module Fusion
     # WirePair -> stdout/stderr
     def emit_output(wire_pair, output_mode:)
       if output_mode == :unix
-        channel = wire_pair.status.zero? ? $stdout : $stderr
+        channel = wire_pair.status == 0 ? $stdout : $stderr
         channel.puts(wire_pair.data)
         exit(wire_pair.status)
       else
