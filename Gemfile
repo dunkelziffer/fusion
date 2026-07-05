@@ -15,3 +15,5 @@ gem 'rubocop-rspec'
 group :test do
   gem 'simplecov', require: false
 end
+
+gem "mutant-rspec", "~> 0.16.3"
