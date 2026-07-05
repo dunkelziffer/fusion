@@ -27,7 +27,9 @@ RSpec.describe "CLI (exe/fusion)" do
     opts = { stdin_data: stdin }
     opts[:chdir] = chdir if chdir
 
+    # :nocov: the `[]` arm runs only with coverage off, so no report can see it
     maybe_coverage = ENV["COVERAGE"] ? ["-r", File.expand_path("simplecov_spawn", __dir__)] : []
+    # :nocov:
     Open3.capture3(RbConfig.ruby, *maybe_coverage, executable, *args, **opts)
   end
 

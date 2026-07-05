@@ -236,3 +236,16 @@ Marking the flag at construction (a constructor argument, not a later mutation) 
 they serialize **leniently** (functions → `"<function>"`, non-finite → `"<Infinity>"`),
 which made the old `| @sanitize` in stdlib error payloads redundant; it was dropped,
 and `sanitize.fsn` remains as a standalone utility.
+
+## `Unreachable` is relative to the `exe/fusion` entry point
+
+`raise Unreachable` asserts "no input can steer execution here **from `exe/fusion`**":
+the lexer/parser only emit the known token/node classes and `Options.parse` only
+produces the known use cases and modes, so from the binary the guarded arms are dead
+— reaching one is by definition an interpreter bug, the one deliberate exception to
+"no raw Ruby errors on stderr" (design §2.9). The claim says nothing about the more
+granular Ruby seams: calling `Fusion::CLI` or `Fusion::Interpreter` directly *can*
+reach the guards by handing over a bogus node or use case, which is exactly how the
+specs prove they exist (`cli_spec.rb`, `error_kinds_spec.rb` "internal invariant
+guards"). For the same reason the guards carry no `:nocov:` markers: the four with
+such specs count as covered, the rest as honest misses.

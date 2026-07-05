@@ -17,7 +17,9 @@ begin
   require "pty"
   PTY_AVAILABLE = true
 rescue LoadError
+  # :nocov:
   PTY_AVAILABLE = false
+  # :nocov:
 end
 
 RSpec.describe "REPL in a pseudo-terminal (exe/fusion --repl)", if: PTY_AVAILABLE do
@@ -27,7 +29,9 @@ RSpec.describe "REPL in a pseudo-terminal (exe/fusion --repl)", if: PTY_AVAILABL
   # matter what, so a failed example never leaks a process (leaked sessions
   # exhaust the pty pool and take down later ones).
   def repl_session
+    # :nocov: the `[]` arm runs only with coverage off, so no report can see it
     maybe_coverage = ENV["COVERAGE"] ? ["-r", File.expand_path("simplecov_spawn", __dir__)] : []
+    # :nocov:
     reader, writer, pid = PTY.spawn(RbConfig.ruby, *maybe_coverage, executable, "--repl")
 
     terminal = Terminal.new(reader, writer)
@@ -44,6 +48,7 @@ RSpec.describe "REPL in a pseudo-terminal (exe/fusion --repl)", if: PTY_AVAILABL
     # hook that a KILL would cut short — but bounded, and kill whatever is left,
     # so the reap can never block on a wedged child.
     [writer, reader].each { |io| io.close rescue nil }
+    # :nocov: pid is only nil when PTY.spawn itself raised; the kill needs a wedged child
     if pid
       begin
         Timeout.timeout(5) { Process.wait(pid) }
@@ -52,6 +57,7 @@ RSpec.describe "REPL in a pseudo-terminal (exe/fusion --repl)", if: PTY_AVAILABL
         Process.wait(pid) rescue nil
       end
     end
+    # :nocov:
   end
 
   # A thin expect-style driver over the pty master.
@@ -83,7 +89,9 @@ RSpec.describe "REPL in a pseudo-terminal (exe/fusion --repl)", if: PTY_AVAILABL
           @scan = index + needle.length
           return
         end
+        # :nocov: only a wedged example raises
         raise "timed out waiting for #{needle.inspect}; transcript so far:\n#{transcript}" if @eof || Time.now > deadline
+        # :nocov:
 
         pump
       end
@@ -106,7 +114,9 @@ RSpec.describe "REPL in a pseudo-terminal (exe/fusion --repl)", if: PTY_AVAILABL
     rescue IO::WaitReadable
       @reader.wait_readable(0.1)
     rescue Errno::EIO, EOFError
+      # :nocov: everything asserted is read before the child exits
       @eof = true # the child closed the pty
+      # :nocov:
     end
   end
 
