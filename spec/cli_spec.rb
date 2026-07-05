@@ -102,12 +102,13 @@ RSpec.describe Fusion::CLI do
   describe ".run_repl" do
     it "starts a REPL on a root environment jailed to the working directory" do
       options = Fusion::CLI::Options.parse(["--repl"])
-      repl = instance_double(Fusion::CLI::Repl, run: nil)
+      repl = instance_double(Fusion::CLI::Repl)
       root = nil
       expect(Fusion::CLI::Repl).to receive(:new) { |root_env:|
         root = root_env
         repl
       }
+      expect(repl).to receive(:run)
 
       described_class.run_repl(options)
 
