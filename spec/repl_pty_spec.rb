@@ -17,17 +17,23 @@ begin
   require "pty"
   PTY_AVAILABLE = true
 rescue LoadError
+  # :nocov:
   PTY_AVAILABLE = false
+  # :nocov:
 end
 
 RSpec.describe "REPL in a pseudo-terminal (exe/fusion --repl)", if: PTY_AVAILABLE do
-  let(:exe) { File.expand_path("../exe/fusion", __dir__) }
+  let(:executable) { File.expand_path("../exe/fusion", __dir__) }
 
   # Drives one REPL session in a pty. Closes the pty and reaps the child no
   # matter what, so a failed example never leaks a process (leaked sessions
   # exhaust the pty pool and take down later ones).
   def repl_session
-    reader, writer, pid = PTY.spawn(RbConfig.ruby, exe, "--repl")
+    # :nocov: the `[]` arm runs only with coverage off, so no report can see it
+    maybe_coverage = ENV["COVERAGE"] ? ["-r", File.expand_path("simplecov_spawn", __dir__)] : []
+    # :nocov:
+    reader, writer, pid = PTY.spawn(RbConfig.ruby, *maybe_coverage, executable, "--repl")
+
     terminal = Terminal.new(reader, writer)
     # A whole session is sub-second; the outer cap only guards against a wedged
     # child so a single example can never hang the suite.
@@ -37,13 +43,21 @@ RSpec.describe "REPL in a pseudo-terminal (exe/fusion --repl)", if: PTY_AVAILABL
     end
     terminal.transcript
   ensure
-    # Close the master (the child reading the slave then gets EOF), then make
-    # sure it is dead before reaping, so the reap can never block on a live child.
+    # Close the master (the child reading the slave then gets EOF and exits).
+    # Let it die on its own first — it writes its coverage result in an at_exit
+    # hook that a KILL would cut short — but bounded, and kill whatever is left,
+    # so the reap can never block on a wedged child.
     [writer, reader].each { |io| io.close rescue nil }
+    # :nocov: pid is only nil when PTY.spawn itself raised; the kill needs a wedged child
     if pid
-      Process.kill("KILL", pid) rescue nil
-      Process.wait(pid) rescue nil
+      begin
+        Timeout.timeout(5) { Process.wait(pid) }
+      rescue Timeout::Error
+        Process.kill("KILL", pid) rescue nil
+        Process.wait(pid) rescue nil
+      end
     end
+    # :nocov:
   end
 
   # A thin expect-style driver over the pty master.
@@ -75,7 +89,9 @@ RSpec.describe "REPL in a pseudo-terminal (exe/fusion --repl)", if: PTY_AVAILABL
           @scan = index + needle.length
           return
         end
+        # :nocov: only a wedged example raises
         raise "timed out waiting for #{needle.inspect}; transcript so far:\n#{transcript}" if @eof || Time.now > deadline
+        # :nocov:
 
         pump
       end
@@ -98,7 +114,9 @@ RSpec.describe "REPL in a pseudo-terminal (exe/fusion --repl)", if: PTY_AVAILABL
     rescue IO::WaitReadable
       @reader.wait_readable(0.1)
     rescue Errno::EIO, EOFError
+      # :nocov: everything asserted is read before the child exits
       @eof = true # the child closed the pty
+      # :nocov:
     end
   end
 

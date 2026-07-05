@@ -113,7 +113,9 @@ module FusionHelpers
 
     # Record that a builder slot has been filled, rejecting a second use.
     def claim!(slot, label = slot)
+      # :nocov: only fires on spec-author misuse
       raise ArgumentError, "`#{label}` may be used only once per expect_pipe" if @used.include?(slot)
+      # :nocov:
 
       @used << slot
     end
