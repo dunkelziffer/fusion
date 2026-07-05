@@ -55,19 +55,12 @@ jobs:
         env:
           COVERAGE: "1"
 
-      - name: Add coverage to the job summary
-        run: |
-          echo "### Coverage" >> "$GITHUB_STEP_SUMMARY"
-          ruby -rjson -e 'JSON.parse(File.read("coverage/.last_run.json"))["result"].each { |criterion, percent| puts "- #{criterion}: #{percent}%" }' >> "$GITHUB_STEP_SUMMARY"
-
-      # A "Coverage" check run: its title lands next to the check name in the
-      # PR merge box, and Details opens the summary in the PR's Checks tab.
-      # On pull_request the checkout is a merge commit, so attach the check to
-      # the branch head, where the PR looks for it.
       - name: Report the coverage as a check run
         env:
           GH_TOKEN: ${{ github.token }}
           REPOSITORY: ${{ github.repository }}
+          # On pull_request the checkout is a merge commit, so attach the check to
+          # the branch head, where the PR looks for it.
           HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
         run: |
           title=$(ruby -rjson -e 'puts JSON.parse(File.read("coverage/.last_run.json"))["result"].map { |criterion, percent| "#{criterion} #{percent}%" }.join(", ")')
