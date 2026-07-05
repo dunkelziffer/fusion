@@ -2,7 +2,7 @@
 
 # @-resolution: how @name resolves against sibling files, the stdlib, builtins,
 # self-recursion, @ENV and @load. Fixtures live in spec/fixtures/ref/.
-RSpec.describe "@-resolution" do
+RSpec.describe "@-resolution", mutant_expression: "Fusion::CLI*" do
   describe "sibling files shadow builtins" do
     it "lets a sibling range.fsn shadow @range" do
       expect_pipe

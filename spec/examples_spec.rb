@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
 # End-to-end runs of the example programs in spec/fixtures/.
-RSpec.describe "example programs" do
+RSpec.describe "example programs", mutant_expression: "Fusion::CLI*" do
   it "doubles a number" do
     expect_pipe
       .in("✅", "21")

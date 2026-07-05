@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
 # Member access (o.name) and index access (a[i]).
-RSpec.describe "value access" do
+RSpec.describe "value access", mutant_expression: "Fusion::CLI*" do
   describe "member access" do
     it "reads a present key" do
       expect_pipe

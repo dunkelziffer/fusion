@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
 # Array/object literals, spreads, and null-as-ordinary-data.
-RSpec.describe "literals and spreads" do
+RSpec.describe "literals and spreads", mutant_expression: "Fusion::CLI*" do
   it "treats null as ordinary data (binds like any value)" do
     expect_pipe
       .in("✅", "null")

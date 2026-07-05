@@ -2,7 +2,7 @@
 
 # Syntactic rules for error patterns: errors may not be nested inside other
 # patterns, while legitimate top-level !pat forms still parse and run.
-RSpec.describe "error pattern syntax" do
+RSpec.describe "error pattern syntax", mutant_expression: "Fusion::CLI*" do
   describe "nested error patterns are rejected" do
     [
       ["([!a, b] => a)",       "error inside an array pattern"],

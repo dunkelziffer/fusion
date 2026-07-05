@@ -21,4 +21,4 @@ integration:
 
 matcher:
   subjects:
-  - Fusion::CLI
+  - Fusion*

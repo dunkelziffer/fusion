@@ -8,7 +8,7 @@
 # Where a precedence/associativity claim is made, the input is chosen so the
 # *opposite* rule would produce a different (noted) result — otherwise the test
 # would not actually pin the rule down.
-RSpec.describe "syntax sugar" do
+RSpec.describe "syntax sugar", mutant_expression: "Fusion::CLI*" do
   describe "arithmetic and its precedence" do
     it "adds a pair" do
       expect_pipe

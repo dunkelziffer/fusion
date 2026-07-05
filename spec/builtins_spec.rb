@@ -5,7 +5,7 @@
 # Each builtin is exercised for its happy paths and its failure payloads. A
 # wrong input shape or type is an `argument_error` whose `expected` field
 # lists the acceptable inputs as Fusion patterns. See docs/lang/design.md §2.9.
-RSpec.describe "builtins" do
+RSpec.describe "builtins", mutant_expression: "Fusion::CLI*" do
   describe "@size" do
     it "measures a string" do
       expect_pipe

@@ -5,7 +5,7 @@
 # live in builtins_spec.rb; this file covers the interpreter- and runtime-level
 # errors and confirms each kind is reachable (or documents why a given source
 # cannot be triggered from Fusion code).
-RSpec.describe "error kinds" do
+RSpec.describe "error kinds", mutant_expression: "Fusion::CLI*" do
   describe "syntax_error" do
     it "from inline source (origin: code, file <inline>)" do
       expect_pipe

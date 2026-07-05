@@ -6,7 +6,7 @@
 #   - location:  "<fusion>" (above all user code) vs "<inline>" vs a user file
 #   - source:    a builtin, a stdlib function, or a syntactic op (`.name`, `[]`, `|`)
 #   - depth:     a directly-piped operation vs one reached through `@map`
-RSpec.describe "the error `file` (innermost user-code call site)" do
+RSpec.describe "the error `file` (innermost user-code call site)", mutant_expression: "Fusion::CLI*" do
   # The program is a bare operation; the CLI applies it to the input directly, so
   # the failure has no user-code frame around it. Only *direct* failures arise
   # here — a nested one would need a function argument, which JSON input can't carry.

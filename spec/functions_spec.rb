@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
 # Functions as values: closures and currying.
-RSpec.describe "functions" do
+RSpec.describe "functions", mutant_expression: "Fusion::CLI*" do
   it "reports a serialization_error for a bare function result (a closure is produced, but JSON can't hold it)" do
     expect_pipe
       .in("✅", "10")
