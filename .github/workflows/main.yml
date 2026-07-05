@@ -74,7 +74,7 @@ jobs:
           summary=$(ruby -rjson -e 'JSON.parse(File.read("coverage/.last_run.json"))["result"].each { |criterion, percent| puts "- #{criterion}: #{percent}%" }')
           gh api "repos/$REPOSITORY/check-runs" \
             --method POST \
-            -f name="Coverage" \
+            -f name="Coverage ${{ matrix.ruby }}" \
             -f head_sha="$HEAD_SHA" \
             -f status=completed \
             -f conclusion=success \
