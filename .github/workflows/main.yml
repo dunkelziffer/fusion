@@ -31,6 +31,9 @@ jobs:
   test:
     runs-on: ubuntu-latest
     name: Test ${{ matrix.ruby }}
+    permissions:
+      contents: read
+      checks: write # the "Coverage" check run
     strategy:
       matrix:
         ruby:
@@ -56,6 +59,29 @@ jobs:
         run: |
           echo "### Coverage" >> "$GITHUB_STEP_SUMMARY"
           ruby -rjson -e 'JSON.parse(File.read("coverage/.last_run.json"))["result"].each { |criterion, percent| puts "- #{criterion}: #{percent}%" }' >> "$GITHUB_STEP_SUMMARY"
+
+      # A "Coverage" check run: its title lands next to the check name in the
+      # PR merge box, and Details opens the summary in the PR's Checks tab.
+      # On pull_request the checkout is a merge commit, so attach the check to
+      # the branch head, where the PR looks for it.
+      - name: Report the coverage as a check run
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          title=$(ruby -rjson -e 'puts JSON.parse(File.read("coverage/.last_run.json"))["result"].map { |criterion, percent| "#{criterion} #{percent}%" }.join(", ")')
+          summary=$(ruby -rjson -e 'JSON.parse(File.read("coverage/.last_run.json"))["result"].each { |criterion, percent| puts "- #{criterion}: #{percent}%" }')
+          gh api "repos/$REPOSITORY/check-runs" \
+            --method POST \
+            -f name="Coverage" \
+            -f head_sha="$HEAD_SHA" \
+            -f status=completed \
+            -f conclusion=success \
+            -f "output[title]=$title" \
+            -f "output[summary]=$summary
+
+          The full HTML report is in the run's \`coverage-report\` artifact."
 
       - name: Upload the coverage report
         uses: actions/upload-artifact@v7
