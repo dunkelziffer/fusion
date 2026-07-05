@@ -58,7 +58,7 @@ jobs:
           ruby -rjson -e 'JSON.parse(File.read("coverage/.last_run.json"))["result"].each { |criterion, percent| puts "- #{criterion}: #{percent}%" }' >> "$GITHUB_STEP_SUMMARY"
 
       - name: Upload the coverage report
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: coverage-report-ruby-${{ matrix.ruby }}
           path: coverage/
