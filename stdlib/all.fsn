@@ -4,7 +4,7 @@
 # the rest.
 (
   {"f": _ ? @Function, "c": []} => true,
-  {"f": f ? @Function, "c": [x, ...rest]} => (x | f) | (
+  {"f": f ? @Function, "c": [x, ...rest]} => x | f | (
     _ ? @falsey => false,
     _           => {"f": f, "c": rest} | @,
   ),
