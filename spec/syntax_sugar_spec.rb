@@ -451,7 +451,7 @@ RSpec.describe "syntax sugar", mutant_expression: "Fusion::CLI*" do
     it "errors when |: gets a non-collection" do
       expect_pipe
         .code("5 |: (x => x)")
-        .out("❌", '{"kind":"argument_error","origin":"stdlib","file":"<inline>","operation":"@map","status":0,"input":{"c":5,"f":"<function>"},"expected":["{\"f\": _ ? @Function, \"c\": _ ? @Array}","{\"f\": _ ? @Function, \"c\": _ ? @Object}"]}')
+        .out("❌", '{"kind":"argument_error","origin":"stdlib","file":"<inline>","operation":"@map","status":0,"input":{"c":5,"f":"<function>"},"expected":["{\"f\": _ ? @Function, \"c\": _ ? @Collection}"]}')
     end
 
     it "filters an array with |?" do
@@ -469,7 +469,7 @@ RSpec.describe "syntax sugar", mutant_expression: "Fusion::CLI*" do
     it "errors when |? gets a non-collection" do
       expect_pipe
         .code("5 |? (x => x)")
-        .out("❌", '{"kind":"argument_error","origin":"stdlib","file":"<inline>","operation":"@filter","status":0,"input":{"c":5,"f":"<function>"},"expected":["{\"f\": _ ? @Function, \"c\": _ ? @Array}","{\"f\": _ ? @Function, \"c\": _ ? @Object}"]}')
+        .out("❌", '{"kind":"argument_error","origin":"stdlib","file":"<inline>","operation":"@filter","status":0,"input":{"c":5,"f":"<function>"},"expected":["{\"f\": _ ? @Function, \"c\": _ ? @Collection}"]}')
     end
 
     it "reduces an array with |+" do

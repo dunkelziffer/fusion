@@ -59,35 +59,35 @@ RSpec.describe "stdlib error handling", mutant_expression: "Fusion::CLI*" do
       expect_pipe
         .in("✅", "5")
         .code("(x => x | @map)")
-        .out("❌", '{"kind":"argument_error","origin":"stdlib","file":"<inline>","operation":"@map","status":0,"input":5,"expected":["{\"f\": _ ? @Function, \"c\": _ ? @Array}","{\"f\": _ ? @Function, \"c\": _ ? @Object}"]}')
+        .out("❌", '{"kind":"argument_error","origin":"stdlib","file":"<inline>","operation":"@map","status":0,"input":5,"expected":["{\"f\": _ ? @Function, \"c\": _ ? @Collection}"]}')
     end
 
     it "errors when a required key is missing" do
       expect_pipe
         .in("✅", "[1,2]")
         .code('(xs => {"c": xs} | @map)')
-        .out("❌", '{"kind":"argument_error","origin":"stdlib","file":"<inline>","operation":"@map","status":0,"input":{"c":[1,2]},"expected":["{\"f\": _ ? @Function, \"c\": _ ? @Array}","{\"f\": _ ? @Function, \"c\": _ ? @Object}"]}')
+        .out("❌", '{"kind":"argument_error","origin":"stdlib","file":"<inline>","operation":"@map","status":0,"input":{"c":[1,2]},"expected":["{\"f\": _ ? @Function, \"c\": _ ? @Collection}"]}')
     end
 
     it "errors when c is present but not an array" do
       expect_pipe
         .in("✅", "null")
         .code('(_ => {"f": @OP.negate, "c": "nope"} | @map)')
-        .out("❌", '{"kind":"argument_error","origin":"stdlib","file":"<inline>","operation":"@map","status":0,"input":{"f":"<function>","c":"nope"},"expected":["{\"f\": _ ? @Function, \"c\": _ ? @Array}","{\"f\": _ ? @Function, \"c\": _ ? @Object}"]}')
+        .out("❌", '{"kind":"argument_error","origin":"stdlib","file":"<inline>","operation":"@map","status":0,"input":{"f":"<function>","c":"nope"},"expected":["{\"f\": _ ? @Function, \"c\": _ ? @Collection}"]}')
     end
 
     it "validates f eagerly: a non-function f errors even when c is empty" do
       expect_pipe
         .in("✅", "[]")
         .code('(xs => {"f": 5, "c": xs} | @map)')
-        .out("❌", '{"kind":"argument_error","origin":"stdlib","file":"<inline>","operation":"@map","status":0,"input":{"f":5,"c":[]},"expected":["{\"f\": _ ? @Function, \"c\": _ ? @Array}","{\"f\": _ ? @Function, \"c\": _ ? @Object}"]}')
+        .out("❌", '{"kind":"argument_error","origin":"stdlib","file":"<inline>","operation":"@map","status":0,"input":{"f":5,"c":[]},"expected":["{\"f\": _ ? @Function, \"c\": _ ? @Collection}"]}')
     end
 
     it "validates f eagerly for an object too: a non-function f errors on an empty object" do
       expect_pipe
         .in("✅", "{}")
         .code('(o => {"f": 5, "c": o} | @map)')
-        .out("❌", '{"kind":"argument_error","origin":"stdlib","file":"<inline>","operation":"@map","status":0,"input":{"f":5,"c":{}},"expected":["{\"f\": _ ? @Function, \"c\": _ ? @Array}","{\"f\": _ ? @Function, \"c\": _ ? @Object}"]}')
+        .out("❌", '{"kind":"argument_error","origin":"stdlib","file":"<inline>","operation":"@map","status":0,"input":{"f":5,"c":{}},"expected":["{\"f\": _ ? @Function, \"c\": _ ? @Collection}"]}')
     end
   end
 
@@ -104,21 +104,21 @@ RSpec.describe "stdlib error handling", mutant_expression: "Fusion::CLI*" do
       expect_pipe
         .in("✅", "null")
         .code('(_ => {"f": @OP.negate} | @map)')
-        .out("❌", '{"kind":"argument_error","origin":"stdlib","file":"<inline>","operation":"@map","status":0,"input":{"f":"<function>"},"expected":["{\"f\": _ ? @Function, \"c\": _ ? @Array}","{\"f\": _ ? @Function, \"c\": _ ? @Object}"]}')
+        .out("❌", '{"kind":"argument_error","origin":"stdlib","file":"<inline>","operation":"@map","status":0,"input":{"f":"<function>"},"expected":["{\"f\": _ ? @Function, \"c\": _ ? @Collection}"]}')
     end
 
     it "@map of a bare function echoes the function placeholder" do
       expect_pipe
         .in("✅", "null")
         .code("(_ => (y => y) | @map)")
-        .out("❌", '{"kind":"argument_error","origin":"stdlib","file":"<inline>","operation":"@map","status":0,"input":"<function>","expected":["{\"f\": _ ? @Function, \"c\": _ ? @Array}","{\"f\": _ ? @Function, \"c\": _ ? @Object}"]}')
+        .out("❌", '{"kind":"argument_error","origin":"stdlib","file":"<inline>","operation":"@map","status":0,"input":"<function>","expected":["{\"f\": _ ? @Function, \"c\": _ ? @Collection}"]}')
     end
 
     it "renders deeply nested functions and non-finite numbers in the echoed input" do
       expect_pipe
         .in("✅", "null")
         .code('(_ => {"a": [1, (y => y), {"deep": @OP.negate}], "b": [1e400]} | @map)')
-        .out("❌", '{"kind":"argument_error","origin":"stdlib","file":"<inline>","operation":"@map","status":0,"input":{"a":[1,"<function>",{"deep":"<function>"}],"b":["<Infinity>"]},"expected":["{\"f\": _ ? @Function, \"c\": _ ? @Array}","{\"f\": _ ? @Function, \"c\": _ ? @Object}"]}')
+        .out("❌", '{"kind":"argument_error","origin":"stdlib","file":"<inline>","operation":"@map","status":0,"input":{"a":[1,"<function>",{"deep":"<function>"}],"b":["<Infinity>"]},"expected":["{\"f\": _ ? @Function, \"c\": _ ? @Collection}"]}')
     end
   end
 
@@ -188,14 +188,14 @@ RSpec.describe "stdlib error handling", mutant_expression: "Fusion::CLI*" do
       expect_pipe
         .in("✅", "5")
         .code("(x => x | @all)")
-        .out("❌", '{"kind":"argument_error","origin":"stdlib","file":"<inline>","operation":"@all","status":0,"input":5,"expected":["{\"f\": _ ? @Function, \"c\": _ ? @Array}","{\"f\": _ ? @Function, \"c\": _ ? @Object}"]}')
+        .out("❌", '{"kind":"argument_error","origin":"stdlib","file":"<inline>","operation":"@all","status":0,"input":5,"expected":["{\"f\": _ ? @Function, \"c\": _ ? @Collection}"]}')
     end
 
     it "validates f eagerly: a non-function f errors even when c is empty" do
       expect_pipe
         .in("✅", "[]")
         .code('(xs => {"f": 5, "c": xs} | @all)')
-        .out("❌", '{"kind":"argument_error","origin":"stdlib","file":"<inline>","operation":"@all","status":0,"input":{"f":5,"c":[]},"expected":["{\"f\": _ ? @Function, \"c\": _ ? @Array}","{\"f\": _ ? @Function, \"c\": _ ? @Object}"]}')
+        .out("❌", '{"kind":"argument_error","origin":"stdlib","file":"<inline>","operation":"@all","status":0,"input":{"f":5,"c":[]},"expected":["{\"f\": _ ? @Function, \"c\": _ ? @Collection}"]}')
     end
 
     # Proper recursion short-circuits: once an item is falsey the result is
@@ -381,14 +381,14 @@ RSpec.describe "stdlib error handling", mutant_expression: "Fusion::CLI*" do
       expect_pipe
         .in("✅", "[]")
         .code('(xs => {"f": 5, "c": xs} | @filter)')
-        .out("❌", '{"kind":"argument_error","origin":"stdlib","file":"<inline>","operation":"@filter","status":0,"input":{"f":5,"c":[]},"expected":["{\"f\": _ ? @Function, \"c\": _ ? @Array}","{\"f\": _ ? @Function, \"c\": _ ? @Object}"]}')
+        .out("❌", '{"kind":"argument_error","origin":"stdlib","file":"<inline>","operation":"@filter","status":0,"input":{"f":5,"c":[]},"expected":["{\"f\": _ ? @Function, \"c\": _ ? @Collection}"]}')
     end
 
     it "errors on a non-{f,c} value" do
       expect_pipe
         .in("✅", "5")
         .code("(x => x | @filter)")
-        .out("❌", '{"kind":"argument_error","origin":"stdlib","file":"<inline>","operation":"@filter","status":0,"input":5,"expected":["{\"f\": _ ? @Function, \"c\": _ ? @Array}","{\"f\": _ ? @Function, \"c\": _ ? @Object}"]}')
+        .out("❌", '{"kind":"argument_error","origin":"stdlib","file":"<inline>","operation":"@filter","status":0,"input":5,"expected":["{\"f\": _ ? @Function, \"c\": _ ? @Collection}"]}')
     end
   end
 
@@ -464,7 +464,7 @@ RSpec.describe "stdlib error handling", mutant_expression: "Fusion::CLI*" do
       expect_pipe
         .in("✅", "5")
         .code("(x => x | @compact)")
-        .out("❌", '{"kind":"argument_error","origin":"stdlib","file":"<inline>","operation":"@compact","status":0,"input":5,"expected":["_ ? @Array","_ ? @Object"]}')
+        .out("❌", '{"kind":"argument_error","origin":"stdlib","file":"<inline>","operation":"@compact","status":0,"input":5,"expected":["_ ? @Collection"]}')
     end
   end
 
@@ -555,7 +555,7 @@ RSpec.describe "stdlib error handling", mutant_expression: "Fusion::CLI*" do
       expect_pipe
         .in("✅", "5")
         .code("(x => x | @any)")
-        .out("❌", '{"kind":"argument_error","origin":"stdlib","file":"<inline>","operation":"@any","status":0,"input":5,"expected":["{\"f\": _ ? @Function, \"c\": _ ? @Array}","{\"f\": _ ? @Function, \"c\": _ ? @Object}"]}')
+        .out("❌", '{"kind":"argument_error","origin":"stdlib","file":"<inline>","operation":"@any","status":0,"input":5,"expected":["{\"f\": _ ? @Function, \"c\": _ ? @Collection}"]}')
     end
   end
 

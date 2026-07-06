@@ -334,7 +334,7 @@ module Fusion
 
       def size(v)
         return v if v.is_a?(ErrorVal)
-        return argument_error("size", v, ["_ ? @String", "_ ? @Array", "_ ? @Object"]) unless v.is_a?(String) || v.is_a?(Array) || v.is_a?(Hash)
+        return argument_error("size", v, ["_ ? @String", "_ ? @Collection"]) unless v.is_a?(String) || v.is_a?(Array) || v.is_a?(Hash)
 
         v.length
       end

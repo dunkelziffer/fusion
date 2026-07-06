@@ -8,5 +8,5 @@
   ),
   # Reduce to array case
   {"f": f ? @Function, "c": obj ? @Object} => {"f": ([_, v] => v | f), "c": obj | @entries} | @ | @toObject,
-  x => !{"kind": "argument_error", "origin": "stdlib", "operation": "@filter", "status": 0, "input": x, "expected": ["{\"f\": _ ? @Function, \"c\": _ ? @Array}", "{\"f\": _ ? @Function, \"c\": _ ? @Object}"]}
+  x => !{"kind": "argument_error", "origin": "stdlib", "operation": "@filter", "status": 0, "input": x, "expected": ["{\"f\": _ ? @Function, \"c\": _ ? @Collection}"]}
 )

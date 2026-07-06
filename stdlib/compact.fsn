@@ -1,5 +1,5 @@
 # Drop null entries from an array (by element) or an object (by value). Built on @filter.
 (
   c ? @Collection => c |? (null => false, _ => true),
-  x => !{"kind": "argument_error", "origin": "stdlib", "operation": "@compact", "status": 0, "input": x, "expected": ["_ ? @Array", "_ ? @Object"]}
+  x => !{"kind": "argument_error", "origin": "stdlib", "operation": "@compact", "status": 0, "input": x, "expected": ["_ ? @Collection"]}
 )

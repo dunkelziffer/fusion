@@ -39,7 +39,7 @@ RSpec.describe "builtins", mutant_expression: "Fusion::CLI*" do
       expect_pipe
         .in("✅", "5")
         .code("(v => v | @size)")
-        .out("❌", '{"kind":"argument_error","origin":"builtin","file":"<inline>","operation":"@size","status":0,"input":5,"expected":["_ ? @String","_ ? @Array","_ ? @Object"]}')
+        .out("❌", '{"kind":"argument_error","origin":"builtin","file":"<inline>","operation":"@size","status":0,"input":5,"expected":["_ ? @String","_ ? @Collection"]}')
     end
   end
 
