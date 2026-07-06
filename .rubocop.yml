@@ -6,6 +6,9 @@ AllCops:
   SuggestExtensions: false
   NewCops: disable # TODO
 
+Bundler/OrderedGems:
+  Enabled: false
+
 Layout/CaseIndentation:
   EnforcedStyle: end
 

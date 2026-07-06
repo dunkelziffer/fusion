@@ -2,18 +2,20 @@
 
 source "https://rubygems.org"
 
-# Runtime dependencies
+# === Runtime dependencies ===
+
 gemspec
 
-# Development dependencies
+# === Development dependencies ===
+
 gem "irb"
 gem "rake", "~> 13.0"
-gem "rspec", "~> 3.0"
+
+# Lint
 gem 'rubocop'
 gem 'rubocop-rspec'
 
-group :test do
-  gem 'simplecov', require: false
-end
-
+# Test
+gem "rspec", "~> 3.0"
+gem 'simplecov', require: false
 gem "mutant-rspec", "~> 0.16.3"
