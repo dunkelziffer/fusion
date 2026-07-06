@@ -26,7 +26,7 @@ Compute a boolean, then pipe it into a two-clause function:
 
 ```fusion
 (n =>
-  [n, 0] | @OP.compare | @lt | (
+  (n < 0) | (
     true  => "negative",
     false => "non-negative"
   )
@@ -156,10 +156,11 @@ other way to change them.
 
 Most stdlib helpers are deliberately **immune** to your override, so a reskin can't
 break them by accident: `@truthy`/`@falsey` decide truthiness by pattern matching,
-`@compact` drops nulls by pattern matching too, and the comparison helpers
-`@lt`/`@gt`/`@lte`/`@gte` interpret an `@OP.compare` *result* (you write
-`[a, b] | @OP.compare | @lt`, so the compare step already follows your override while
-the interpretation stays fixed).
+and `@compact` drops nulls by pattern matching too. The comparison readers
+`@OP.lt`/`@OP.gt`/`@OP.lte`/`@OP.gte` interpret an `@OP.compare` *result*, and both
+steps of `a < b` (= `[a, b] | @OP.compare | @OP.lt`) resolve through `@OP` — so
+overriding `compare` alone already reskins the comparisons, and an `OP.fsn` that
+spreads `...@@` keeps the original readers.
 
 One helper still calls `@OP` internally — `@range` uses `@OP.sum` and `@OP.compare` —
 and, like `@`-names everywhere, it resolves `@OP` in *its own* directory (the stdlib),

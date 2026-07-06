@@ -1,9 +1,0 @@
-# Less-or-equal: interprets an @OP.compare result. Use as `[a, b] | @OP.compare | @lte`.
-# A partial order's compare may return null (incomparable); that propagates as null.
-(
-  -1 => true,
-  0 => true,
-  1 => false,
-  null => null,
-  x => !{"kind": "argument_error", "origin": "stdlib", "operation": "@lte", "status": 0, "input": x, "expected": ["-1", "0", "1", "null"]},
-)

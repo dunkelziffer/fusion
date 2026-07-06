@@ -48,7 +48,7 @@ Precedence, tightest to loosest:
    `|+` (reduce). Left-associative (`a | f | g` ≡ `(a | f) | g`).
 5. Multiplicative: `*`, `/`, `%`, `//`. Left-associative.
 6. Additive: `+`, `-`. Left-associative.
-7. Ordering: `??`. Left-associative.
+7. Ordering: `??` and the comparisons `<`, `<=`, `>`, `>=`. Binary, left-associative.
 8. Equality: `==`.
 9. Logical and: `&&`.
 10. Logical or: `||`.
@@ -105,7 +105,7 @@ expr           = logical_or ;
 logical_or     = logical_and { "||" logical_and } ;
 logical_and    = equality { "&&" equality } ;
 equality       = ordering { "==" ordering } ;
-ordering       = additive { "??" additive } ;
+ordering       = additive { ( "??" | "<" | "<=" | ">" | ">=" ) additive } ;
 additive       = multiplicative { ( "+" | "-" ) multiplicative } ;
 multiplicative = pipe { ( "*" | "/" | "%" | "//" ) pipe } ;
 pipe           = unary { ( "|" | "|:" | "|?" | "|+" ) unary } ;
@@ -194,6 +194,7 @@ member (§7.6), or, for the map-pipes, into a stdlib call.
   a % b        →  [a, b] | @OP.modulo
   a // b       →  [a, b] | @OP.quotient
   a ?? b       →  [a, b] | @OP.compare
+  a < b        →  [a, b] | @OP.compare | @OP.lt     (likewise <= / > / >= via @OP.lte / @OP.gt / @OP.gte)
   a == b == c  →  [a, b, c] | @OP.equal
   a && b && c  →  [a, b, c] | @OP.and
   a || b || c  →  [a, b, c] | @OP.or
@@ -209,15 +210,17 @@ Folding and associativity:
 - A maximal run of `*`/`/` folds into one `@OP.product`; each `/` term is inverted via
   `@OP.invert` (never a literal, so `1/x` stays a float and `/0` stays a runtime error).
 - Runs of `==`, `&&`, `||` fold n-ary into `@OP.equal` / `@OP.and` / `@OP.or`.
-- `%`, `//`, `??` are binary and left-associative; they sit at their level and break a
-  fold run: `a * b % c` is `(a * b) % c`; `a ?? b == 0` is `(a ?? b) == 0`.
+- `%`, `//`, `??`, `<`, `<=`, `>`, `>=` are binary and left-associative; they sit at
+  their level and break a fold run: `a * b % c` is `(a * b) % c`; `a ?? b == 0` is
+  `(a ?? b) == 0`. Comparisons do not chain: `a < b < c` is `(a < b) < c`, which
+  errors at runtime (a boolean is not comparable).
 
 Because pipe binds tighter than the value operators, `x|@f + 1` is `(x|@f) + 1`; to pipe a
-computed value onward, parenthesize it: `(a + b)|@f`, `(a ?? b)|@gt`.
+computed value onward, parenthesize it: `(a + b)|@f`, `(a < b)|@f`.
 
-Comparisons: `a == b` is equality. `a < b` needs to be expressed as `(a ?? b) | @lt`
-(likewise `@gt` / `@lte` / `@gte`), since `??` yields the `-1`/`0`/`1` ordering those
-stdlib helpers interpret.
+Comparisons: `a == b` is equality; `a < b` (and `<=` / `>` / `>=`) orders two numbers
+or two strings. `??` exposes the underlying `-1`/`0`/`1` ordering that the comparison
+desugaring reads through `@OP.lt` / `@OP.lte` / `@OP.gt` / `@OP.gte` (§7.2).
 
 ---
 
@@ -476,8 +479,7 @@ below are the built-in names; write `@` before them to use them. **Operations** 
 input that is not of the queried type (they never return `!`).
 
 The operators (`+ - * / == < …` and the boolean ops) live in the shadowable `@OP`
-object (§7.6); a directory reskins them by placing an `OP.fsn`. Their **named** forms
-below are stdlib functions built on `@OP.*`, so they follow a per-directory override.
+object (§7.6); a directory reskins them by placing an `OP.fsn`.
 
 ### 7.1 Arithmetic
 
@@ -492,22 +494,21 @@ division and the other numeric functions live in `@math` (§7.6a): `@math.divide
 
 Equality is `@OP.equal` (deep structural equality of a pair; §7.6) — used directly,
 there is no `@eq` helper. Ordering is `@OP.compare`, which returns `-1`/`0`/`1`. The
-named boolean forms **interpret that result** and are applied *after* it:
+comparison members **interpret that result** and are applied *after* it:
 
-| Name  | `-1`   | `0`    | `1`    | `null` |
-| ----- | ------ | ------ | ------ | ------ |
-| `lt`  | `true` | `false`| `false`| `null` |
-| `gt`  | `false`| `false`| `true` | `null` |
-| `lte` | `true` | `true` | `false`| `null` |
-| `gte` | `false`| `true` | `true` | `null` |
+| Member   | `-1`   | `0`    | `1`    | `null` |
+| -------- | ------ | ------ | ------ | ------ |
+| `OP.lt`  | `true` | `false`| `false`| `null` |
+| `OP.gt`  | `false`| `false`| `true` | `null` |
+| `OP.lte` | `true` | `true` | `false`| `null` |
+| `OP.gte` | `false`| `true` | `true` | `null` |
 
-So `a < b` is written `[a, b] | @OP.compare | @lt` (with sugar: `(a ?? b) | @lt`; equality
-is `a == b` — see §2.7). Because the caller invokes
-`@OP.compare`, the ordering follows a per-directory `@OP` override while the helper
-itself is fixed and shadow-independent. A partial order whose `compare` returns `null`
-for incomparable operands passes that `null` straight through; any other input is an
-`argument_error`. A type mismatch surfaces as `@OP.compare`'s own error, before the
-helper runs.
+`a < b` desugars to exactly this pipeline: `[a, b] | @OP.compare | @OP.lt` (likewise
+`<=` / `>` / `>=`; equality is `a == b` — see §2.7). Both steps resolve `@OP` per
+directory, so an override reskins the ordering and its reading together. A partial
+order whose `compare` returns `null` for incomparable operands passes that `null`
+straight through; any other input is an `argument_error`. A type mismatch surfaces
+as `@OP.compare`'s own error, before the reader runs.
 
 ### 7.3 Boolean
 
@@ -570,9 +571,10 @@ elements); `compare` reports an ordering. The infix operators (§2.7) desugar to
 
 `@OP` is **shadowable per directory**: place an `OP.fsn` sibling that overrides members
 (spread the originals with `@@`) to reskin the operators — complex numbers, matrices,
-ternary logic — for that directory only. The comparison helpers in §7.2 (`@lt`, `@gt`, …)
-interpret an `@OP.compare` result, so ordering follows a local override the moment the
-caller pipes through `@OP.compare` (see the how-to guide).
+ternary logic — for that directory only. The comparison members (§7.2: `lt`, `gt`,
+`lte`, `gte`) interpret an `@OP.compare` *result* rather than comparing values
+themselves, so an override of `compare` alone already reskins `a < b` (see the
+how-to guide).
 
 | Member        | Input                                    | Result                                                   |
 | ------------- | ---------------------------------------- | -------------------------------------------------------- |
@@ -584,6 +586,10 @@ caller pipes through `@OP.compare` (see the how-to guide).
 | `OP.modulo`   | `[integer, integer]`                     | integer remainder; `!` on a non-integer or a `0` divisor |
 | `OP.equal`    | array (any element types)                | deep equality: `true` iff every element equals the first |
 | `OP.compare`  | `[number, number]` or `[string, string]` | `-1` / `0` / `1` (first smaller / equal / larger)        |
+| `OP.lt`       | a compare result (`-1`/`0`/`1`/`null`)   | `true` for `-1`, else `false`; `null` passes through     |
+| `OP.gt`       | a compare result                         | `true` for `1`                                           |
+| `OP.lte`      | a compare result                         | `true` for `-1` / `0`                                    |
+| `OP.gte`      | a compare result                         | `true` for `0` / `1`                                     |
 | `OP.and`      | array                                    | `true` if every element is truthy (`true` for `[]`)      |
 | `OP.or`       | array                                    | `true` if any element is truthy (`false` for `[]`)       |
 | `OP.not`      | `_`                                      | `true` if the operand is falsey                          |

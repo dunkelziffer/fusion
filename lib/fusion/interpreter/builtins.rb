@@ -12,9 +12,7 @@ module Fusion
         define = ->(name, fn) { table[name] = NativeFunc.new(name, fn) }
 
         # Irreducible primitives kept as built-ins. The sugar-target operators
-        # (arithmetic/comparison/boolean) live in `@OP` below; their friendly
-        # derived forms (`@lt`, `@gt`, `@truthy`, …) are stdlib files that build on
-        # `@OP.*`, so they follow a per-directory `@OP` override. Numeric functions
+        # (arithmetic/comparison/boolean) live in `@OP` below. Numeric functions
         # (`round`, `divide`, `sin`, …) and constants (`pi`, `e`) live in `@math`.
         define.call("size", method(:size))
         define.call("join", method(:join))
@@ -51,6 +49,10 @@ module Fusion
           "modulo"   => NativeFunc.new("OP.modulo", method(:op_modulo)),
           "equal"    => NativeFunc.new("OP.equal", method(:op_equal)),
           "compare"  => NativeFunc.new("OP.compare", method(:op_compare)),
+          "lt"       => NativeFunc.new("OP.lt", method(:op_lt)),
+          "gt"       => NativeFunc.new("OP.gt", method(:op_gt)),
+          "lte"      => NativeFunc.new("OP.lte", method(:op_lte)),
+          "gte"      => NativeFunc.new("OP.gte", method(:op_gte)),
           "and"      => NativeFunc.new("OP.and", method(:op_and)),
           "or"       => NativeFunc.new("OP.or", method(:op_or)),
           "not"      => NativeFunc.new("OP.not", method(:op_not)),
@@ -206,9 +208,8 @@ module Fusion
       # --- OP: the sugar-target operators (reached as `@OP.sum`, `@OP.and`, …) ---
       #
       # The arithmetic, boolean, and equality members take an array of ANY length;
-      # the unary ones take a single value; `compare` returns -1 / 0 / 1. The
-      # friendly derived forms (`@lt`, `@gt`, `@truthy`, …) are stdlib files built on
-      # these.
+      # the unary ones take a single value; `compare` returns -1 / 0 / 1, which
+      # `lt` / `gt` / `lte` / `gte` then read into a boolean.
 
       def op_sum(v)
         return v if v.is_a?(ErrorVal)
@@ -287,6 +288,26 @@ module Fusion
         elsif b < a then 1
         else 0
         end
+      end
+
+      # The comparison readers interpret an `@OP.compare` result. The infix sugar
+      # `a < b` desugars to `[a, b] | @OP.compare | @OP.lt` (likewise `<=` / `>` /
+      # `>=`), so an `@OP` override reskins the ordering and its reading together.
+
+      def op_lt(v)
+        read_compare_result("OP.lt", v, [-1])
+      end
+
+      def op_gt(v)
+        read_compare_result("OP.gt", v, [1])
+      end
+
+      def op_lte(v)
+        read_compare_result("OP.lte", v, [-1, 0])
+      end
+
+      def op_gte(v)
+        read_compare_result("OP.gte", v, [0, 1])
       end
 
       def op_and(v)
@@ -448,6 +469,19 @@ module Fusion
 
       def non_finite?(v)
         v.is_a?(Float) && !v.finite?
+      end
+
+      COMPARE_RESULT = ["-1", "0", "1", "null"].freeze
+
+      # -1 / 0 / 1 (exact integers) → whether the ordering is in `truthy_results`.
+      # A partial order's compare may return null (incomparable); that passes
+      # through as null rather than being forced to a boolean.
+      def read_compare_result(name, v, truthy_results)
+        return v if v.is_a?(ErrorVal)
+        return NULL if v == NULL
+        return argument_error(name, v, COMPARE_RESULT) unless integer?(v) && [-1, 0, 1].include?(v)
+
+        truthy_results.include?(v)
       end
 
       # Build a standardized interpreter error carrying a human-readable

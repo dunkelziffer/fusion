@@ -475,7 +475,7 @@ Refines §2.9: same general shape, more orthogonal fields, field values easier t
 - 🧑 ✅ Split `location` into `origin` (where the operation is *defined*) and an optional `file` (the **innermost user-code file** on the call chain).
 - 🧑 ✅ `file` is `Dir.pwd`-relative, so it reads as the route from the location where `fusion` was called to the offending source code.
 - 🧑 ✅ Split `status` out from `input`. `status` is `0` (a value) or `1` (an error). On `1`, `input` carries the error's bare payload, so `input` is always valid JSON.
-- 🧑 ✅ `operation` now contains the failing operation's own **`@`-reference** (`@`, `@@`, `@lt`, `@math.round`, `@../mod`, `@load`) or for Built-in *syntax* its own form (`|`, `.key`, `[]`, `parsing code`). Loading the top-level program file is `loading code` (not an `@`-reference).
+- 🧑 ✅ `operation` now contains the failing operation's own **`@`-reference** (`@`, `@@`, `@range`, `@math.round`, `@../mod`, `@load`) or for Built-in *syntax* its own form (`|`, `.key`, `[]`, `parsing code`). Loading the top-level program file is `loading code` (not an `@`-reference).
 - 🧑 ✅ An `@`-reference takes no argument, so its `input` is `null` and its `status` is always `0`. `@load` is the exception: it's a function taking a filename.
 - 🧑 ✅ For *access errors* the "key" appears only once:
   - `.name` carries the static key in `operation` and the object alone in `input`
@@ -1062,3 +1062,9 @@ runtime node is the `[=]` setter.
 ### Pros
 
 - Giving `pipe` the tightest precedence keeps the "useful reading" paren-free: a pipe's RHS has to always be a function and arithmetic never yields one, so `x|@f + 1` can only sensibly mean `(x|@f) + 1`.
+
+---
+
+## 5.7 Comparison operators `<` `<=` `>=` `>`
+
+TODO

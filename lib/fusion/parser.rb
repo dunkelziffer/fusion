@@ -73,7 +73,7 @@ module Fusion
     # --- Operator sugar (reference §2.7) --------------------------------------
     # The ladder below desugars every operator to a pipe into an `@OP.*` member
     # (or, for the map-pipes, a stdlib call). Tightest to loosest:
-    #   postfix · unary (! - / ~) · pipe (| |: |? |+) · * / % // · + - · ?? · == · && · ||
+    #   postfix · unary (! - / ~) · pipe (| |: |? |+) · * / % // · + - · ?? < <= > >= · == · && · ||
     # `@OP.*` is a shadowable `:name` reference, so a local `@OP` reskins the operators.
 
     def parse_or
@@ -103,12 +103,24 @@ module Fusion
       fold_operator(operands, "equal")
     end
 
-    # `??` (compare) is binary and left-associative — it does not fold.
+    # The comparisons desugar to a compare piped into its reading member:
+    # `a < b` → `[a, b] | @OP.compare | @OP.lt`.
+    COMPARISON_MEMBERS = { lt: "lt", lte: "lte", gt: "gt", gte: "gte" }.freeze
+
+    # `??` (compare) and the comparisons are binary and left-associative — they
+    # do not fold, and `a < b < c` does not chain (it compares a boolean).
     def parse_ordering
       node = parse_additive
-      while at?(:qq)
-        advance
-        node = pipe_operator([node, parse_additive], "compare")
+      loop do
+        if at?(:qq)
+          advance
+          node = pipe_operator([node, parse_additive], "compare")
+        elsif COMPARISON_MEMBERS.key?(peek.type)
+          member = COMPARISON_MEMBERS[advance.type]
+          node = pipe_into(pipe_operator([node, parse_additive], "compare"), member)
+        else
+          break
+        end
       end
       node
     end

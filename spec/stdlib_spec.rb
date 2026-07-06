@@ -20,14 +20,14 @@ RSpec.describe "stdlib error handling", mutant_expression: "Fusion::CLI*" do
       expect_pipe
         .in("✅", '"hi"')
         .code("(x => x | @range)")
-        .out("❌", '{"kind":"argument_error","origin":"stdlib","file":"<inline>","operation":"@range","status":0,"input":"hi","expected":["_ ? (m ? @Integer => [m, 0] | @OP.compare | @gte)"]}')
+        .out("❌", '{"kind":"argument_error","origin":"stdlib","file":"<inline>","operation":"@range","status":0,"input":"hi","expected":["_ ? (m ? @Integer => [m, 0] | @OP.compare | @OP.gte)"]}')
     end
 
     it "errors on a negative integer (rather than recursing forever)" do
       expect_pipe
         .in("✅", "-1")
         .code("(x => x | @range)")
-        .out("❌", '{"kind":"argument_error","origin":"stdlib","file":"<inline>","operation":"@range","status":0,"input":-1,"expected":["_ ? (m ? @Integer => [m, 0] | @OP.compare | @gte)"]}')
+        .out("❌", '{"kind":"argument_error","origin":"stdlib","file":"<inline>","operation":"@range","status":0,"input":-1,"expected":["_ ? (m ? @Integer => [m, 0] | @OP.compare | @OP.gte)"]}')
     end
   end
 
@@ -97,7 +97,7 @@ RSpec.describe "stdlib error handling", mutant_expression: "Fusion::CLI*" do
       expect_pipe
         .in("✅", "null")
         .code("(_ => 1e400 | @range)")
-        .out("❌", '{"kind":"argument_error","origin":"stdlib","file":"<inline>","operation":"@range","status":0,"input":"<Infinity>","expected":["_ ? (m ? @Integer => [m, 0] | @OP.compare | @gte)"]}')
+        .out("❌", '{"kind":"argument_error","origin":"stdlib","file":"<inline>","operation":"@range","status":0,"input":"<Infinity>","expected":["_ ? (m ? @Integer => [m, 0] | @OP.compare | @OP.gte)"]}')
     end
 
     it "@map of a {f} missing c echoes the function placeholder" do
@@ -271,60 +271,18 @@ RSpec.describe "stdlib error handling", mutant_expression: "Fusion::CLI*" do
     end
   end
 
-  # The comparison helpers interpret an @OP.compare result (-1 / 0 / 1); the caller
-  # pipes a pair through @OP.compare first, so the compare step follows a per-directory
-  # @OP override while the helper itself stays stable and shadow-independent.
-  describe "comparison helpers (read off @OP.compare)" do
-    it "@lt / @gt / @lte / @gte map a compare result to a boolean" do
-      expect_pipe
-        .in("✅", "[1,2]")
-        .code('(p => p | @OP.compare | (c => [c | @lt, c | @gt, c | @lte, c | @gte]))')
-        .out("✅", "[true,false,true,false]")
-    end
-
-    it "@lte and @gte are inclusive at equality (compare is 0)" do
-      expect_pipe
-        .in("✅", "[2,2]")
-        .code('(p => p | @OP.compare | (c => [c | @lt, c | @gt, c | @lte, c | @gte]))')
-        .out("✅", "[false,false,true,true]")
-    end
-
-    # A partial order's `compare` may report `null` (incomparable); each helper
-    # passes that through as `null` rather than forcing a boolean.
-    it "propagates a null compare result as null" do
-      expect_pipe
-        .in("✅", "null")
-        .code('(c => [c | @lt, c | @gt, c | @lte, c | @gte])')
-        .out("✅", "[null,null,null,null]")
-    end
-
-    it "raises a stdlib argument_error on a value that is not a compare result" do
-      expect_pipe
-        .in("✅", "5")
-        .code("(c => c | @lt)")
-        .out("❌", '{"kind":"argument_error","origin":"stdlib","file":"<inline>","operation":"@lt","status":0,"input":5,"expected":["-1","0","1","null"]}')
-    end
-
-    it "the @OP.compare step bubbles its own error on mixed types" do
-      expect_pipe
-        .in("✅", '[1,"a"]')
-        .code("(p => p | @OP.compare | @lt)")
-        .out("❌", '{"kind":"argument_error","origin":"builtin","file":"<inline>","operation":"@OP.compare","status":0,"input":[1,"a"],"expected":["[_ ? @Number, _ ? @Number]","[_ ? @String, _ ? @String]"]}')
-    end
-  end
-
   describe "@filter" do
     it "keeps array elements where the predicate is truthy" do
       expect_pipe
         .in("✅", "[-1,2,-3,4]")
-        .code('(xs => {"f": (n => [n, 0] | @OP.compare | @gt), "c": xs} | @filter)')
+        .code('(xs => {"f": (n => [n, 0] | @OP.compare | @OP.gt), "c": xs} | @filter)')
         .out("✅", "[2,4]")
     end
 
     it "keeps object values where the predicate is truthy, dropping keys" do
       expect_pipe
         .in("✅", '{"a":1,"b":3,"c":5}')
-        .code('(o => {"f": (n => [n, 2] | @OP.compare | @gt), "c": o} | @filter)')
+        .code('(o => {"f": (n => [n, 2] | @OP.compare | @OP.gt), "c": o} | @filter)')
         .out("✅", '{"b":3,"c":5}')
     end
 
@@ -460,14 +418,14 @@ RSpec.describe "stdlib error handling", mutant_expression: "Fusion::CLI*" do
     it "is true when some element satisfies the predicate" do
       expect_pipe
         .in("✅", "[1,2,-3]")
-        .code('(xs => {"f": (n => [n, 0] | @OP.compare | @lt), "c": xs} | @any)')
+        .code('(xs => {"f": (n => [n, 0] | @OP.compare | @OP.lt), "c": xs} | @any)')
         .out("✅", "true")
     end
 
     it "is false when none satisfy it" do
       expect_pipe
         .in("✅", "[1,2,3]")
-        .code('(xs => {"f": (n => [n, 0] | @OP.compare | @lt), "c": xs} | @any)')
+        .code('(xs => {"f": (n => [n, 0] | @OP.compare | @OP.lt), "c": xs} | @any)')
         .out("✅", "false")
     end
 
@@ -491,14 +449,14 @@ RSpec.describe "stdlib error handling", mutant_expression: "Fusion::CLI*" do
     it "is true when some object value satisfies the predicate" do
       expect_pipe
         .in("✅", '{"a":1,"b":-3}')
-        .code('(o => {"f": (n => [n, 0] | @OP.compare | @lt), "c": o} | @any)')
+        .code('(o => {"f": (n => [n, 0] | @OP.compare | @OP.lt), "c": o} | @any)')
         .out("✅", "true")
     end
 
     it "is false when no object value satisfies it" do
       expect_pipe
         .in("✅", '{"a":1,"b":2}')
-        .code('(o => {"f": (n => [n, 0] | @OP.compare | @lt), "c": o} | @any)')
+        .code('(o => {"f": (n => [n, 0] | @OP.compare | @OP.lt), "c": o} | @any)')
         .out("✅", "false")
     end
 
