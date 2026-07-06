@@ -88,3 +88,53 @@ jobs:
         with:
           name: coverage-report
           path: coverage/
+
+  mutant:
+    runs-on: ubuntu-latest
+    name: Mutation tests
+    # Mutation testing is slow; run it only after a merge into main, never for
+    # pull requests.
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    permissions:
+      contents: read
+      checks: write # the "Mutant" check run
+
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - name: Set up Ruby
+        uses: ruby/setup-ruby@v1
+        with:
+          bundler-cache: true
+
+      - name: Run the mutation tests
+        # Mutant exits non-zero whenever mutations survive, which is the normal
+        # state. The coverage is reported by the check run below; only a run
+        # without a coverage result (see below) fails this job.
+        run: bundle exec rake spec:mutant | tee mutant.log || true
+
+      - name: Upload the mutation testing results
+        uses: actions/upload-artifact@v7
+        with:
+          name: mutant-report
+          path: .mutant/
+
+      - name: Report the mutation coverage as a check run
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+          HEAD_SHA: ${{ github.sha }}
+        run: |
+          percent=$(ruby -e 'puts File.read("mutant.log")[/^Coverage:\s+([\d.]+)%/, 1] || abort("No coverage in the mutant output - did mutant crash?")')
+          gh api "repos/$REPOSITORY/check-runs" \
+            --method POST \
+            -f name="Mutant" \
+            -f head_sha="$HEAD_SHA" \
+            -f status=completed \
+            -f conclusion=success \
+            -f "output[title]=mutation $percent%" \
+            -f "output[summary]=- mutation: $percent%
+
+          The full results are in the run's \`mutant-report\` artifact."
