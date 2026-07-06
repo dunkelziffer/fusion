@@ -120,6 +120,9 @@ jobs:
         with:
           name: mutant-report
           path: .mutant/
+          # Without this the upload skips the hidden .mutant/ directory entirely.
+          include-hidden-files: true
+          if-no-files-found: error
 
       - name: Report the mutation coverage as a check run
         env:
