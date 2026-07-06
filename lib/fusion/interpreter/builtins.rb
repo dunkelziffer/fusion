@@ -21,7 +21,6 @@ module Fusion
         define.call("parseNumber", method(:parse_number))
         define.call("keys", method(:keys))
         define.call("values", method(:values))
-        define.call("toObject", method(:to_object))
 
         # type predicates: return false on any non-matching value, never an error
         define.call("Integer", method(:integer?))
@@ -31,6 +30,7 @@ module Fusion
         define.call("Boolean", method(:boolean?))
         define.call("Array", method(:array?))
         define.call("Object", method(:object?))
+        define.call("Collection", method(:collection?))
         define.call("Null", method(:null?))
         define.call("Function", method(:function?))
         define.call("NonFinite", method(:non_finite?))
@@ -411,18 +411,6 @@ module Fusion
         v.values
       end
 
-      def to_object(v)
-        return v if v.is_a?(ErrorVal)
-
-        # Each entry must be a [string, _] pair.
-        expected = ['_ ? (xs => {"c": xs, "f": ([_ ? @String, _] => true)} | @all)']
-        unless v.is_a?(Array) && v.all? { |entry| pair?(entry) && entry[0].is_a?(String) }
-          return argument_error("toObject", v, expected)
-        end
-
-        v.to_h
-      end
-
       private
 
       # Type predicates, also reused as internal guards.
@@ -453,6 +441,10 @@ module Fusion
 
       def object?(v)
         v.is_a?(Hash)
+      end
+
+      def collection?(v)
+        array?(v) || object?(v)
       end
 
       def null?(v)

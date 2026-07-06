@@ -271,6 +271,90 @@ RSpec.describe "stdlib error handling", mutant_expression: "Fusion::CLI*" do
     end
   end
 
+  # @entries and @toObject destructure/construct objects as [key, value] entry
+  # arrays. They are inverses: obj | @entries | @toObject == obj. @entries is
+  # built on @keys; @toObject folds onto {} with the [=] setter.
+  describe "@entries" do
+    it "lists an object's [key, value] entries in insertion order" do
+      expect_pipe
+        .in("✅", '{"b":2,"a":1}')
+        .code("(o => o | @entries)")
+        .out("✅", '[["b",2],["a",1]]')
+    end
+
+    it "is empty for the empty object" do
+      expect_pipe
+        .in("✅", "{}")
+        .code("(o => o | @entries)")
+        .out("✅", "[]")
+    end
+
+    it "keeps composite values intact" do
+      expect_pipe
+        .in("✅", '{"a":[1,{"deep":true}]}')
+        .code("(o => o | @entries)")
+        .out("✅", '[["a",[1,{"deep":true}]]]')
+    end
+
+    it "round-trips through @toObject" do
+      expect_pipe
+        .in("✅", '{"a":1,"b":[2],"c":null}')
+        .code("(o => o | @entries | @toObject)")
+        .out("✅", '{"a":1,"b":[2],"c":null}')
+    end
+
+    it "errors on a non-object" do
+      expect_pipe
+        .in("✅", "[1,2]")
+        .code("(o => o | @entries)")
+        .out("❌", '{"kind":"argument_error","origin":"stdlib","file":"<inline>","operation":"@entries","status":0,"input":[1,2],"expected":["_ ? @Object"]}')
+    end
+  end
+
+  describe "@toObject" do
+    it "builds an object from [key, value] entries" do
+      expect_pipe
+        .in("✅", '[["a",1],["b",2]]')
+        .code("(es => es | @toObject)")
+        .out("✅", '{"a":1,"b":2}')
+    end
+
+    it "is empty for no entries" do
+      expect_pipe
+        .in("✅", "[]")
+        .code("(es => es | @toObject)")
+        .out("✅", "{}")
+    end
+
+    it "keeps the last value for a duplicate key" do
+      expect_pipe
+        .in("✅", '[["a",1],["a",9]]')
+        .code("(es => es | @toObject)")
+        .out("✅", '{"a":9}')
+    end
+
+    it "errors on a non-array" do
+      expect_pipe
+        .in("✅", "5")
+        .code("(es => es | @toObject)")
+        .out("❌", '{"kind":"argument_error","origin":"stdlib","file":"<inline>","operation":"@toObject","status":0,"input":5,"expected":["_ ? (xs ? @Array => {\"c\": xs, \"f\": ([_ ? @String, _] => true)} | @all)"]}')
+    end
+
+    it "errors on a malformed entry" do
+      expect_pipe
+        .in("✅", '[["a",1],5]')
+        .code("(es => es | @toObject)")
+        .out("❌", '{"kind":"argument_error","origin":"stdlib","file":"<inline>","operation":"@toObject","status":0,"input":[["a",1],5],"expected":["_ ? (xs ? @Array => {\"c\": xs, \"f\": ([_ ? @String, _] => true)} | @all)"]}')
+    end
+
+    it "errors on a non-string key" do
+      expect_pipe
+        .in("✅", "[[1,2]]")
+        .code("(es => es | @toObject)")
+        .out("❌", '{"kind":"argument_error","origin":"stdlib","file":"<inline>","operation":"@toObject","status":0,"input":[[1,2]],"expected":["_ ? (xs ? @Array => {\"c\": xs, \"f\": ([_ ? @String, _] => true)} | @all)"]}')
+    end
+  end
+
   describe "@filter" do
     it "keeps array elements where the predicate is truthy" do
       expect_pipe

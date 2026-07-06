@@ -1089,3 +1089,21 @@ into `@OP`.
 ### Cons
 
 - Comparisons don't chain: `a < b < c` is not `a < b && b < c`.
+
+---
+
+## 5.8 Stdlib charter
+
+TODO
+
+---
+
+## 5.9 Object construction and destructuring
+
+TODO
+
+---
+
+## 5.10 The `@Collection` predicate
+
+TODO

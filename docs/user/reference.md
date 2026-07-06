@@ -531,11 +531,13 @@ everything except `false`/`null`, and `@falsey` is its complement.
 | `parseNumber` | string                      | integer or float; `!` if not numeric    |
 | `keys`        | object                      | array of key strings                    |
 | `values`      | object                      | array of values                         |
-| `toObject`    | `[[string-key, value], …]`  | object built from entries; later duplicate keys win |
 
 `concat` (`[string, string]` → concatenation) and `chars` (string → array of its
 characters) are **standard-library** functions built on `join` / `split`, not
-built-ins.
+built-ins. So are `entries` (object → array of its `[key, value]` entries, in
+insertion order; built on `keys`) and `toObject` (`[[string-key, value], …]` →
+object, later duplicate keys win; built on the `[=]` setter). They are inverses:
+`obj | @entries | @toObject` is `obj`.
 
 Indexed read (`x[k]`) and write (`x[k = v]`) are **core syntax**, not built-ins — there
 is no `@get`/`@set`; see §8.
@@ -555,6 +557,7 @@ functions provides a runtime type system.
 | `String`    | strings                              |                    |
 | `Array`     | arrays                               | `[_]`              |
 | `Object`    | objects                              | `{_}`              |
+| `Collection`| arrays and objects                   |                    |
 | `Function`  | any function (builtin, stdlib, user) |                    |
 | `NonFinite` | "Infinity", "-Infinity", "NaN"       |                    |
 

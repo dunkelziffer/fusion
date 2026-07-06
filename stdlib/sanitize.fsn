@@ -6,7 +6,6 @@
 (
   v ? @Function => "<function>",
   v ? @NonFinite => [["<", v | @toString] | @concat, ">"] | @concat,
-  v ? @Array => {"f": @sanitize, "c": v} | @map,
-  v ? @Object => {"f": @sanitize, "c": v} | @map,
+  v ? @Collection => v |: @,
   v => v
 )

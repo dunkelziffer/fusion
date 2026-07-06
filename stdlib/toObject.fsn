@@ -1,0 +1,7 @@
+# Build an object from an array of [key, value] entries; later duplicate keys win.
+# The inverse of @entries: folds the entries onto {} with the [=] setter.
+(
+  entries ? (xs ? @Array => {"c": xs, "f": ([_ ? @String, _] => true)} | @all) =>
+    [{}, ...entries] |+ ([object, [key, value]] => object[key = value]),
+  x => !{"kind": "argument_error", "origin": "stdlib", "operation": "@toObject", "status": 0, "input": x, "expected": ["_ ? (xs ? @Array => {\"c\": xs, \"f\": ([_ ? @String, _] => true)} | @all)"]}
+)

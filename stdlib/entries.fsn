@@ -1,0 +1,6 @@
+# Destructure an object into an array of its [key, value] entries, in insertion
+# order. The inverse of @toObject.
+(
+  obj ? @Object => obj | @keys |: (k => [k, obj[k]]),
+  x => !{"kind": "argument_error", "origin": "stdlib", "operation": "@entries", "status": 0, "input": x, "expected": ["_ ? @Object"]}
+)
