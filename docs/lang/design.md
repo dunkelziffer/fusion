@@ -1067,4 +1067,25 @@ runtime node is the `[=]` setter.
 
 ## 5.7 Comparison operators `<` `<=` `>=` `>`
 
-TODO
+Extends the §5.6 sugar with comparisons; moves the comparison readers from the stdlib
+into `@OP`.
+
+### Decisions
+
+- 🧑 ✅ `a < b` is sugar for `[a, b] | @OP.compare | @OP.lt`; likewise `<=` / `>` / `>=` via `@OP.lte` / `@OP.gt` / `@OP.gte`.
+- 🧑 ✅ The readers `lt` / `gt` / `lte` / `gte` are `@OP` members: they map an exact `@OP.compare` result (`-1`/`0`/`1`) to a boolean, pass `null` through (a partial order's "incomparable"), and reject anything else.
+- 🤖 ✅ The comparisons sit at the ordering level with `??`: binary, left-associative, no folding — `a < b < c` compares a boolean and errors at runtime.
+
+### Alternatives
+
+- 🧑 ⏪ The readers as stdlib helpers (`@lt`, `@gt`, `@lte`, `@gte`), deliberately immune to an `@OP` override. Superseded: as members they live where the sugar points, and the override story stays one object.
+- 🧑 ❌ Four direct pair-comparing members (`[a, b] | @OP.lt`); rejected: four coupled orderings an override would have to keep consistent with `compare`.
+
+### Pros
+
+- `compare` stays the single ordering primitive; the four operators are thin readers of its result.
+- Overriding `compare` alone reskins `a < b` — both desugared steps resolve through the per-directory `@OP`.
+
+### Cons
+
+- Comparisons don't chain: `a < b < c` is not `a < b && b < c`.

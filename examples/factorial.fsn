@@ -1,6 +1,9 @@
 # Factorial: n! for a non-negative integer.
 (
-  _ ? (i ? @Integer => i < 0, _ => true) => !"Only non-negative integers, please!",
-  0 => 1,
-  n => n * (n - 1)|@
+  n ? (i ? @Integer => i >= 0) =>
+    n | (
+      0 => 1,
+      n => n * (n - 1)|@
+    ),
+  _ => !"Only non-negative integers, please!"
 )

@@ -723,9 +723,8 @@ Two built-ins are special in how they resolve:
 - **`@ENV`** resolves (at step 2) to a fresh object of environment variables.
 - **`@load`** resolves (at step 2) to a function that loads a file by a **verbatim**
   filename string — no `.fsn` is appended — relative to the referencing directory,
-  returning that file's value. If the argument is not a string, or the file does not
-  exist, the result is an error (`{"kind":"load_bad_arg",...}` or
-  `{"kind":"file_not_found","path":...}` respectively). This is the only way to load
+  returning that file's value. A non-string argument is an `argument_error`; a
+  missing file is a `reference_error` (`file not found`). This is the only way to load
   a file whose name is computed at runtime or is not a plain identifier (e.g.
   `"data.config.fsn"`).
 

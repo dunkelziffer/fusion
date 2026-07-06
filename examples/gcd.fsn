@@ -1,0 +1,9 @@
+# Greatest common divisor of a pair of non-negative integers (Euclidean algorithm).
+(
+  pair ? ([a ? @Integer, b ? @Integer] => a >= 0 && b >= 0) =>
+    pair | (
+      [a, 0] => a,
+      [a, b] => [b, a % b] | @
+    ),
+  _ => !"Only pairs of non-negative integers, please!"
+)
