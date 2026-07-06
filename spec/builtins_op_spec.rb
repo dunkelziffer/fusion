@@ -8,7 +8,7 @@
 # A wrong input shape or type is an `argument_error` whose `operation` is the
 # member's own reference (`@OP.sum`) and whose `expected` lists the acceptable
 # inputs as Fusion patterns.
-RSpec.describe "@OP builtin" do
+RSpec.describe "@OP builtin", mutant_expression: "Fusion::CLI*" do
   describe "@OP.sum" do
     it "sums an array of arbitrary length" do
       expect_pipe

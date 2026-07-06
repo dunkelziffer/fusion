@@ -4,7 +4,7 @@
 # member access (`@math.round`, `@math.pi`, …). `pi`/`e` are plain values; the rest
 # are one-argument functions. Non-finite inputs to `round`/`floor`/`ceil` and
 # domain errors (log of a non-positive, complex `pow`) are `math_error`s.
-RSpec.describe "@math builtin" do
+RSpec.describe "@math builtin", mutant_expression: "Fusion::CLI*" do
   describe "constants" do
     it "@math.pi" do
       expect_pipe

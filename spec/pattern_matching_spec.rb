@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
 # Core matching semantics: clause selection, wildcards, destructuring and guards.
-RSpec.describe "pattern matching" do
+RSpec.describe "pattern matching", mutant_expression: "Fusion::CLI*" do
   describe "clause selection" do
     it "returns null when nothing matches (lenient)" do
       expect_pipe

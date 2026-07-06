@@ -249,3 +249,31 @@ reach the guards by handing over a bogus node or use case, which is exactly how 
 specs prove they exist (`cli_spec.rb`, `error_kinds_spec.rb` "internal invariant
 guards"). For the same reason the guards carry no `:nocov:` markers: the four with
 such specs count as covered, the rest as honest misses.
+
+## Mutant test selection: the `mutant_expression` tags
+
+Mutation testing (`.mutant.yml`, subjects `Fusion*`) kills a mutation by re-running
+specs **inside the mutant worker's process** — the mutated method exists only in that
+process's memory, never on disk. Two consequences shape how the specs are wired up:
+
+- The subprocess-driven specs (`cli_subprocess_spec.rb`, `repl_pty_spec.rb`) can never
+  kill a mutation: they spawn `exe/fusion`, which loads the pristine code from disk.
+  Their prose describe titles keep them out of selection, deliberately.
+- Mutant does not select tests by coverage. mutant-rspec parses the first word of each
+  example's description into an expression (`RSpec.describe Fusion::CLI` →
+  `Fusion::CLI`); a prose title is unaddressable. The `mutant_expression` metadata is
+  the explicit override, which is why every `expect_pipe` spec file is tagged
+  `mutant_expression: "Fusion::CLI*"` — the entry point the spec harness drives.
+
+For each subject, mutant walks the subject's match expressions most-specific-first —
+`Fusion::Interpreter#load_file`, then `Fusion::Interpreter*`, then `Fusion*` — and
+**stops at the first level that matches any tests**. The tagged battery matches at the
+`Fusion::CLI*` level (CLI subjects, alongside `cli_spec.rb`) and at the `Fusion*`
+fallback (all other subjects).
+
+**Caveat — preemption.** The fallback reaches the tagged specs only because no spec
+file describes an inner scope directly. Adding a `RSpec.describe Fusion::Interpreter`
+file would match at the `Fusion::Interpreter*` level and silently preempt the whole
+tagged battery for every interpreter mutation — most kills would vanish. When adding
+such a file, extend the language specs' tags to cover that scope too
+(`mutant_expression` accepts an array).

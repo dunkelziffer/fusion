@@ -2,7 +2,7 @@
 
 # Comment syntax: whole-line "#" only, no inline comments; raw newlines in
 # strings are forbidden.
-RSpec.describe "comments" do
+RSpec.describe "comments", mutant_expression: "Fusion::CLI*" do
   describe "accepted forms" do
     it "ignores a full-line # comment" do
       expect_pipe

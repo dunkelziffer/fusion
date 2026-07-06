@@ -2,7 +2,7 @@
 
 # How errors interact with ?-predicates: a predicate that errors bubbles, and a
 # !pat ? predicate sees the payload rather than the error wrapper.
-RSpec.describe "errors and ?-predicates" do
+RSpec.describe "errors and ?-predicates", mutant_expression: "Fusion::CLI*" do
   describe "predicate error bubbling" do
     it "makes the function return an error raised inside a predicate" do
       expect_pipe

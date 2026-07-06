@@ -2,7 +2,7 @@
 
 # @-resolution: how @name resolves against sibling files, the stdlib, builtins,
 # self-recursion, @ENV and @load. Fixtures live in spec/fixtures/ref/.
-RSpec.describe "@-resolution" do
+RSpec.describe "@-resolution", mutant_expression: "Fusion::CLI*" do
   describe "sibling files shadow builtins" do
     it "lets a sibling range.fsn shadow @range" do
       expect_pipe
@@ -163,8 +163,7 @@ RSpec.describe "@-resolution" do
     # first load is caught; the array then surfaces the second's error.
     it "a read-failure error reflects the forcing reference, not a cached earlier one" do
       expect_pipe
-        .in("✅", "null")
-        .code('(_ => [("ref/sub/../adir.fsn" | @load) | (! => "_"), "ref/adir.fsn" | @load])')
+        .code('[("ref/sub/../adir.fsn" | @load) | (! => "_"), "ref/adir.fsn" | @load]')
         .out("❌", a_string_including('"kind":"reference_error"', '"origin":"builtin"', '"operation":"@load"', '"input":"ref/adir.fsn"', /"message":"[^"]*directory[^"]*"/))
     end
   end
@@ -239,7 +238,7 @@ RSpec.describe "@-resolution" do
     it "keeps the stdlib and its internal sibling references reachable despite a tight jail" do
       expect_pipe
         .jail("ref/localmath")
-        .code('(_ => {"a": 1, "b": [1e400]} | @sanitize)')
+        .code('{"a": 1, "b": [1e400]} | @sanitize')
         .out("✅", '{"a":1,"b":["<Infinity>"]}')
     end
 

@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
 # Payloaded errors: construction, matching, propagation and recovery.
-RSpec.describe "payloaded errors" do
+RSpec.describe "payloaded errors", mutant_expression: "Fusion::CLI*" do
   describe "construction" do
     it "wraps an integer payload" do
       expect_pipe

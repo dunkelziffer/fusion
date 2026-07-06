@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-RSpec.describe "stdlib error handling" do
+RSpec.describe "stdlib error handling", mutant_expression: "Fusion::CLI*" do
   describe "@range" do
     it "builds [0, n) for a non-negative integer" do
       expect_pipe

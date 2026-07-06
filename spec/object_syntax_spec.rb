@@ -3,7 +3,7 @@
 # Syntactic structure rules for objects (literals and patterns): a fixed key may
 # not repeat, and an object pattern's `...rest` must be the last member. Both are
 # caught at parse time as a syntax_error.
-RSpec.describe "object syntax" do
+RSpec.describe "object syntax", mutant_expression: "Fusion::CLI*" do
   describe "a fixed key may not repeat" do
     [
       ['{"a": 1, "a": 2}',        "duplicate key in an object literal"],
