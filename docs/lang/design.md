@@ -1094,16 +1094,70 @@ into `@OP`.
 
 ## 5.8 Stdlib charter
 
-TODO
+How stdlib functions are written; §5.2 (one function per file) and §5.5 (orthogonality
+to `@OP`) set the frame.
+
+### Decisions
+
+- 🧑 ✅ Stdlib functions never reference `@OP`. `@range` is the grandfathered exception; no new ones.
+- 🧑 ✅ Stdlib functions may build on other stdlib functions.
+- 🧑 ✅ Stdlib and example code uses the map-pipe sugar `|:` `|?` `|+` — except that `map`/`filter`/`reduce` write their own recursion as an explicit self-recursive `… | @`.
+- 🧑 ✅ Validation is structural, in the clause patterns themselves; a positive guard clause (`input ? (…) => computation`) is reserved for conditions patterns cannot express, like `@concat`'s "every element is a string".
+
+### Alternatives
+
+- 🤖 ⏪ Every stdlib function as positive guard → nested computation → error fallback. Rewound: plain clauses read better wherever the condition is structural — pattern matching is the language's strength.
+
+### Pros
+
+- An `OP.fsn` reskin is never silently bypassed by stdlib internals — there is nothing to bypass.
+- The stdlib doubles as idiomatic example code.
+
+### Cons
+
+- Helpers deliberately ignore a local `@OP` override; a reskinning caller must vendor them (§5.5, roadmap).
 
 ---
 
 ## 5.9 Object construction and destructuring
 
-TODO
+### Decisions
+
+- 🧑 ✅ `@entries` destructures an object into its `[key, value]` entries, in insertion order; `@toObject` builds an object from such entries, later duplicate keys winning. They are inverses: `obj | @entries | @toObject` is `obj`.
+- 🔢 ✅ The names complete the JS trio `keys`/`values`/`entries`; `toObject` names its result like `toString`, so a pipe ends in what it produces.
+- 🧑 ✅ Both are stdlib, not builtins: the `[=]` setter makes `toObject` expressible in Fusion, so the Tier-0 rule (§5.3) moves it out of the interpreter.
+
+### Alternatives
+
+- 🤖 ❌ `fromEntries` (the JS couple): in a postfix pipe it names the input you already see, not the result. `fromPairs`/`toPairs` (lodash): "pair" already means any two-element array here.
+
+### Pros
+
+- Computed keys become first-class: destructure, transform the entries, rebuild.
+- `@map`/`@filter` reduce their object case to the array case via `@entries`.
+
+### Cons
+
+- An object pass builds an intermediate entries array.
 
 ---
 
 ## 5.10 The `@Collection` predicate
 
-TODO
+### Decisions
+
+- 🧑 ✅ `@Collection` is a type predicate, true exactly for arrays and objects.
+- 🧑 ✅ All type predicates stay builtins, even derivable ones like this.
+- 🧑 ✅ `expected` patterns use `_ ? @Collection` wherever the acceptable set is exactly "array or object"; alternatives that couple the collection kind to another slot's type (`[]`, `[=]`) stay split, keeping "matches ⇒ acceptable" exact.
+
+### Alternatives
+
+- 🤖 ❌ A stdlib `Collection.fsn` (it is derivable). Rejected: the type predicates stay one uniform builtin family.
+
+### Pros
+
+- The polymorphic collection functions state their contract in one pattern (`c ? @Collection`, `"c": _ ? @Collection`).
+
+### Cons
+
+- Where the array/object alternatives differ in a coupled slot, both spellings coexist.
