@@ -72,14 +72,14 @@ RSpec.describe "stdlib matrix module", mutant_expression: "Fusion::CLI*" do
       expect_pipe
         .in("✅", "[[[1,2]], [[1,2]]]")
         .code("(p => p | @matrix/multiply)")
-        .out("❌", '{"kind":"argument_error","origin":"stdlib","file":"<inline>","operation":"@matrix/multiply","status":0,"input":[[[1,2]],[[1,2]]],"expected":["_ ? ([x ? @matrix/Matrix, y ? @matrix/Matrix] => [x[0] | @size, y | @size] | @@OP.equal)"]}')
+        .out("❌", '{"kind":"argument_error","origin":"stdlib","file":"<inline>","operation":"@matrix/multiply","status":0,"input":[[[1,2]],[[1,2]]],"expected":["_ ? ([x ? @matrix/Matrix, y ? @matrix/Matrix] => [(x | @matrix/size)[1], (y | @matrix/size)[0]] | @@OP.equal)"]}')
     end
 
     it "errors on a non-matrix input" do
       expect_pipe
         .in("✅", "5")
         .code("(p => p | @matrix/multiply)")
-        .out("❌", '{"kind":"argument_error","origin":"stdlib","file":"<inline>","operation":"@matrix/multiply","status":0,"input":5,"expected":["_ ? ([x ? @matrix/Matrix, y ? @matrix/Matrix] => [x[0] | @size, y | @size] | @@OP.equal)"]}')
+        .out("❌", '{"kind":"argument_error","origin":"stdlib","file":"<inline>","operation":"@matrix/multiply","status":0,"input":5,"expected":["_ ? ([x ? @matrix/Matrix, y ? @matrix/Matrix] => [(x | @matrix/size)[1], (y | @matrix/size)[0]] | @@OP.equal)"]}')
     end
   end
 

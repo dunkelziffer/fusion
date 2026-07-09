@@ -53,14 +53,14 @@ RSpec.describe "stdlib vector module", mutant_expression: "Fusion::CLI*" do
       expect_pipe
         .in("✅", "[[1,2],[3,4,5]]")
         .code("(p => p | @vector/dot)")
-        .out("❌", '{"kind":"argument_error","origin":"stdlib","file":"<inline>","operation":"@vector/dot","status":0,"input":[[1,2],[3,4,5]],"expected":["_ ? ([u ? @vector/Vector, v ? @vector/Vector] => [u | @size, v | @size] | @@OP.equal)"]}')
+        .out("❌", '{"kind":"argument_error","origin":"stdlib","file":"<inline>","operation":"@vector/dot","status":0,"input":[[1,2],[3,4,5]],"expected":["_ ? ([u ? @vector/Vector, v ? @vector/Vector] => [u, v] |: @size | @@OP.equal)"]}')
     end
 
     it "errors on a non-number element" do
       expect_pipe
         .in("✅", '[[1,"x"],[3,4]]')
         .code("(p => p | @vector/dot)")
-        .out("❌", '{"kind":"argument_error","origin":"stdlib","file":"<inline>","operation":"@vector/dot","status":0,"input":[[1,"x"],[3,4]],"expected":["_ ? ([u ? @vector/Vector, v ? @vector/Vector] => [u | @size, v | @size] | @@OP.equal)"]}')
+        .out("❌", '{"kind":"argument_error","origin":"stdlib","file":"<inline>","operation":"@vector/dot","status":0,"input":[[1,"x"],[3,4]],"expected":["_ ? ([u ? @vector/Vector, v ? @vector/Vector] => [u, v] |: @size | @@OP.equal)"]}')
     end
   end
 
@@ -76,7 +76,7 @@ RSpec.describe "stdlib vector module", mutant_expression: "Fusion::CLI*" do
       expect_pipe
         .in("✅", "[[1,2],[3,4,5]]")
         .code("(p => p | @vector/add)")
-        .out("❌", '{"kind":"argument_error","origin":"stdlib","file":"<inline>","operation":"@vector/add","status":0,"input":[[1,2],[3,4,5]],"expected":["_ ? ([u ? @vector/Vector, v ? @vector/Vector] => [u | @size, v | @size] | @@OP.equal)"]}')
+        .out("❌", '{"kind":"argument_error","origin":"stdlib","file":"<inline>","operation":"@vector/add","status":0,"input":[[1,2],[3,4,5]],"expected":["_ ? ([u ? @vector/Vector, v ? @vector/Vector] => [u, v] |: @size | @@OP.equal)"]}')
     end
   end
 
@@ -115,7 +115,7 @@ RSpec.describe "stdlib vector module", mutant_expression: "Fusion::CLI*" do
       expect_pipe
         .in("✅", "[[1,2],[3,4,5]]")
         .code("(p => p | @vector/subtract)")
-        .out("❌", '{"kind":"argument_error","origin":"stdlib","file":"<inline>","operation":"@vector/subtract","status":0,"input":[[1,2],[3,4,5]],"expected":["_ ? ([u ? @vector/Vector, v ? @vector/Vector] => [u | @size, v | @size] | @@OP.equal)"]}')
+        .out("❌", '{"kind":"argument_error","origin":"stdlib","file":"<inline>","operation":"@vector/subtract","status":0,"input":[[1,2],[3,4,5]],"expected":["_ ? ([u ? @vector/Vector, v ? @vector/Vector] => [u, v] |: @size | @@OP.equal)"]}')
     end
   end
 

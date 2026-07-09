@@ -1,0 +1,2 @@
+# Solve the linear system a * x = b for x (b a column matrix): x = a⁻¹ * b.
+([a, b] => /a * b)
