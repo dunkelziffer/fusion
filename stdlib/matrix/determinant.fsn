@@ -1,0 +1,16 @@
+# Determinant of a square matrix, by Laplace expansion along the first row: the
+# dot product of the first row with its cofactors (signed minor determinants).
+(
+  m ? (sq ? @Matrix => sq | @size | @@OP.equal) =>
+    m | (
+      [[a]] => a,
+      [firstRow, ...] =>
+        [
+          firstRow,
+          firstRow | @@size | @range |: (j =>
+            [[-1, j] | @math.pow, [m, 0, j] | @minor | @] | @@OP.product
+          ),
+        ] | @vector/dot
+    ),
+  x => !{"kind": "argument_error", "origin": "stdlib", "operation": "@matrix/determinant", "status": 0, "input": x, "expected": ["_ ? (sq ? @matrix/Matrix => sq | @matrix/size | @@OP.equal)"]}
+)

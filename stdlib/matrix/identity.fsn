@@ -1,0 +1,6 @@
+# The n-by-n identity matrix for a positive integer n.
+(
+  n ? (i ? @Integer => [i, 0] | @@OP.compare | @@OP.gt) =>
+    n | @range |: (r => n | @range |: (c => (r == c) | (true => 1, false => 0))),
+  x => !{"kind": "argument_error", "origin": "stdlib", "operation": "@matrix/identity", "status": 0, "input": x, "expected": ["_ ? (n ? @Integer => [n, 0] | @@OP.compare | @@OP.gt)"]}
+)

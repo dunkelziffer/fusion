@@ -152,6 +152,12 @@ Only files in *that* directory are affected; everything else keeps the defaults.
 check whether a directory changed the operators, look for an `OP.fsn` — there is no
 other way to change them.
 
+The standard library ships one ready-made reskin: an `OP.fsn` containing just
+`@matrix/OP` gives the directory matrix arithmetic — `a + b` elementwise, `a * b`
+the matrix product, `a / b` multiplication by the inverse, `%`/`//` always an
+error — built on the helpers `@matrix/multiply`, `@matrix/determinant`,
+`@matrix/scale`, and `@matrix/rotate`.
+
 ### Making a named derived helper follow your override
 
 Most stdlib helpers are deliberately **immune** to your override, so a reskin can't

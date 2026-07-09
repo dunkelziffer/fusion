@@ -1,0 +1,6 @@
+# Zip a pair of equal-length arrays into an array of [left, right] pairs.
+(
+  [xs, ys] ? ([a ? @Array, b ? @Array] => [a | @size, b | @size] | @@OP.equal) =>
+    xs | @size | @range |: (k => [xs[k], ys[k]]),
+  x => !{"kind": "argument_error", "origin": "stdlib", "operation": "@zip", "status": 0, "input": x, "expected": ["_ ? ([xs ? @Array, ys ? @Array] => [xs | @size, ys | @size] | @@OP.equal)"]}
+)

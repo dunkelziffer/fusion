@@ -1,0 +1,7 @@
+# Subtract the second matrix from the first, elementwise: a + (-1 * b).
+# Input: [a, b].
+(
+  [a, b] ? ([x ? @Matrix, y ? @Matrix] => [x, y] |: @size | @@OP.equal) =>
+    [a, [-1, b] | @scale] | @add,
+  x => !{"kind": "argument_error", "origin": "stdlib", "operation": "@matrix/subtract", "status": 0, "input": x, "expected": ["_ ? ([a ? @matrix/Matrix, b ? @matrix/Matrix] => [a, b] |: @matrix/size | @@OP.equal)"]}
+)

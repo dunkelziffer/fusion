@@ -377,6 +377,36 @@ RSpec.describe "stdlib error handling", mutant_expression: "Fusion::CLI*" do
     end
   end
 
+  describe "@zip" do
+    it "zips a pair of equal-length arrays into pairs" do
+      expect_pipe
+        .in("✅", '[[1,2],["a","b"]]')
+        .code("(p => p | @zip)")
+        .out("✅", '[[1,"a"],[2,"b"]]')
+    end
+
+    it "zips two empty arrays into the empty array" do
+      expect_pipe
+        .in("✅", "[[],[]]")
+        .code("(p => p | @zip)")
+        .out("✅", "[]")
+    end
+
+    it "errors on a length mismatch" do
+      expect_pipe
+        .in("✅", "[[1,2],[3,4,5]]")
+        .code("(p => p | @zip)")
+        .out("❌", '{"kind":"argument_error","origin":"stdlib","file":"<inline>","operation":"@zip","status":0,"input":[[1,2],[3,4,5]],"expected":["_ ? ([xs ? @Array, ys ? @Array] => [xs | @size, ys | @size] | @@OP.equal)"]}')
+    end
+
+    it "errors on a non-array operand" do
+      expect_pipe
+        .in("✅", "[[1,2],5]")
+        .code("(p => p | @zip)")
+        .out("❌", '{"kind":"argument_error","origin":"stdlib","file":"<inline>","operation":"@zip","status":0,"input":[[1,2],5],"expected":["_ ? ([xs ? @Array, ys ? @Array] => [xs | @size, ys | @size] | @@OP.equal)"]}')
+    end
+  end
+
   describe "@filter" do
     it "keeps array elements where the predicate is truthy" do
       expect_pipe

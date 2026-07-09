@@ -1161,3 +1161,9 @@ to `@OP`) set the frame.
 ### Cons
 
 - Where the array/object alternatives differ in a coupled slot, both spellings coexist.
+
+---
+
+## 5.11 The matrix and vector modules
+
+TODO

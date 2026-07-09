@@ -1,0 +1,11 @@
+# Cross product of two 3-dimensional vectors: [a, b, c] x [d, e, f] is
+# [b*f - c*e, c*d - a*f, a*e - b*d].
+(
+  [[a ? @Number, b ? @Number, c ? @Number], [d ? @Number, e ? @Number, f ? @Number]] =>
+    [
+      [[b, f] | @@OP.product, [c, e] | @@OP.product | @@OP.negate] | @@OP.sum,
+      [[c, d] | @@OP.product, [a, f] | @@OP.product | @@OP.negate] | @@OP.sum,
+      [[a, e] | @@OP.product, [b, d] | @@OP.product | @@OP.negate] | @@OP.sum,
+    ],
+  x => !{"kind": "argument_error", "origin": "stdlib", "operation": "@vector/cross", "status": 0, "input": x, "expected": ["[[_ ? @Number, _ ? @Number, _ ? @Number], [_ ? @Number, _ ? @Number, _ ? @Number]]"]}
+)

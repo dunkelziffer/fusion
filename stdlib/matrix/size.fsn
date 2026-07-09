@@ -1,0 +1,6 @@
+# The dimensions of a matrix, as [rows, columns]. This file shadows the builtin
+# @size inside stdlib/matrix — the module's own files reach the builtin as @@size.
+(
+  m ? @Matrix => [m | @@size, m[0] | @@size],
+  x => !{"kind": "argument_error", "origin": "stdlib", "operation": "@matrix/size", "status": 0, "input": x, "expected": ["_ ? @matrix/Matrix"]}
+)

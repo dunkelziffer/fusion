@@ -1,0 +1,7 @@
+# Add two equally sized matrices elementwise: zip the rows and add each pair
+# through @vector/add. Input: [a, b].
+(
+  [a, b] ? ([x ? @Matrix, y ? @Matrix] => [x, y] |: @size | @@OP.equal) =>
+    [a, b] | @zip |: (rows => rows | @vector/add),
+  x => !{"kind": "argument_error", "origin": "stdlib", "operation": "@matrix/add", "status": 0, "input": x, "expected": ["_ ? ([a ? @matrix/Matrix, b ? @matrix/Matrix] => [a, b] |: @matrix/size | @@OP.equal)"]}
+)

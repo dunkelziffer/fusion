@@ -1,0 +1,10 @@
+# Matrix multiplication of a pair [a, b]: a's column count must equal b's row
+# count. Entry (i, j) is the dot product of a's row i and b's column j — the
+# columns are the rows of the transposed b, computed once.
+(
+  [a, b] ? ([x ? @Matrix, y ? @Matrix] => [x[0] | @@size, y | @@size] | @@OP.equal) =>
+    b | @transpose | (columns =>
+      a |: (row => columns |: (column => [row, column] | @vector/dot))
+    ),
+  x => !{"kind": "argument_error", "origin": "stdlib", "operation": "@matrix/multiply", "status": 0, "input": x, "expected": ["_ ? ([x ? @matrix/Matrix, y ? @matrix/Matrix] => [x[0] | @size, y | @size] | @@OP.equal)"]}
+)

@@ -1,0 +1,5 @@
+# Transpose a matrix: its columns become its rows.
+(
+  m ? @Matrix => m[0] | @@size | @range |: (j => [m, j] | @column),
+  x => !{"kind": "argument_error", "origin": "stdlib", "operation": "@matrix/transpose", "status": 0, "input": x, "expected": ["_ ? @matrix/Matrix"]}
+)

@@ -1,0 +1,16 @@
+# The operators reskinned for matrices. Point a directory's OP.fsn at
+# `@matrix/OP` to make the arithmetic sugar operate on matrices: `a + b`
+# (elementwise sum), `-a` / `a - b` (elementwise negation), `a * b` (matrix
+# product), `/a` (inverse), `a / b` (multiply by the inverse). `//` and `%`
+# have no matrix meaning and always raise. The spread keeps every other member
+# (equal, compare and its readers, the boolean operators) at its builtin
+# meaning — this module's own files rely on that for `==` and `~`.
+{
+  ...@@,
+  "sum": @sum,
+  "negate": @negate,
+  "product": @product,
+  "invert": @invert,
+  "quotient": (x => !{"kind": "math_error", "origin": "stdlib", "operation": "@matrix/OP.quotient", "status": 0, "input": x, "message": "integer division is not defined for matrices"}),
+  "modulo": (x => !{"kind": "math_error", "origin": "stdlib", "operation": "@matrix/OP.modulo", "status": 0, "input": x, "message": "modulo is not defined for matrices"}),
+}

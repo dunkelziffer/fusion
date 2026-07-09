@@ -1,0 +1,5 @@
+# Negate a matrix elementwise. Built on @matrix/scale.
+(
+  m ? @Matrix => [-1, m] | @scale,
+  x => !{"kind": "argument_error", "origin": "stdlib", "operation": "@matrix/negate", "status": 0, "input": x, "expected": ["_ ? @matrix/Matrix"]}
+)

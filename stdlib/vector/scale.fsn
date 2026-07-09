@@ -1,0 +1,5 @@
+# Scale a vector elementwise by a single number. Input: [number, vector].
+(
+  [s ? @Number, v ? @Vector] => v |: (entry => [s, entry] | @@OP.product),
+  x => !{"kind": "argument_error", "origin": "stdlib", "operation": "@vector/scale", "status": 0, "input": x, "expected": ["[_ ? @Number, _ ? @vector/Vector]"]}
+)

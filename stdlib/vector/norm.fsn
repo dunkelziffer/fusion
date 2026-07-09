@@ -1,0 +1,6 @@
+# Euclidean norm (length) of a vector: the square root of the dot product with
+# itself. Always a float.
+(
+  v ? @Vector => [v, v] | @dot | @math.sqrt,
+  x => !{"kind": "argument_error", "origin": "stdlib", "operation": "@vector/norm", "status": 0, "input": x, "expected": ["_ ? @vector/Vector"]}
+)
