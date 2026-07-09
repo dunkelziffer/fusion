@@ -532,9 +532,9 @@ everything except `false`/`null`, and `@falsey` is its complement.
 | `keys`        | object                      | array of key strings                    |
 | `values`      | object                      | array of values                         |
 
-`concat` (`[string, string]` → concatenation) and `chars` (string → array of its
-characters) are **standard-library** functions built on `join` / `split`, not
-built-ins. So are `entries` (object → array of its `[key, value]` entries, in
+`concat` (array of strings, any length → concatenation) and `chars` (string →
+array of its characters) are **standard-library** functions built on `join` /
+`split`, not built-ins. So are `entries` (object → array of its `[key, value]` entries, in
 insertion order; built on `keys`) and `toObject` (`[[string-key, value], …]` →
 object, later duplicate keys win; built on the `[=]` setter). They are inverses:
 `obj | @entries | @toObject` is `obj`.

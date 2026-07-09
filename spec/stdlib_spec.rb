@@ -210,13 +210,21 @@ RSpec.describe "stdlib error handling", mutant_expression: "Fusion::CLI*" do
   end
 
   # @concat and @chars are stdlib wrappers over the @join / @split builtins, so
-  # their argument_errors report origin "stdlib".
+  # their argument_errors report origin "stdlib". @concat is n-ary: it joins an
+  # array of any number of strings.
   describe "@concat" do
     it "concatenates two strings" do
       expect_pipe
         .in("✅", '["a","b"]')
         .code("(p => p | @concat)")
         .out("✅", '"ab"')
+    end
+
+    it "concatenates a run of strings" do
+      expect_pipe
+        .in("✅", '["a","b","c"]')
+        .code("(p => p | @concat)")
+        .out("✅", '"abc"')
     end
 
     it "concatenates with an empty string" do
@@ -226,18 +234,32 @@ RSpec.describe "stdlib error handling", mutant_expression: "Fusion::CLI*" do
         .out("✅", '"x"')
     end
 
+    it "returns the sole element of a single-string array" do
+      expect_pipe
+        .in("✅", '["a"]')
+        .code("(p => p | @concat)")
+        .out("✅", '"a"')
+    end
+
+    it "is the empty string for the empty array" do
+      expect_pipe
+        .in("✅", "[]")
+        .code("(p => p | @concat)")
+        .out("✅", '""')
+    end
+
     it "errors when an element is not a string" do
       expect_pipe
         .in("✅", '["a",1]')
         .code("(p => p | @concat)")
-        .out("❌", '{"kind":"argument_error","origin":"stdlib","file":"<inline>","operation":"@concat","status":0,"input":["a",1],"expected":["[_ ? @String, _ ? @String]"]}')
+        .out("❌", '{"kind":"argument_error","origin":"stdlib","file":"<inline>","operation":"@concat","status":0,"input":["a",1],"expected":["_ ? (xs ? @Array => {\"c\": xs, \"f\": @String} | @all)"]}')
     end
 
-    it "errors on a non-pair" do
+    it "errors on a non-array" do
       expect_pipe
-        .in("✅", '["a"]')
+        .in("✅", "5")
         .code("(p => p | @concat)")
-        .out("❌", '{"kind":"argument_error","origin":"stdlib","file":"<inline>","operation":"@concat","status":0,"input":["a"],"expected":["[_ ? @String, _ ? @String]"]}')
+        .out("❌", '{"kind":"argument_error","origin":"stdlib","file":"<inline>","operation":"@concat","status":0,"input":5,"expected":["_ ? (xs ? @Array => {\"c\": xs, \"f\": @String} | @all)"]}')
     end
   end
 
