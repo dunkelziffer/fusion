@@ -126,6 +126,66 @@ array again to compare its two ends.
 
 ---
 
+## Short-circuit a chain of checks
+
+`&&` and `||` are **eager**. `a && b` desugars to `[a, b] | @OP.and` — an array
+piped into a function — so both operands are computed before the operator sees
+them. The same goes for a conditions array like `[a, b, c] | @all`: an array
+literal evaluates all of its elements, and if one of them is an error, the
+error propagates out of the literal immediately. No piped form can keep its
+input from being computed.
+
+The one place where Fusion is lazy is a **clause body**: it evaluates only when
+its clause's pattern matches. To run check B only if check A passed, put B in a
+body that A's success selects. For boolean conditions:
+
+```fusion
+a | (true => b, _ => false)   # short-circuiting a && b
+a | (true => true, _ => b)    # short-circuiting a || b
+```
+
+For example, `x | @Array | (true => x | @size > 0, _ => false)` safely tests
+"a non-empty array": fed `5`, it yields `false` without ever piping the number
+into `@size`.
+
+In a guard, the same sequencing falls out of the stages pattern → predicate →
+body, each of which runs only after the previous one succeeded. `@zip`
+validates "a pair of equal-length arrays" like this:
+
+```fusion
+[xs, ys] ? ([a ? @Array, b ? @Array] => a | @size == b | @size)
+```
+
+The size comparison lives in the predicate's body, so it is computed only after
+the pattern has established that both elements are arrays — `@size` can never
+see a non-array. For longer chains, nest another predicate between pattern and
+body. `@matrix/sum` checks "a non-empty array, all matrices, all of equal
+dimensions", in that order:
+
+```fusion
+matrices ? ([first, ...rest] ? (list => {"c": list, "f": @Matrix} | @all) =>
+    [first, ...rest] |: @dimensions | @OP.equal)
+```
+
+Sequencing matters because a predicate that *errors* does not fall through to
+the next clause — the error propagates. Fed `[5]`, a flat guard
+`(ms => {"c": ms, "f": @Matrix} | @all && ms |: @dimensions | @OP.equal)` would
+compute both `&&` operands and leak `@matrix/dimensions`'s error; the sequenced
+guard never computes the dimensions, fails cleanly, and falls through to the
+function's own error clause.
+
+Eager conditions are fine when they are safe on the already-matched input.
+After `[x ? @Matrix, row ? @Integer, col ? @Integer]` has matched, bounds
+checks like `row >= 0 && row < x | @size` cannot error, and the flat `&&`
+chain reads best — the structural pattern is what bought that safety.
+
+(`@all` and `@any` do short-circuit, but at the level of applying their
+predicate to already-computed items: the first falsey/truthy item stops the
+testing. That protects against a predicate erroring on a later item, not
+against computing the items themselves.)
+
+---
+
 ## Shadow a built-in or stdlib function locally
 
 Because a sibling file wins over a built-in or the standard library, you can override
