@@ -1,16 +1,12 @@
 # The minor of a matrix: drop row r and column c. Input: [matrix, r, c]. The
 # matrix must be at least 2 by 2, so the minor is a matrix again.
 (
-  [m, r, c] ? ([x ? @Matrix, row ? @Integer, col ? @Integer] => [
-      [row, 0] | @@OP.compare | @@OP.gte,
-      [row, x | @@size] | @@OP.compare | @@OP.lt,
-      [col, 0] | @@OP.compare | @@OP.gte,
-      [col, x[0] | @@size] | @@OP.compare | @@OP.lt,
-      [x | @@size, 2] | @@OP.compare | @@OP.gte,
-      [x[0] | @@size, 2] | @@OP.compare | @@OP.gte,
-    ] | @@OP.and) =>
-    m | @@size | @range |? (k => ~(k == r)) |: (k =>
-      m[k] | @@size | @range |? (l => ~(l == c)) |: (l => m[k][l])
+  [m, r, c] ? ([x ? @Matrix, row ? @Integer, col ? @Integer] =>
+      row >= 0 && row < x | @size &&
+      col >= 0 && col < x[0] | @size &&
+      x | @size >= 2 && x[0] | @size >= 2) =>
+    m | @size | @range |? (k => ~(k == r)) |: (k =>
+      m[k] | @size | @range |? (l => ~(l == c)) |: (l => m[k][l])
     ),
-  x => !{"kind": "argument_error", "origin": "stdlib", "operation": "@matrix/minor", "status": 0, "input": x, "expected": ["_ ? ([m ? @matrix/Matrix, r ? @Integer, c ? @Integer] => [[r, 0] | @@OP.compare | @@OP.gte, [r, m | @size] | @@OP.compare | @@OP.lt, [c, 0] | @@OP.compare | @@OP.gte, [c, m[0] | @size] | @@OP.compare | @@OP.lt, [m | @size, 2] | @@OP.compare | @@OP.gte, [m[0] | @size, 2] | @@OP.compare | @@OP.gte] | @@OP.and)"]}
+  x => !{"kind": "argument_error", "origin": "stdlib", "operation": "@matrix/minor", "status": 0, "input": x, "expected": ["_ ? ([m ? @matrix/Matrix, r ? @Integer, c ? @Integer] => r >= 0 && r < m | @size && c >= 0 && c < m[0] | @size && m | @size >= 2 && m[0] | @size >= 2)"]}
 )

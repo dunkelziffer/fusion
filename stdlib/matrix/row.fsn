@@ -1,6 +1,6 @@
 # Extract the i-th (0-based) row of a matrix as a vector. Input: [matrix, index].
 (
-  [m, i] ? ([x ? @Matrix, n ? @Integer] => [[n, 0] | @@OP.compare | @@OP.gte, [n, x | @@size] | @@OP.compare | @@OP.lt] | @@OP.and) =>
+  [m, i] ? ([x ? @Matrix, n ? @Integer] => n >= 0 && n < x | @size) =>
     m[i],
-  x => !{"kind": "argument_error", "origin": "stdlib", "operation": "@matrix/row", "status": 0, "input": x, "expected": ["_ ? ([m ? @matrix/Matrix, i ? @Integer] => [[i, 0] | @@OP.compare | @@OP.gte, [i, m | @size] | @@OP.compare | @@OP.lt] | @@OP.and)"]}
+  x => !{"kind": "argument_error", "origin": "stdlib", "operation": "@matrix/row", "status": 0, "input": x, "expected": ["_ ? ([m ? @matrix/Matrix, i ? @Integer] => i >= 0 && i < m | @size)"]}
 )

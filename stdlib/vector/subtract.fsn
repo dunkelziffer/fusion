@@ -1,6 +1,6 @@
 # Subtract the second vector from the first, elementwise: u + (-1 * v).
 (
-  [u, v] ? ([a ? @Vector, b ? @Vector] => [a, b] |: @size | @@OP.equal) =>
+  [u, v] ? ([a ? @Vector, b ? @Vector] => [a, b] |: @size | @OP.equal) =>
     [u, [-1, v] | @scale] | @add,
-  x => !{"kind": "argument_error", "origin": "stdlib", "operation": "@vector/subtract", "status": 0, "input": x, "expected": ["_ ? ([u ? @vector/Vector, v ? @vector/Vector] => [u, v] |: @size | @@OP.equal)"]}
+  x => !{"kind": "argument_error", "origin": "stdlib", "operation": "@vector/subtract", "status": 0, "input": x, "expected": ["_ ? ([u ? @vector/Vector, v ? @vector/Vector] => [u, v] |: @size | @OP.equal)"]}
 )

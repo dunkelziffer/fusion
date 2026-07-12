@@ -72,14 +72,14 @@ RSpec.describe "stdlib matrix module", mutant_expression: "Fusion::CLI*" do
       expect_pipe
         .in("✅", "[[[1,2]], [[1,2]]]")
         .code("(p => p | @matrix/multiply)")
-        .out("❌", '{"kind":"argument_error","origin":"stdlib","file":"<inline>","operation":"@matrix/multiply","status":0,"input":[[[1,2]],[[1,2]]],"expected":["_ ? ([x ? @matrix/Matrix, y ? @matrix/Matrix] => [(x | @matrix/size)[1], (y | @matrix/size)[0]] | @@OP.equal)"]}')
+        .out("❌", '{"kind":"argument_error","origin":"stdlib","file":"<inline>","operation":"@matrix/multiply","status":0,"input":[[[1,2]],[[1,2]]],"expected":["_ ? ([x ? @matrix/Matrix, y ? @matrix/Matrix] => (x | @matrix/dimensions)[1] == (y | @matrix/dimensions)[0])"]}')
     end
 
     it "errors on a non-matrix input" do
       expect_pipe
         .in("✅", "5")
         .code("(p => p | @matrix/multiply)")
-        .out("❌", '{"kind":"argument_error","origin":"stdlib","file":"<inline>","operation":"@matrix/multiply","status":0,"input":5,"expected":["_ ? ([x ? @matrix/Matrix, y ? @matrix/Matrix] => [(x | @matrix/size)[1], (y | @matrix/size)[0]] | @@OP.equal)"]}')
+        .out("❌", '{"kind":"argument_error","origin":"stdlib","file":"<inline>","operation":"@matrix/multiply","status":0,"input":5,"expected":["_ ? ([x ? @matrix/Matrix, y ? @matrix/Matrix] => (x | @matrix/dimensions)[1] == (y | @matrix/dimensions)[0])"]}')
     end
   end
 
@@ -109,7 +109,7 @@ RSpec.describe "stdlib matrix module", mutant_expression: "Fusion::CLI*" do
       expect_pipe
         .in("✅", "[[1,2,3],[4,5,6]]")
         .code("(m => m | @matrix/determinant)")
-        .out("❌", '{"kind":"argument_error","origin":"stdlib","file":"<inline>","operation":"@matrix/determinant","status":0,"input":[[1,2,3],[4,5,6]],"expected":["_ ? (sq ? @matrix/Matrix => sq | @matrix/size | @@OP.equal)"]}')
+        .out("❌", '{"kind":"argument_error","origin":"stdlib","file":"<inline>","operation":"@matrix/determinant","status":0,"input":[[1,2,3],[4,5,6]],"expected":["_ ? (sq ? @matrix/Matrix => sq | @matrix/dimensions | @OP.equal)"]}')
     end
   end
 
@@ -183,14 +183,14 @@ RSpec.describe "stdlib matrix module", mutant_expression: "Fusion::CLI*" do
       expect_pipe
         .in("✅", "[[[1,2],[3,4]], 2]")
         .code("(p => p | @matrix/column)")
-        .out("❌", '{"kind":"argument_error","origin":"stdlib","file":"<inline>","operation":"@matrix/column","status":0,"input":[[[1,2],[3,4]],2],"expected":["_ ? ([m ? @matrix/Matrix, i ? @Integer] => [[i, 0] | @@OP.compare | @@OP.gte, [i, m[0] | @size] | @@OP.compare | @@OP.lt] | @@OP.and)"]}')
+        .out("❌", '{"kind":"argument_error","origin":"stdlib","file":"<inline>","operation":"@matrix/column","status":0,"input":[[[1,2],[3,4]],2],"expected":["_ ? ([m ? @matrix/Matrix, i ? @Integer] => i >= 0 && i < m[0] | @size)"]}')
     end
 
     it "errors on a negative index (0-based, strict)" do
       expect_pipe
         .in("✅", "[[[1,2],[3,4]], -1]")
         .code("(p => p | @matrix/column)")
-        .out("❌", '{"kind":"argument_error","origin":"stdlib","file":"<inline>","operation":"@matrix/column","status":0,"input":[[[1,2],[3,4]],-1],"expected":["_ ? ([m ? @matrix/Matrix, i ? @Integer] => [[i, 0] | @@OP.compare | @@OP.gte, [i, m[0] | @size] | @@OP.compare | @@OP.lt] | @@OP.and)"]}')
+        .out("❌", '{"kind":"argument_error","origin":"stdlib","file":"<inline>","operation":"@matrix/column","status":0,"input":[[[1,2],[3,4]],-1],"expected":["_ ? ([m ? @matrix/Matrix, i ? @Integer] => i >= 0 && i < m[0] | @size)"]}')
     end
   end
 
@@ -206,7 +206,7 @@ RSpec.describe "stdlib matrix module", mutant_expression: "Fusion::CLI*" do
       expect_pipe
         .in("✅", "[[[1,2],[3,4]], 2]")
         .code("(p => p | @matrix/row)")
-        .out("❌", '{"kind":"argument_error","origin":"stdlib","file":"<inline>","operation":"@matrix/row","status":0,"input":[[[1,2],[3,4]],2],"expected":["_ ? ([m ? @matrix/Matrix, i ? @Integer] => [[i, 0] | @@OP.compare | @@OP.gte, [i, m | @size] | @@OP.compare | @@OP.lt] | @@OP.and)"]}')
+        .out("❌", '{"kind":"argument_error","origin":"stdlib","file":"<inline>","operation":"@matrix/row","status":0,"input":[[[1,2],[3,4]],2],"expected":["_ ? ([m ? @matrix/Matrix, i ? @Integer] => i >= 0 && i < m | @size)"]}')
     end
   end
 
@@ -233,21 +233,19 @@ RSpec.describe "stdlib matrix module", mutant_expression: "Fusion::CLI*" do
     end
   end
 
-  # @matrix/size shadows the builtin @size for files inside stdlib/matrix; the
-  # module's own files reach the builtin as @@size.
-  describe "@matrix/size" do
+  describe "@matrix/dimensions" do
     it "reports the dimensions as [rows, columns]" do
       expect_pipe
         .in("✅", "[[1,2,3],[4,5,6]]")
-        .code("(m => m | @matrix/size)")
+        .code("(m => m | @matrix/dimensions)")
         .out("✅", "[2,3]")
     end
 
     it "errors on a non-matrix" do
       expect_pipe
         .in("✅", "5")
-        .code("(m => m | @matrix/size)")
-        .out("❌", '{"kind":"argument_error","origin":"stdlib","file":"<inline>","operation":"@matrix/size","status":0,"input":5,"expected":["_ ? @matrix/Matrix"]}')
+        .code("(m => m | @matrix/dimensions)")
+        .out("❌", '{"kind":"argument_error","origin":"stdlib","file":"<inline>","operation":"@matrix/dimensions","status":0,"input":5,"expected":["_ ? @matrix/Matrix"]}')
     end
   end
 
@@ -263,7 +261,7 @@ RSpec.describe "stdlib matrix module", mutant_expression: "Fusion::CLI*" do
       expect_pipe
         .in("✅", "[[[5]], 0, 0]")
         .code("(p => p | @matrix/minor)")
-        .out("❌", '{"kind":"argument_error","origin":"stdlib","file":"<inline>","operation":"@matrix/minor","status":0,"input":[[[5]],0,0],"expected":["_ ? ([m ? @matrix/Matrix, r ? @Integer, c ? @Integer] => [[r, 0] | @@OP.compare | @@OP.gte, [r, m | @size] | @@OP.compare | @@OP.lt, [c, 0] | @@OP.compare | @@OP.gte, [c, m[0] | @size] | @@OP.compare | @@OP.lt, [m | @size, 2] | @@OP.compare | @@OP.gte, [m[0] | @size, 2] | @@OP.compare | @@OP.gte] | @@OP.and)"]}')
+        .out("❌", '{"kind":"argument_error","origin":"stdlib","file":"<inline>","operation":"@matrix/minor","status":0,"input":[[[5]],0,0],"expected":["_ ? ([m ? @matrix/Matrix, r ? @Integer, c ? @Integer] => r >= 0 && r < m | @size && c >= 0 && c < m[0] | @size && m | @size >= 2 && m[0] | @size >= 2)"]}')
     end
   end
 
@@ -279,7 +277,7 @@ RSpec.describe "stdlib matrix module", mutant_expression: "Fusion::CLI*" do
       expect_pipe
         .in("✅", "[[[1,2]], [[1,2],[3,4]]]")
         .code("(p => p | @matrix/subtract)")
-        .out("❌", '{"kind":"argument_error","origin":"stdlib","file":"<inline>","operation":"@matrix/subtract","status":0,"input":[[[1,2]],[[1,2],[3,4]]],"expected":["_ ? ([a ? @matrix/Matrix, b ? @matrix/Matrix] => [a, b] |: @matrix/size | @@OP.equal)"]}')
+        .out("❌", '{"kind":"argument_error","origin":"stdlib","file":"<inline>","operation":"@matrix/subtract","status":0,"input":[[[1,2]],[[1,2],[3,4]]],"expected":["_ ? ([a ? @matrix/Matrix, b ? @matrix/Matrix] => [a, b] |: @matrix/dimensions | @OP.equal)"]}')
     end
   end
 
@@ -302,7 +300,7 @@ RSpec.describe "stdlib matrix module", mutant_expression: "Fusion::CLI*" do
       expect_pipe
         .in("✅", "0")
         .code("(n => n | @matrix/identity)")
-        .out("❌", '{"kind":"argument_error","origin":"stdlib","file":"<inline>","operation":"@matrix/identity","status":0,"input":0,"expected":["_ ? (n ? @Integer => [n, 0] | @@OP.compare | @@OP.gt)"]}')
+        .out("❌", '{"kind":"argument_error","origin":"stdlib","file":"<inline>","operation":"@matrix/identity","status":0,"input":0,"expected":["_ ? (n ? @Integer => n > 0)"]}')
     end
   end
 
@@ -318,14 +316,14 @@ RSpec.describe "stdlib matrix module", mutant_expression: "Fusion::CLI*" do
       expect_pipe
         .in("✅", "[[[1,2]], [[1,2],[3,4]]]")
         .code("(p => p | @matrix/add)")
-        .out("❌", '{"kind":"argument_error","origin":"stdlib","file":"<inline>","operation":"@matrix/add","status":0,"input":[[[1,2]],[[1,2],[3,4]]],"expected":["_ ? ([a ? @matrix/Matrix, b ? @matrix/Matrix] => [a, b] |: @matrix/size | @@OP.equal)"]}')
+        .out("❌", '{"kind":"argument_error","origin":"stdlib","file":"<inline>","operation":"@matrix/add","status":0,"input":[[[1,2]],[[1,2],[3,4]]],"expected":["_ ? ([a ? @matrix/Matrix, b ? @matrix/Matrix] => [a, b] |: @matrix/dimensions | @OP.equal)"]}')
     end
 
     it "errors on a non-matrix operand" do
       expect_pipe
         .in("✅", "[[[1,2],[3,4]], 5]")
         .code("(p => p | @matrix/add)")
-        .out("❌", '{"kind":"argument_error","origin":"stdlib","file":"<inline>","operation":"@matrix/add","status":0,"input":[[[1,2],[3,4]],5],"expected":["_ ? ([a ? @matrix/Matrix, b ? @matrix/Matrix] => [a, b] |: @matrix/size | @@OP.equal)"]}')
+        .out("❌", '{"kind":"argument_error","origin":"stdlib","file":"<inline>","operation":"@matrix/add","status":0,"input":[[[1,2],[3,4]],5],"expected":["_ ? ([a ? @matrix/Matrix, b ? @matrix/Matrix] => [a, b] |: @matrix/dimensions | @OP.equal)"]}')
     end
   end
 
@@ -341,7 +339,7 @@ RSpec.describe "stdlib matrix module", mutant_expression: "Fusion::CLI*" do
       expect_pipe
         .in("✅", "[[[1,2]], [[1,2],[3,4]]]")
         .code("(ms => ms | @matrix/OP.sum)")
-        .out("❌", '{"kind":"argument_error","origin":"stdlib","file":"<inline>","operation":"@matrix/sum","status":0,"input":[[[1,2]],[[1,2],[3,4]]],"expected":["_ ? ([first, ...rest] ? (list => {\"c\": list, \"f\": @matrix/Matrix} | @all) => [first, ...rest] |: @matrix/size | @@OP.equal)"]}')
+        .out("❌", '{"kind":"argument_error","origin":"stdlib","file":"<inline>","operation":"@matrix/sum","status":0,"input":[[[1,2]],[[1,2],[3,4]]],"expected":["_ ? ([first, ...rest] ? (list => {\"c\": list, \"f\": @matrix/Matrix} | @all) => [first, ...rest] |: @matrix/dimensions | @OP.equal)"]}')
     end
 
     it "negates elementwise" do

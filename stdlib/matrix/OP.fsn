@@ -4,7 +4,9 @@
 # product), `/a` (inverse), `a / b` (multiply by the inverse). `//` and `%`
 # have no matrix meaning and always raise. The spread keeps every other member
 # (equal, compare and its readers, the boolean operators) at its builtin
-# meaning — this module's own files rely on that for `==` and `~`.
+# meaning — this module's own files rely on that: they use the comparison and
+# boolean sugar and plain `@OP` references freely, and reserve `@@OP` for the
+# scalar versions of the arithmetic members this file overrides.
 {
   ...@@,
   "sum": @sum,

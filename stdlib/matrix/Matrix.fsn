@@ -3,7 +3,7 @@
 (
   rows ? ([_, ...] => true) =>
     {"c": rows, "f": @vector/Vector} | @all | (
-      true => rows |: @@size | @@OP.equal,
+      true => rows |: @size | @OP.equal,
       _    => false
     ),
   _ => false

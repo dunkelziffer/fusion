@@ -396,14 +396,14 @@ RSpec.describe "stdlib error handling", mutant_expression: "Fusion::CLI*" do
       expect_pipe
         .in("✅", "[[1,2],[3,4,5]]")
         .code("(p => p | @zip)")
-        .out("❌", '{"kind":"argument_error","origin":"stdlib","file":"<inline>","operation":"@zip","status":0,"input":[[1,2],[3,4,5]],"expected":["_ ? ([xs ? @Array, ys ? @Array] => [xs | @size, ys | @size] | @@OP.equal)"]}')
+        .out("❌", '{"kind":"argument_error","origin":"stdlib","file":"<inline>","operation":"@zip","status":0,"input":[[1,2],[3,4,5]],"expected":["_ ? ([xs ? @Array, ys ? @Array] => xs | @size == ys | @size)"]}')
     end
 
     it "errors on a non-array operand" do
       expect_pipe
         .in("✅", "[[1,2],5]")
         .code("(p => p | @zip)")
-        .out("❌", '{"kind":"argument_error","origin":"stdlib","file":"<inline>","operation":"@zip","status":0,"input":[[1,2],5],"expected":["_ ? ([xs ? @Array, ys ? @Array] => [xs | @size, ys | @size] | @@OP.equal)"]}')
+        .out("❌", '{"kind":"argument_error","origin":"stdlib","file":"<inline>","operation":"@zip","status":0,"input":[[1,2],5],"expected":["_ ? ([xs ? @Array, ys ? @Array] => xs | @size == ys | @size)"]}')
     end
   end
 

@@ -1,6 +1,6 @@
 # Add two equal-length vectors elementwise: zip and sum each pair.
 (
-  [u, v] ? ([a ? @Vector, b ? @Vector] => [a, b] |: @size | @@OP.equal) =>
-    [u, v] | @zip |: @@OP.sum,
-  x => !{"kind": "argument_error", "origin": "stdlib", "operation": "@vector/add", "status": 0, "input": x, "expected": ["_ ? ([u ? @vector/Vector, v ? @vector/Vector] => [u, v] |: @size | @@OP.equal)"]}
+  [u, v] ? ([a ? @Vector, b ? @Vector] => [a, b] |: @size | @OP.equal) =>
+    [u, v] | @zip |: @OP.sum,
+  x => !{"kind": "argument_error", "origin": "stdlib", "operation": "@vector/add", "status": 0, "input": x, "expected": ["_ ? ([u ? @vector/Vector, v ? @vector/Vector] => [u, v] |: @size | @OP.equal)"]}
 )

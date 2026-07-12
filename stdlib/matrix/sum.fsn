@@ -2,7 +2,7 @@
 # over @matrix/add.
 (
   matrices ? ([first, ...rest] ? (list => {"c": list, "f": @Matrix} | @all) =>
-      [first, ...rest] |: @size | @@OP.equal) =>
+      [first, ...rest] |: @dimensions | @OP.equal) =>
     matrices |+ @add,
-  x => !{"kind": "argument_error", "origin": "stdlib", "operation": "@matrix/sum", "status": 0, "input": x, "expected": ["_ ? ([first, ...rest] ? (list => {\"c\": list, \"f\": @matrix/Matrix} | @all) => [first, ...rest] |: @matrix/size | @@OP.equal)"]}
+  x => !{"kind": "argument_error", "origin": "stdlib", "operation": "@matrix/sum", "status": 0, "input": x, "expected": ["_ ? ([first, ...rest] ? (list => {\"c\": list, \"f\": @matrix/Matrix} | @all) => [first, ...rest] |: @matrix/dimensions | @OP.equal)"]}
 )

@@ -1,16 +1,16 @@
 # Inverse of a square matrix with a non-zero determinant: the adjugate scaled
 # by 1/determinant. Adjugate entry (i, j) is (-1)^(i+j) * determinant(minor(j, i)).
 (
-  m ? (sq ? @Matrix => sq | @size | @@OP.equal) =>
-    m | @determinant | (det => [det, 0] | @@OP.compare | (
+  m ? (sq ? @Matrix => sq | @dimensions | @OP.equal) =>
+    m | @determinant | (det => (det ?? 0) | (
       0 => !{"kind": "math_error", "origin": "stdlib", "operation": "@matrix/invert", "status": 0, "input": m, "message": "singular matrix (determinant 0)"},
       _ => m | (
         [[a]] => [[a | @@OP.invert]],
         _ =>
           [
             det | @@OP.invert,
-            m | @@size | @range |: (i =>
-              m | @@size | @range |: (j =>
+            m | @size | @range |: (i =>
+              m | @size | @range |: (j =>
                 [
                   [-1, [i, j] | @@OP.sum] | @math.pow,
                   [m, j, i] | @minor | @determinant,
@@ -20,5 +20,5 @@
           ] | @scale
       )
     )),
-  x => !{"kind": "argument_error", "origin": "stdlib", "operation": "@matrix/invert", "status": 0, "input": x, "expected": ["_ ? (sq ? @matrix/Matrix => sq | @matrix/size | @@OP.equal)"]}
+  x => !{"kind": "argument_error", "origin": "stdlib", "operation": "@matrix/invert", "status": 0, "input": x, "expected": ["_ ? (sq ? @matrix/Matrix => sq | @matrix/dimensions | @OP.equal)"]}
 )
