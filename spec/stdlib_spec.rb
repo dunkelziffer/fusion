@@ -184,33 +184,18 @@ RSpec.describe "stdlib error handling", mutant_expression: "Fusion::CLI*" do
         .out("✅", "true")
     end
 
-    # A bare array needs no predicate: its elements are tested with @truthy.
-    it "tests a bare array's elements with @truthy" do
-      expect_pipe
-        .in("✅", '[1,"x",true]')
-        .code("(xs => xs | @all)")
-        .out("✅", "true")
-    end
-
-    it "is false for a bare array with a falsy element" do
-      expect_pipe
-        .in("✅", "[true,null,true]")
-        .code("(xs => xs | @all)")
-        .out("✅", "false")
-    end
-
-    it "errors on a non-{f,c}, non-array value" do
+    it "errors on a non-{f,c} value" do
       expect_pipe
         .in("✅", "5")
         .code("(x => x | @all)")
-        .out("❌", '{"kind":"argument_error","origin":"stdlib","file":"<inline>","operation":"@all","status":0,"input":5,"expected":["{\"f\": _ ? @Function, \"c\": _ ? @Collection}","_ ? @Array"]}')
+        .out("❌", '{"kind":"argument_error","origin":"stdlib","file":"<inline>","operation":"@all","status":0,"input":5,"expected":["{\"f\": _ ? @Function, \"c\": _ ? @Collection}"]}')
     end
 
     it "validates f eagerly: a non-function f errors even when c is empty" do
       expect_pipe
         .in("✅", "[]")
         .code('(xs => {"f": 5, "c": xs} | @all)')
-        .out("❌", '{"kind":"argument_error","origin":"stdlib","file":"<inline>","operation":"@all","status":0,"input":{"f":5,"c":[]},"expected":["{\"f\": _ ? @Function, \"c\": _ ? @Collection}","_ ? @Array"]}')
+        .out("❌", '{"kind":"argument_error","origin":"stdlib","file":"<inline>","operation":"@all","status":0,"input":{"f":5,"c":[]},"expected":["{\"f\": _ ? @Function, \"c\": _ ? @Collection}"]}')
     end
 
     # Proper recursion short-circuits: once an item is falsey the result is
@@ -618,26 +603,11 @@ RSpec.describe "stdlib error handling", mutant_expression: "Fusion::CLI*" do
         .out("✅", "false")
     end
 
-    # A bare array needs no predicate: its elements are tested with @truthy.
-    it "tests a bare array's elements with @truthy" do
-      expect_pipe
-        .in("✅", "[false,null,1]")
-        .code("(xs => xs | @any)")
-        .out("✅", "true")
-    end
-
-    it "is false for a bare array of falsy elements" do
-      expect_pipe
-        .in("✅", "[false,null]")
-        .code("(xs => xs | @any)")
-        .out("✅", "false")
-    end
-
-    it "errors on a non-{f,c}, non-array value" do
+    it "errors on a non-{f,c} value" do
       expect_pipe
         .in("✅", "5")
         .code("(x => x | @any)")
-        .out("❌", '{"kind":"argument_error","origin":"stdlib","file":"<inline>","operation":"@any","status":0,"input":5,"expected":["{\"f\": _ ? @Function, \"c\": _ ? @Collection}","_ ? @Array"]}')
+        .out("❌", '{"kind":"argument_error","origin":"stdlib","file":"<inline>","operation":"@any","status":0,"input":5,"expected":["{\"f\": _ ? @Function, \"c\": _ ? @Collection}"]}')
     end
   end
 
@@ -679,6 +649,39 @@ RSpec.describe "stdlib error handling", mutant_expression: "Fusion::CLI*" do
         .in("✅", '""')
         .code("(v => v | @falsey)")
         .out("✅", "false")
+    end
+  end
+
+  # @safe is the one stdlib function with an error clause: it catches any error
+  # into false and passes regular values through unchanged, so a guard condition
+  # chain ending in `| @safe` reads an erroring check as "no match".
+  describe "@safe" do
+    it "catches a user error into false" do
+      expect_pipe
+        .in("✅", "42")
+        .code("(x => !x | @safe)")
+        .out("✅", "false")
+    end
+
+    it "catches an interpreter error into false" do
+      expect_pipe
+        .in("✅", "[5,0]")
+        .code("(p => p | @math.divide | @safe)")
+        .out("✅", "false")
+    end
+
+    it "passes a regular value through unchanged" do
+      expect_pipe
+        .in("✅", "42")
+        .code("(x => x | @safe)")
+        .out("✅", "42")
+    end
+
+    it "passes falsy values through as themselves, not as false" do
+      expect_pipe
+        .in("✅", "null")
+        .code("(x => x | @safe)")
+        .out("✅", "null")
     end
   end
 end

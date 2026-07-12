@@ -1,7 +1,11 @@
 # Product of a non-empty array of matrices, folded left through
 # @matrix/multiply. A dimension mismatch surfaces as @matrix/multiply's error.
 (
-  matrices ? ([first, ...rest] => {"c": [first, ...rest], "f": @Matrix} | @all) =>
+  matrices ? (ms => [
+      ms | @Array,
+      ms | @size > 0,
+      {"c": ms, "f": @Matrix} | @all,
+    ] | @OP.and | @safe) =>
     matrices |+ @multiply,
-  x => !{"kind": "argument_error", "origin": "stdlib", "operation": "@matrix/product", "status": 0, "input": x, "expected": ["_ ? ([first, ...rest] => {\"c\": [first, ...rest], \"f\": @matrix/Matrix} | @all)"]}
+  x => !{"kind": "argument_error", "origin": "stdlib", "operation": "@matrix/product", "status": 0, "input": x, "expected": ["_ ? (ms => [ms | @Array, ms | @size > 0, {\"c\": ms, \"f\": @matrix/Matrix} | @all] | @OP.and | @safe)"]}
 )

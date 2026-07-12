@@ -382,7 +382,10 @@ particular built-ins:
   that clause must match the specific error received. An error of a shape no
   clause catches propagates unchanged.
 - **Built-in and stdlib operations (`@math.divide`, `@OP.sum`, `@Integer`, …) all
-  propagate** their input error without examining it. To inspect or compare an
+  propagate** their input error without examining it. The one deliberate
+  exception is the stdlib catcher `@safe` — an ordinary two-clause function
+  `(! => false, v => v)` that catches any error into `false` and passes regular
+  values through. To inspect or compare an
   error's payload, you must catch it first and operate on the extracted payload:
   `!42 | (!a => a) | @Integer` returns `true` (the payload `42` *is* an integer);
   `!42 | @Integer` returns `!42` (the predicate doesn't handle the error,

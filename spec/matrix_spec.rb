@@ -339,31 +339,31 @@ RSpec.describe "stdlib matrix module", mutant_expression: "Fusion::CLI*" do
       expect_pipe
         .in("✅", "[[[1,2]], [[1,2],[3,4]]]")
         .code("(ms => ms | @matrix/OP.sum)")
-        .out("❌", '{"kind":"argument_error","origin":"stdlib","file":"<inline>","operation":"@matrix/sum","status":0,"input":[[[1,2]],[[1,2],[3,4]]],"expected":["_ ? ([first, ...rest] ? (list => {\"c\": list, \"f\": @matrix/Matrix} | @all) => [first, ...rest] |: @matrix/dimensions | @OP.equal)"]}')
+        .out("❌", '{"kind":"argument_error","origin":"stdlib","file":"<inline>","operation":"@matrix/sum","status":0,"input":[[[1,2]],[[1,2],[3,4]]],"expected":["_ ? (ms => [ms | @Array, ms | @size > 0, {\"c\": ms, \"f\": @matrix/Matrix} | @all, ms |: @matrix/dimensions | @OP.equal] | @OP.and | @safe)"]}')
     end
 
-    # The guard sequences its checks (non-empty array, all matrices, equal
-    # dimensions), so every bad input gets @matrix/sum's own error — no inner
-    # helper's error leaks through.
+    # The guard is a flat conditions array ending in @OP.and | @safe: a condition
+    # that errors makes the guard false, so every bad input gets @matrix/sum's
+    # own error — no inner helper's error leaks through.
     it "rejects a non-matrix element with sum's own error" do
       expect_pipe
         .in("✅", "[5]")
         .code("(ms => ms | @matrix/OP.sum)")
-        .out("❌", '{"kind":"argument_error","origin":"stdlib","file":"<inline>","operation":"@matrix/sum","status":0,"input":[5],"expected":["_ ? ([first, ...rest] ? (list => {\"c\": list, \"f\": @matrix/Matrix} | @all) => [first, ...rest] |: @matrix/dimensions | @OP.equal)"]}')
+        .out("❌", '{"kind":"argument_error","origin":"stdlib","file":"<inline>","operation":"@matrix/sum","status":0,"input":[5],"expected":["_ ? (ms => [ms | @Array, ms | @size > 0, {\"c\": ms, \"f\": @matrix/Matrix} | @all, ms |: @matrix/dimensions | @OP.equal] | @OP.and | @safe)"]}')
     end
 
     it "rejects the empty array with sum's own error" do
       expect_pipe
         .in("✅", "[]")
         .code("(ms => ms | @matrix/OP.sum)")
-        .out("❌", '{"kind":"argument_error","origin":"stdlib","file":"<inline>","operation":"@matrix/sum","status":0,"input":[],"expected":["_ ? ([first, ...rest] ? (list => {\"c\": list, \"f\": @matrix/Matrix} | @all) => [first, ...rest] |: @matrix/dimensions | @OP.equal)"]}')
+        .out("❌", '{"kind":"argument_error","origin":"stdlib","file":"<inline>","operation":"@matrix/sum","status":0,"input":[],"expected":["_ ? (ms => [ms | @Array, ms | @size > 0, {\"c\": ms, \"f\": @matrix/Matrix} | @all, ms |: @matrix/dimensions | @OP.equal] | @OP.and | @safe)"]}')
     end
 
     it "rejects a non-array with sum's own error" do
       expect_pipe
         .in("✅", "5")
         .code("(ms => ms | @matrix/OP.sum)")
-        .out("❌", '{"kind":"argument_error","origin":"stdlib","file":"<inline>","operation":"@matrix/sum","status":0,"input":5,"expected":["_ ? ([first, ...rest] ? (list => {\"c\": list, \"f\": @matrix/Matrix} | @all) => [first, ...rest] |: @matrix/dimensions | @OP.equal)"]}')
+        .out("❌", '{"kind":"argument_error","origin":"stdlib","file":"<inline>","operation":"@matrix/sum","status":0,"input":5,"expected":["_ ? (ms => [ms | @Array, ms | @size > 0, {\"c\": ms, \"f\": @matrix/Matrix} | @all, ms |: @matrix/dimensions | @OP.equal] | @OP.and | @safe)"]}')
     end
 
     it "negates elementwise" do
@@ -380,28 +380,28 @@ RSpec.describe "stdlib matrix module", mutant_expression: "Fusion::CLI*" do
         .out("✅", "[[19,22],[43,50]]")
     end
 
-    # The guard sequences its checks (non-empty array, all matrices), so a bad
+    # The guard is a flat conditions array ending in @OP.and | @safe, so a bad
     # shape gets @matrix/product's own error. A dimension mismatch is the one
     # documented exception: it surfaces as @matrix/multiply's error from the fold.
     it "rejects a non-matrix element with product's own error" do
       expect_pipe
         .in("✅", "[5]")
         .code("(ms => ms | @matrix/OP.product)")
-        .out("❌", '{"kind":"argument_error","origin":"stdlib","file":"<inline>","operation":"@matrix/product","status":0,"input":[5],"expected":["_ ? ([first, ...rest] => {\"c\": [first, ...rest], \"f\": @matrix/Matrix} | @all)"]}')
+        .out("❌", '{"kind":"argument_error","origin":"stdlib","file":"<inline>","operation":"@matrix/product","status":0,"input":[5],"expected":["_ ? (ms => [ms | @Array, ms | @size > 0, {\"c\": ms, \"f\": @matrix/Matrix} | @all] | @OP.and | @safe)"]}')
     end
 
     it "rejects the empty array with product's own error" do
       expect_pipe
         .in("✅", "[]")
         .code("(ms => ms | @matrix/OP.product)")
-        .out("❌", '{"kind":"argument_error","origin":"stdlib","file":"<inline>","operation":"@matrix/product","status":0,"input":[],"expected":["_ ? ([first, ...rest] => {\"c\": [first, ...rest], \"f\": @matrix/Matrix} | @all)"]}')
+        .out("❌", '{"kind":"argument_error","origin":"stdlib","file":"<inline>","operation":"@matrix/product","status":0,"input":[],"expected":["_ ? (ms => [ms | @Array, ms | @size > 0, {\"c\": ms, \"f\": @matrix/Matrix} | @all] | @OP.and | @safe)"]}')
     end
 
     it "rejects a non-array with product's own error" do
       expect_pipe
         .in("✅", "5")
         .code("(ms => ms | @matrix/OP.product)")
-        .out("❌", '{"kind":"argument_error","origin":"stdlib","file":"<inline>","operation":"@matrix/product","status":0,"input":5,"expected":["_ ? ([first, ...rest] => {\"c\": [first, ...rest], \"f\": @matrix/Matrix} | @all)"]}')
+        .out("❌", '{"kind":"argument_error","origin":"stdlib","file":"<inline>","operation":"@matrix/product","status":0,"input":5,"expected":["_ ? (ms => [ms | @Array, ms | @size > 0, {\"c\": ms, \"f\": @matrix/Matrix} | @all] | @OP.and | @safe)"]}')
     end
 
     it "surfaces a dimension mismatch as @matrix/multiply's error" do

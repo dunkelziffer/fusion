@@ -1,6 +1,6 @@
 # True if any item satisfies the predicate — over an array's elements or an object's
-# values. Input: {"f": predicate, "c": array-or-object}, or a bare array, which is
-# tested with @truthy. Short-circuits on the first truthy result.
+# values. Input: {"f": predicate, "c": array-or-object}. Short-circuits on the first
+# truthy result.
 (
   {"f": _ ? @Function, "c": []} => false,
   {"f": f ? @Function, "c": [x, ...rest]} => x | f | (
@@ -8,6 +8,5 @@
     _           => {"f": f, "c": rest} | @,
   ),
   {"f": f ? @Function, "c": obj ? @Object} => {"f": f, "c": obj | @values} | @,
-  xs ? @Array => {"f": @truthy, "c": xs} | @,
-  x => !{"kind": "argument_error", "origin": "stdlib", "operation": "@any", "status": 0, "input": x, "expected": ["{\"f\": _ ? @Function, \"c\": _ ? @Collection}", "_ ? @Array"]},
+  x => !{"kind": "argument_error", "origin": "stdlib", "operation": "@any", "status": 0, "input": x, "expected": ["{\"f\": _ ? @Function, \"c\": _ ? @Collection}"]},
 )

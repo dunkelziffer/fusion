@@ -130,9 +130,9 @@ array again to compare its two ends.
 
 `&&` and `||` are **eager**. `a && b` desugars to `[a, b] | @OP.and` — an array
 piped into a function — so both operands are computed before the operator sees
-them. The same goes for a conditions array like `[a, b, c] | @all`: an array
-literal evaluates all of its elements, and if one of them is an error, the
-error propagates out of the literal immediately. No piped form can keep its
+them. The same goes for a hand-written conditions array `[a, b, c] | @OP.and`:
+an array literal evaluates all of its elements, and if one of them is an error,
+the error propagates out of the literal immediately. No piped form can keep its
 input from being computed.
 
 The one place where Fusion is lazy is a **clause body**: it evaluates only when
@@ -158,21 +158,39 @@ validates "a pair of equal-length arrays" like this:
 
 The size comparison lives in the predicate's body, so it is computed only after
 the pattern has established that both elements are arrays — `@size` can never
-see a non-array. For longer chains, nest another predicate between pattern and
-body. `@matrix/sum` checks "a non-empty array, all matrices, all of equal
-dimensions", in that order:
+see a non-array. Sequencing matters because a predicate that *errors* does not
+fall through to the next clause — the error propagates.
+
+For a longer chain of checks you have two options. You can keep sequencing by
+nesting another predicate between pattern and body — the checks stay lazy, and
+a broken predicate still fails loudly. Or you can accept that every condition
+is computed and route any error into "no match" by piping a conditions array
+through `@OP.and | @safe`, one condition per line. `@matrix/sum` checks "an
+array, non-empty, all matrices, all of equal dimensions" like this:
 
 ```fusion
-matrices ? ([first, ...rest] ? (list => {"c": list, "f": @Matrix} | @all) =>
-    [first, ...rest] |: @dimensions | @OP.equal)
+matrices ? (ms => [
+    ms | @Array,
+    ms | @size > 0,
+    {"c": ms, "f": @Matrix} | @all,
+    ms |: @dimensions | @OP.equal,
+  ] | @OP.and | @safe)
 ```
 
-Sequencing matters because a predicate that *errors* does not fall through to
-the next clause — the error propagates. Fed `[5]`, a flat guard
-`(ms => {"c": ms, "f": @Matrix} | @all && ms |: @dimensions | @OP.equal)` would
-compute both `&&` operands and leak `@matrix/dimensions`'s error; the sequenced
-guard never computes the dimensions, fails cleanly, and falls through to the
-function's own error clause.
+Fed `[5]`, the last condition errors (`@dimensions` of the number `5`), the
+error collapses the conditions array — an array literal propagates an error
+element, and `@OP.and` passes an error through untouched — and `@safe` turns
+it into `false`: the clause simply doesn't match, and the input falls through
+to the function's own error clause. Two things to keep in mind:
+
+- `@safe` is just the two-clause function `(! => false, v => v)`, and it needs
+  both clauses: the error clause alone would turn every *successful* condition
+  into `null` — a value that matches no clause yields `null` — and the guard
+  would go falsey for valid inputs too.
+- Catching trades loudness for flatness. Errors-as-false means a genuinely
+  broken condition (a typo'd reference, a wrong shape) reads as "the guard is
+  false for every input" instead of crashing. Prefer sequenced clauses where
+  the checks order themselves structurally anyway.
 
 Eager conditions are fine when they are safe on the already-matched input.
 After `[x ? @Matrix, row ? @Integer, col ? @Integer]` has matched, bounds

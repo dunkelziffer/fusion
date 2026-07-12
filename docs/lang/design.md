@@ -1173,3 +1173,9 @@ TODO
 ## 5.12 Bare-array @all and @any
 
 TODO
+
+---
+
+## 5.13 Error-as-false guards
+
+TODO
