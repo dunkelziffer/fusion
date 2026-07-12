@@ -1,5 +1,5 @@
-# The dimensions of a matrix, as [rows, columns].
+# The dimensions of a matrix, as {"rows": _, "columns": _}.
 (
-  m ? @Matrix => [m | @size, m[0] | @size],
+  m ? @Matrix => {"rows": m | @size, "columns": m[0] | @size},
   x => !{"kind": "argument_error", "origin": "stdlib", "operation": "@matrix/dimensions", "status": 0, "input": x, "expected": ["_ ? @matrix/Matrix"]}
 )

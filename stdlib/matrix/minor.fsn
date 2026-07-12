@@ -2,11 +2,14 @@
 # matrix must be at least 2 by 2, so the minor is a matrix again.
 (
   [m, r, c] ? ([x ? @Matrix, row ? @Integer, col ? @Integer] =>
-      row >= 0 && row < x | @size &&
-      col >= 0 && col < x[0] | @size &&
-      x | @size >= 2 && x[0] | @size >= 2) =>
-    m | @size | @range |? (k => ~(k == r)) |: (k =>
-      m[k] | @size | @range |? (l => ~(l == c)) |: (l => m[k][l])
+      x | @dimensions | (d =>
+        row >= 0 && row < d.rows &&
+        col >= 0 && col < d.columns &&
+        d.rows >= 2 && d.columns >= 2)) =>
+    m | @dimensions | (d =>
+      d.rows | @range |? (k => ~(k == r)) |: (k =>
+        d.columns | @range |? (l => ~(l == c)) |: (l => m[k][l])
+      )
     ),
-  x => !{"kind": "argument_error", "origin": "stdlib", "operation": "@matrix/minor", "status": 0, "input": x, "expected": ["_ ? ([m ? @matrix/Matrix, r ? @Integer, c ? @Integer] => r >= 0 && r < m | @size && c >= 0 && c < m[0] | @size && m | @size >= 2 && m[0] | @size >= 2)"]}
+  x => !{"kind": "argument_error", "origin": "stdlib", "operation": "@matrix/minor", "status": 0, "input": x, "expected": ["_ ? ([m ? @matrix/Matrix, r ? @Integer, c ? @Integer] => m | @matrix/dimensions | (d => r >= 0 && r < d.rows && c >= 0 && c < d.columns && d.rows >= 2 && d.columns >= 2))"]}
 )
