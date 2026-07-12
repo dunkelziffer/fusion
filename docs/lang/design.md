@@ -1167,3 +1167,9 @@ to `@OP`) set the frame.
 ## 5.11 The matrix and vector modules
 
 TODO
+
+---
+
+## 5.12 Bare-array @all and @any
+
+TODO

@@ -342,6 +342,30 @@ RSpec.describe "stdlib matrix module", mutant_expression: "Fusion::CLI*" do
         .out("❌", '{"kind":"argument_error","origin":"stdlib","file":"<inline>","operation":"@matrix/sum","status":0,"input":[[[1,2]],[[1,2],[3,4]]],"expected":["_ ? ([first, ...rest] ? (list => {\"c\": list, \"f\": @matrix/Matrix} | @all) => [first, ...rest] |: @matrix/dimensions | @OP.equal)"]}')
     end
 
+    # The guard sequences its checks (non-empty array, all matrices, equal
+    # dimensions), so every bad input gets @matrix/sum's own error — no inner
+    # helper's error leaks through.
+    it "rejects a non-matrix element with sum's own error" do
+      expect_pipe
+        .in("✅", "[5]")
+        .code("(ms => ms | @matrix/OP.sum)")
+        .out("❌", '{"kind":"argument_error","origin":"stdlib","file":"<inline>","operation":"@matrix/sum","status":0,"input":[5],"expected":["_ ? ([first, ...rest] ? (list => {\"c\": list, \"f\": @matrix/Matrix} | @all) => [first, ...rest] |: @matrix/dimensions | @OP.equal)"]}')
+    end
+
+    it "rejects the empty array with sum's own error" do
+      expect_pipe
+        .in("✅", "[]")
+        .code("(ms => ms | @matrix/OP.sum)")
+        .out("❌", '{"kind":"argument_error","origin":"stdlib","file":"<inline>","operation":"@matrix/sum","status":0,"input":[],"expected":["_ ? ([first, ...rest] ? (list => {\"c\": list, \"f\": @matrix/Matrix} | @all) => [first, ...rest] |: @matrix/dimensions | @OP.equal)"]}')
+    end
+
+    it "rejects a non-array with sum's own error" do
+      expect_pipe
+        .in("✅", "5")
+        .code("(ms => ms | @matrix/OP.sum)")
+        .out("❌", '{"kind":"argument_error","origin":"stdlib","file":"<inline>","operation":"@matrix/sum","status":0,"input":5,"expected":["_ ? ([first, ...rest] ? (list => {\"c\": list, \"f\": @matrix/Matrix} | @all) => [first, ...rest] |: @matrix/dimensions | @OP.equal)"]}')
+    end
+
     it "negates elementwise" do
       expect_pipe
         .in("✅", "[[1,2],[3,4]]")
@@ -354,6 +378,37 @@ RSpec.describe "stdlib matrix module", mutant_expression: "Fusion::CLI*" do
         .in("✅", "[[[1,2],[3,4]], [[5,6],[7,8]]]")
         .code("(ms => ms | @matrix/OP.product)")
         .out("✅", "[[19,22],[43,50]]")
+    end
+
+    # The guard sequences its checks (non-empty array, all matrices), so a bad
+    # shape gets @matrix/product's own error. A dimension mismatch is the one
+    # documented exception: it surfaces as @matrix/multiply's error from the fold.
+    it "rejects a non-matrix element with product's own error" do
+      expect_pipe
+        .in("✅", "[5]")
+        .code("(ms => ms | @matrix/OP.product)")
+        .out("❌", '{"kind":"argument_error","origin":"stdlib","file":"<inline>","operation":"@matrix/product","status":0,"input":[5],"expected":["_ ? ([first, ...rest] => {\"c\": [first, ...rest], \"f\": @matrix/Matrix} | @all)"]}')
+    end
+
+    it "rejects the empty array with product's own error" do
+      expect_pipe
+        .in("✅", "[]")
+        .code("(ms => ms | @matrix/OP.product)")
+        .out("❌", '{"kind":"argument_error","origin":"stdlib","file":"<inline>","operation":"@matrix/product","status":0,"input":[],"expected":["_ ? ([first, ...rest] => {\"c\": [first, ...rest], \"f\": @matrix/Matrix} | @all)"]}')
+    end
+
+    it "rejects a non-array with product's own error" do
+      expect_pipe
+        .in("✅", "5")
+        .code("(ms => ms | @matrix/OP.product)")
+        .out("❌", '{"kind":"argument_error","origin":"stdlib","file":"<inline>","operation":"@matrix/product","status":0,"input":5,"expected":["_ ? ([first, ...rest] => {\"c\": [first, ...rest], \"f\": @matrix/Matrix} | @all)"]}')
+    end
+
+    it "surfaces a dimension mismatch as @matrix/multiply's error" do
+      expect_pipe
+        .in("✅", "[[[1,2]], [[1,2]]]")
+        .code("(ms => ms | @matrix/OP.product)")
+        .out("❌", '{"kind":"argument_error","origin":"stdlib","file":"<inline>","operation":"@matrix/multiply","status":0,"input":[[[1,2]],[[1,2]]],"expected":["_ ? ([x ? @matrix/Matrix, y ? @matrix/Matrix] => (x | @matrix/dimensions)[1] == (y | @matrix/dimensions)[0])"]}')
     end
 
     it "inverts an invertible matrix (always floats)" do
