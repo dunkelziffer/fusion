@@ -1,0 +1,2 @@
+# Average two matrices: elementwise sum, then halve each entry.
+([a, b] => [0.5, a + b] | @matrix/scale)

@@ -1,0 +1,6 @@
+# Dot product of two equal-length vectors: zip, multiply each pair, sum.
+(
+  [u, v] ? ([a ? @Vector, b ? @Vector] => [a, b] |: @size | @OP.equal) =>
+    [u, v] | @zip |: @OP.product | @OP.sum,
+  x => !{"kind": "argument_error", "origin": "stdlib", "operation": "@vector/dot", "status": 0, "input": x, "expected": ["_ ? ([u ? @vector/Vector, v ? @vector/Vector] => [u, v] |: @size | @OP.equal)"]}
+)

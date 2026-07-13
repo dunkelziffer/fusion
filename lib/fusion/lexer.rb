@@ -20,6 +20,7 @@ module Fusion
       "=" => :equals,
       "+" => :plus, "-" => :minus, "*" => :star,
       "%" => :percent, "~" => :tilde,
+      "<" => :lt, ">" => :gt,
     }.freeze
 
     def initialize(src)
@@ -78,6 +79,14 @@ module Fusion
       if c == "?" && peek(1) == "?"
         @i += 2
         return Token.new(type: :qq, value: "??", pos: start)
+      end
+      if c == "<" && peek(1) == "="
+        @i += 2
+        return Token.new(type: :lte, value: "<=", pos: start)
+      end
+      if c == ">" && peek(1) == "="
+        @i += 2
+        return Token.new(type: :gte, value: ">=", pos: start)
       end
       if c == "&" && peek(1) == "&"
         @i += 2

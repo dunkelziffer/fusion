@@ -1,0 +1,7 @@
+# True for a vector: a non-empty array of numbers. A predicate: false for
+# anything else, never an error.
+(v => [
+  v | @Array,
+  v | @size > 0,
+  {"c": v, "f": @Number} | @all,
+] | @OP.and | @safe)

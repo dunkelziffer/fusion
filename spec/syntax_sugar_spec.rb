@@ -328,16 +328,78 @@ RSpec.describe "syntax sugar", mutant_expression: "Fusion::CLI*" do
         .out("✅", "true")
     end
 
-    it "reads < via the (a ?? b) | @lt helper idiom (1 < 2 via @gt is false)" do
+    it "compares with < (smaller first is true)" do
       expect_pipe
-        .code("(1 ?? 2) | @gt")
+        .code("1 < 2")
+        .out("✅", "true")
+    end
+
+    it "compares with < (equal is false; < is strict)" do
+      expect_pipe
+        .code("2 < 2")
         .out("✅", "false")
     end
 
-    it "reads > via the (a ?? b) | @gt helper idiom (3 > 2 is true)" do
+    it "compares with > (larger first is true)" do
       expect_pipe
-        .code("(3 ?? 2) | @gt")
+        .code("3 > 2")
         .out("✅", "true")
+    end
+
+    it "includes equality in <= (2 <= 2 is true)" do
+      expect_pipe
+        .code("2 <= 2")
+        .out("✅", "true")
+    end
+
+    it "includes equality in >= (2 >= 3 is false)" do
+      expect_pipe
+        .code("2 >= 3")
+        .out("✅", "false")
+    end
+
+    it "orders strings with <" do
+      expect_pipe
+        .in("✅", '"a"')
+        .code('(s => s < "b")')
+        .out("✅", "true")
+    end
+
+    it "binds + tighter than < on the left (1 + 3 < 3 is false, not the error 1 + (3 < 3))" do
+      expect_pipe
+        .code("1 + 3 < 3")
+        .out("✅", "false")
+    end
+
+    it "binds + tighter than < on the right (1 < 2 + 3 is true, not the error (1 < 2) + 3)" do
+      expect_pipe
+        .code("1 < 2 + 3")
+        .out("✅", "true")
+    end
+
+    it "binds < tighter than == (1 < 2 == true is true, not the error 1 < (2 == true))" do
+      expect_pipe
+        .code("1 < 2 == true")
+        .out("✅", "true")
+    end
+
+    it "mixes ?? and < left-associatively at one level (1 ?? 2 < 0 reads the compare result)" do
+      expect_pipe
+        .code("1 ?? 2 < 0")
+        .out("✅", "true")
+    end
+
+    it "does not chain comparisons (1 < 2 < 3 compares the boolean 1 < 2)" do
+      expect_pipe
+        .code("1 < 2 < 3")
+        .out("❌", '{"kind":"argument_error","origin":"builtin","file":"<inline>","operation":"@OP.compare","status":0,"input":[true,3],"expected":["[_ ? @Number, _ ? @Number]","[_ ? @String, _ ? @String]"]}')
+    end
+
+    it "errors on mixed operand types via the @OP.compare step" do
+      expect_pipe
+        .in("✅", '"a"')
+        .code("(s => 1 < s)")
+        .out("❌", '{"kind":"argument_error","origin":"builtin","file":"<inline>","operation":"@OP.compare","status":0,"input":[1,"a"],"expected":["[_ ? @Number, _ ? @Number]","[_ ? @String, _ ? @String]"]}')
     end
   end
 
@@ -389,7 +451,7 @@ RSpec.describe "syntax sugar", mutant_expression: "Fusion::CLI*" do
     it "errors when |: gets a non-collection" do
       expect_pipe
         .code("5 |: (x => x)")
-        .out("❌", '{"kind":"argument_error","origin":"stdlib","file":"<inline>","operation":"@map","status":0,"input":{"c":5,"f":"<function>"},"expected":["{\"f\": _ ? @Function, \"c\": _ ? @Array}","{\"f\": _ ? @Function, \"c\": _ ? @Object}"]}')
+        .out("❌", '{"kind":"argument_error","origin":"stdlib","file":"<inline>","operation":"@map","status":0,"input":{"c":5,"f":"<function>"},"expected":["{\"f\": _ ? @Function, \"c\": _ ? @Collection}"]}')
     end
 
     it "filters an array with |?" do
@@ -400,14 +462,14 @@ RSpec.describe "syntax sugar", mutant_expression: "Fusion::CLI*" do
 
     it "filters an object's values with |?" do
       expect_pipe
-        .code('{"a": 1, "b": 9} |? (x => (x ?? 5) | @gt)')
+        .code('{"a": 1, "b": 9} |? (x => x > 5)')
         .out("✅", '{"b":9}')
     end
 
     it "errors when |? gets a non-collection" do
       expect_pipe
         .code("5 |? (x => x)")
-        .out("❌", '{"kind":"argument_error","origin":"stdlib","file":"<inline>","operation":"@filter","status":0,"input":{"c":5,"f":"<function>"},"expected":["{\"f\": _ ? @Function, \"c\": _ ? @Array}","{\"f\": _ ? @Function, \"c\": _ ? @Object}"]}')
+        .out("❌", '{"kind":"argument_error","origin":"stdlib","file":"<inline>","operation":"@filter","status":0,"input":{"c":5,"f":"<function>"},"expected":["{\"f\": _ ? @Function, \"c\": _ ? @Collection}"]}')
     end
 
     it "reduces an array with |+" do

@@ -127,7 +127,7 @@ number's absolute value:
 
 ```fusion
 (n =>
-  [n, 0] | @OP.compare | @lt | (
+  [n, 0] | @OP.compare | @OP.lt | (
     true  => n | @OP.negate,
     false => n
   )
@@ -142,9 +142,10 @@ echo '5'  | fusion lesson.fsn    # => 5
 ```
 
 Read the middle line carefully: `[n, 0] | @OP.compare` orders the pair as `-1`/`0`/`1`,
-and `@lt` turns that into `true`/`false`. That boolean is then piped into a *second,
-inline function* whose two clauses are the two branches. **An `if` is just a function
-with a `true` clause and a `false` clause.**
+and `@OP.lt` turns that into `true`/`false` (the infix `n < 0` is sugar for exactly
+this pipeline). That boolean is then piped into a *second, inline function* whose two
+clauses are the two branches. **An `if` is just a function with a `true` clause and a
+`false` clause.**
 
 Note: you don't need to restrict yourself to the two values `true` and `false` as
 an intermediate result. Don't use it purely as an `if / else`. Use it like a `case`
@@ -216,7 +217,7 @@ Create a function that sorts a pair of values:
 
 ```fusion
 (
-  [a, b] ? (p => p | @OP.compare | @lt) => [a, b],
+  [a, b] ? (p => p | @OP.compare | @OP.lt) => [a, b],
   [a, b] => [b, a]
 )
 ```

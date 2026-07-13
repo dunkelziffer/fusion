@@ -1,0 +1,10 @@
+# Rotate a 2x2 matrix by an angle in radians: the rotation matrix
+# [[cos, -sin], [sin, cos]] multiplied onto it. Input: [angle, matrix].
+(
+  [angle ? @Number, [[a ? @Number, b ? @Number], [c ? @Number, d ? @Number]]] =>
+    [
+      [[angle | @math.cos, angle | @math.sin | @@OP.negate], [angle | @math.sin, angle | @math.cos]],
+      [[a, b], [c, d]],
+    ] | @multiply,
+  x => !{"kind": "argument_error", "origin": "stdlib", "operation": "@matrix/rotate", "status": 0, "input": x, "expected": ["[_ ? @Number, [[_ ? @Number, _ ? @Number], [_ ? @Number, _ ? @Number]]]"]}
+)

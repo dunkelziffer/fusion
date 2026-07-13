@@ -1,0 +1,7 @@
+# Catch any error into false; pass every regular value through unchanged.
+# Appended to a guard condition (`cond | @safe`), an erroring check reads as
+# "no match" instead of propagating out of the guard.
+(
+  ! => false,
+  v => v
+)

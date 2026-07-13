@@ -5,8 +5,7 @@
 # returned unchanged.
 (
   v ? @Function => "<function>",
-  v ? @NonFinite => [["<", v | @toString] | @concat, ">"] | @concat,
-  v ? @Array => {"f": @sanitize, "c": v} | @map,
-  v ? @Object => {"f": @sanitize, "c": v} | @map,
+  v ? @NonFinite => ["<", v | @toString, ">"] | @concat,
+  v ? @Collection => v |: @,
   v => v
 )

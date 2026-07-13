@@ -3,6 +3,7 @@
 (
   {"f": _ ? @Function, "c": []} => [],
   {"f": f ? @Function, "c": [x, ...rest]} => [x | f, ...({"f": f, "c": rest} | @)],
-  {"f": f ? @Function, "c": obj ? @Object} => {"f": (k => [k, obj[k] | f]), "c": obj | @keys} | @ | @toObject,
-  x => !{"kind": "argument_error", "origin": "stdlib", "operation": "@map", "status": 0, "input": x, "expected": ["{\"f\": _ ? @Function, \"c\": _ ? @Array}", "{\"f\": _ ? @Function, \"c\": _ ? @Object}"]}
+  # Reduce to array case
+  {"f": f ? @Function, "c": obj ? @Object} => {"f": ([k, v] => [k, v | f]), "c": obj | @entries} | @ | @toObject,
+  x => !{"kind": "argument_error", "origin": "stdlib", "operation": "@map", "status": 0, "input": x, "expected": ["{\"f\": _ ? @Function, \"c\": _ ? @Collection}"]}
 )

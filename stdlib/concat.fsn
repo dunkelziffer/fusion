@@ -1,5 +1,6 @@
-# Concatenate two strings. Input: [a, b]. Built on @join with an empty separator.
+# Concatenate an array of strings, of any length. Built on @join with an empty
+# separator.
 (
-  [a ? @String, b ? @String] => [[a, b], ""] | @join,
-  x => !{"kind": "argument_error", "origin": "stdlib", "operation": "@concat", "status": 0, "input": x, "expected": ["[_ ? @String, _ ? @String]"]}
+  strings ? (xs ? @Array => {"c": xs, "f": @String} | @all) => [strings, ""] | @join,
+  x => !{"kind": "argument_error", "origin": "stdlib", "operation": "@concat", "status": 0, "input": x, "expected": ["_ ? (xs ? @Array => {\"c\": xs, \"f\": @String} | @all)"]}
 )

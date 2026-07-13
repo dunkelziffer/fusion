@@ -1,0 +1,8 @@
+# True for a matrix: a non-empty array of equally sized vectors (@vector/Vector).
+# A predicate: false for anything else, never an error.
+(rows => [
+  rows | @Array,
+  rows | @size > 0,
+  {"c": rows, "f": @vector/Vector} | @all,
+  rows |: @size | @OP.equal,
+] | @OP.and | @safe)

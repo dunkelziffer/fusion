@@ -12,9 +12,7 @@ module Fusion
         define = ->(name, fn) { table[name] = NativeFunc.new(name, fn) }
 
         # Irreducible primitives kept as built-ins. The sugar-target operators
-        # (arithmetic/comparison/boolean) live in `@OP` below; their friendly
-        # derived forms (`@lt`, `@gt`, `@truthy`, …) are stdlib files that build on
-        # `@OP.*`, so they follow a per-directory `@OP` override. Numeric functions
+        # (arithmetic/comparison/boolean) live in `@OP` below. Numeric functions
         # (`round`, `divide`, `sin`, …) and constants (`pi`, `e`) live in `@math`.
         define.call("size", method(:size))
         define.call("join", method(:join))
@@ -23,7 +21,6 @@ module Fusion
         define.call("parseNumber", method(:parse_number))
         define.call("keys", method(:keys))
         define.call("values", method(:values))
-        define.call("toObject", method(:to_object))
 
         # type predicates: return false on any non-matching value, never an error
         define.call("Integer", method(:integer?))
@@ -33,6 +30,7 @@ module Fusion
         define.call("Boolean", method(:boolean?))
         define.call("Array", method(:array?))
         define.call("Object", method(:object?))
+        define.call("Collection", method(:collection?))
         define.call("Null", method(:null?))
         define.call("Function", method(:function?))
         define.call("NonFinite", method(:non_finite?))
@@ -51,6 +49,10 @@ module Fusion
           "modulo"   => NativeFunc.new("OP.modulo", method(:op_modulo)),
           "equal"    => NativeFunc.new("OP.equal", method(:op_equal)),
           "compare"  => NativeFunc.new("OP.compare", method(:op_compare)),
+          "lt"       => NativeFunc.new("OP.lt", method(:op_lt)),
+          "gt"       => NativeFunc.new("OP.gt", method(:op_gt)),
+          "lte"      => NativeFunc.new("OP.lte", method(:op_lte)),
+          "gte"      => NativeFunc.new("OP.gte", method(:op_gte)),
           "and"      => NativeFunc.new("OP.and", method(:op_and)),
           "or"       => NativeFunc.new("OP.or", method(:op_or)),
           "not"      => NativeFunc.new("OP.not", method(:op_not)),
@@ -206,9 +208,8 @@ module Fusion
       # --- OP: the sugar-target operators (reached as `@OP.sum`, `@OP.and`, …) ---
       #
       # The arithmetic, boolean, and equality members take an array of ANY length;
-      # the unary ones take a single value; `compare` returns -1 / 0 / 1. The
-      # friendly derived forms (`@lt`, `@gt`, `@truthy`, …) are stdlib files built on
-      # these.
+      # the unary ones take a single value; `compare` returns -1 / 0 / 1, which
+      # `lt` / `gt` / `lte` / `gte` then read into a boolean.
 
       def op_sum(v)
         return v if v.is_a?(ErrorVal)
@@ -289,6 +290,26 @@ module Fusion
         end
       end
 
+      # The comparison readers interpret an `@OP.compare` result. The infix sugar
+      # `a < b` desugars to `[a, b] | @OP.compare | @OP.lt` (likewise `<=` / `>` /
+      # `>=`), so an `@OP` override reskins the ordering and its reading together.
+
+      def op_lt(v)
+        read_compare_result("OP.lt", v, [-1])
+      end
+
+      def op_gt(v)
+        read_compare_result("OP.gt", v, [1])
+      end
+
+      def op_lte(v)
+        read_compare_result("OP.lte", v, [-1, 0])
+      end
+
+      def op_gte(v)
+        read_compare_result("OP.gte", v, [0, 1])
+      end
+
       def op_and(v)
         return v if v.is_a?(ErrorVal)
         return argument_error("OP.and", v, ["_ ? @Array"]) unless v.is_a?(Array)
@@ -313,7 +334,7 @@ module Fusion
 
       def size(v)
         return v if v.is_a?(ErrorVal)
-        return argument_error("size", v, ["_ ? @String", "_ ? @Array", "_ ? @Object"]) unless v.is_a?(String) || v.is_a?(Array) || v.is_a?(Hash)
+        return argument_error("size", v, ["_ ? @String", "_ ? @Collection"]) unless v.is_a?(String) || v.is_a?(Array) || v.is_a?(Hash)
 
         v.length
       end
@@ -390,18 +411,6 @@ module Fusion
         v.values
       end
 
-      def to_object(v)
-        return v if v.is_a?(ErrorVal)
-
-        # Each entry must be a [string, _] pair.
-        expected = ['_ ? (xs => {"c": xs, "f": ([_ ? @String, _] => true)} | @all)']
-        unless v.is_a?(Array) && v.all? { |entry| pair?(entry) && entry[0].is_a?(String) }
-          return argument_error("toObject", v, expected)
-        end
-
-        v.to_h
-      end
-
       private
 
       # Type predicates, also reused as internal guards.
@@ -434,6 +443,10 @@ module Fusion
         v.is_a?(Hash)
       end
 
+      def collection?(v)
+        array?(v) || object?(v)
+      end
+
       def null?(v)
         v == NULL
       end
@@ -448,6 +461,19 @@ module Fusion
 
       def non_finite?(v)
         v.is_a?(Float) && !v.finite?
+      end
+
+      COMPARE_RESULT = ["-1", "0", "1", "null"].freeze
+
+      # -1 / 0 / 1 (exact integers) → whether the ordering is in `truthy_results`.
+      # A partial order's compare may return null (incomparable); that passes
+      # through as null rather than being forced to a boolean.
+      def read_compare_result(name, v, truthy_results)
+        return v if v.is_a?(ErrorVal)
+        return NULL if v == NULL
+        return argument_error(name, v, COMPARE_RESULT) unless integer?(v) && [-1, 0, 1].include?(v)
+
+        truthy_results.include?(v)
       end
 
       # Build a standardized interpreter error carrying a human-readable

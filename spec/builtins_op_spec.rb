@@ -410,6 +410,68 @@ RSpec.describe "@OP builtin", mutant_expression: "Fusion::CLI*" do
     end
   end
 
+  # @OP.lt/@OP.gt/@OP.lte/@OP.gte interpret an @OP.compare result (-1 / 0 / 1); the
+  # infix sugar `a < b` pipes the pair through @OP.compare first (see the syntax
+  # sugar spec). A partial order's compare may report null (incomparable); the
+  # readers pass that through as null rather than forcing a boolean.
+  describe "@OP.lt / @OP.gt / @OP.lte / @OP.gte (read an @OP.compare result)" do
+    it "maps a smaller-first compare result to the four booleans" do
+      expect_pipe
+        .in("✅", "[1,2]")
+        .code("(p => p | @OP.compare | (c => [c | @OP.lt, c | @OP.gt, c | @OP.lte, c | @OP.gte]))")
+        .out("✅", "[true,false,true,false]")
+    end
+
+    it "maps a larger-first compare result to the four booleans" do
+      expect_pipe
+        .in("✅", "[3,2]")
+        .code("(p => p | @OP.compare | (c => [c | @OP.lt, c | @OP.gt, c | @OP.lte, c | @OP.gte]))")
+        .out("✅", "[false,true,false,true]")
+    end
+
+    it "is inclusive at equality only for @OP.lte and @OP.gte" do
+      expect_pipe
+        .in("✅", "[2,2]")
+        .code("(p => p | @OP.compare | (c => [c | @OP.lt, c | @OP.gt, c | @OP.lte, c | @OP.gte]))")
+        .out("✅", "[false,false,true,true]")
+    end
+
+    it "propagates a null compare result as null" do
+      expect_pipe
+        .in("✅", "null")
+        .code("(c => [c | @OP.lt, c | @OP.gt, c | @OP.lte, c | @OP.gte])")
+        .out("✅", "[null,null,null,null]")
+    end
+
+    it "errors on a value that is not a compare result" do
+      expect_pipe
+        .in("✅", "5")
+        .code("(c => c | @OP.lt)")
+        .out("❌", '{"kind":"argument_error","origin":"builtin","file":"<inline>","operation":"@OP.lt","status":0,"input":5,"expected":["-1","0","1","null"]}')
+    end
+
+    it "treats a float as the wrong type even where it equals an ordering (exact)" do
+      expect_pipe
+        .in("✅", "-1.0")
+        .code("(c => c | @OP.gt)")
+        .out("❌", '{"kind":"argument_error","origin":"builtin","file":"<inline>","operation":"@OP.gt","status":0,"input":-1.0,"expected":["-1","0","1","null"]}')
+    end
+
+    it "treats a boolean as the wrong type" do
+      expect_pipe
+        .in("✅", "true")
+        .code("(c => c | @OP.lte)")
+        .out("❌", '{"kind":"argument_error","origin":"builtin","file":"<inline>","operation":"@OP.lte","status":0,"input":true,"expected":["-1","0","1","null"]}')
+    end
+
+    it "treats a string as the wrong type" do
+      expect_pipe
+        .in("✅", '"0"')
+        .code("(c => c | @OP.gte)")
+        .out("❌", '{"kind":"argument_error","origin":"builtin","file":"<inline>","operation":"@OP.gte","status":0,"input":"0","expected":["-1","0","1","null"]}')
+    end
+  end
+
   # @OP.and/@OP.or/@OP.not judge truthiness (false and null are falsey, everything
   # else — including 0 — is truthy) and always return a boolean.
   describe "@OP.and" do

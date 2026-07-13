@@ -39,7 +39,7 @@ RSpec.describe "builtins", mutant_expression: "Fusion::CLI*" do
       expect_pipe
         .in("✅", "5")
         .code("(v => v | @size)")
-        .out("❌", '{"kind":"argument_error","origin":"builtin","file":"<inline>","operation":"@size","status":0,"input":5,"expected":["_ ? @String","_ ? @Array","_ ? @Object"]}')
+        .out("❌", '{"kind":"argument_error","origin":"builtin","file":"<inline>","operation":"@size","status":0,"input":5,"expected":["_ ? @String","_ ? @Collection"]}')
     end
   end
 
@@ -246,43 +246,6 @@ RSpec.describe "builtins", mutant_expression: "Fusion::CLI*" do
     end
   end
 
-  describe "@toObject" do
-    it "builds an object from [key, value] entries" do
-      expect_pipe
-        .in("✅", '[["a",1],["b",2]]')
-        .code("(es => es | @toObject)")
-        .out("✅", '{"a":1,"b":2}')
-    end
-
-    it "is empty for no entries" do
-      expect_pipe
-        .in("✅", "[]")
-        .code("(es => es | @toObject)")
-        .out("✅", "{}")
-    end
-
-    it "keeps the last value for a duplicate key" do
-      expect_pipe
-        .in("✅", '[["a",1],["a",9]]')
-        .code("(es => es | @toObject)")
-        .out("✅", '{"a":9}')
-    end
-
-    it "errors on a non-array" do
-      expect_pipe
-        .in("✅", "5")
-        .code("(es => es | @toObject)")
-        .out("❌", '{"kind":"argument_error","origin":"builtin","file":"<inline>","operation":"@toObject","status":0,"input":5,"expected":["_ ? (xs => {\"c\": xs, \"f\": ([_ ? @String, _] => true)} | @all)"]}')
-    end
-
-    it "errors on a malformed entry" do
-      expect_pipe
-        .in("✅", '[["a",1],5]')
-        .code("(es => es | @toObject)")
-        .out("❌", '{"kind":"argument_error","origin":"builtin","file":"<inline>","operation":"@toObject","status":0,"input":[["a",1],5],"expected":["_ ? (xs => {\"c\": xs, \"f\": ([_ ? @String, _] => true)} | @all)"]}')
-    end
-  end
-
   describe "type predicates" do
     it "@Integer is true for an integer" do
       expect_pipe
@@ -393,6 +356,34 @@ RSpec.describe "builtins", mutant_expression: "Fusion::CLI*" do
       expect_pipe
         .in("✅", "[]")
         .code("(x => x | @Object)")
+        .out("✅", "false")
+    end
+
+    it "@Collection is true for an array" do
+      expect_pipe
+        .in("✅", "[1,2]")
+        .code("(x => x | @Collection)")
+        .out("✅", "true")
+    end
+
+    it "@Collection is true for an object" do
+      expect_pipe
+        .in("✅", '{"a":1}')
+        .code("(x => x | @Collection)")
+        .out("✅", "true")
+    end
+
+    it "@Collection is false for a string" do
+      expect_pipe
+        .in("✅", '"ab"')
+        .code("(x => x | @Collection)")
+        .out("✅", "false")
+    end
+
+    it "@Collection is false for null" do
+      expect_pipe
+        .in("✅", "null")
+        .code("(x => x | @Collection)")
         .out("✅", "false")
     end
 

@@ -475,7 +475,7 @@ Refines §2.9: same general shape, more orthogonal fields, field values easier t
 - 🧑 ✅ Split `location` into `origin` (where the operation is *defined*) and an optional `file` (the **innermost user-code file** on the call chain).
 - 🧑 ✅ `file` is `Dir.pwd`-relative, so it reads as the route from the location where `fusion` was called to the offending source code.
 - 🧑 ✅ Split `status` out from `input`. `status` is `0` (a value) or `1` (an error). On `1`, `input` carries the error's bare payload, so `input` is always valid JSON.
-- 🧑 ✅ `operation` now contains the failing operation's own **`@`-reference** (`@`, `@@`, `@lt`, `@math.round`, `@../mod`, `@load`) or for Built-in *syntax* its own form (`|`, `.key`, `[]`, `parsing code`). Loading the top-level program file is `loading code` (not an `@`-reference).
+- 🧑 ✅ `operation` now contains the failing operation's own **`@`-reference** (`@`, `@@`, `@range`, `@math.round`, `@../mod`, `@load`) or for Built-in *syntax* its own form (`|`, `.key`, `[]`, `parsing code`). Loading the top-level program file is `loading code` (not an `@`-reference).
 - 🧑 ✅ An `@`-reference takes no argument, so its `input` is `null` and its `status` is always `0`. `@load` is the exception: it's a function taking a filename.
 - 🧑 ✅ For *access errors* the "key" appears only once:
   - `.name` carries the static key in `operation` and the object alone in `input`
@@ -851,8 +851,6 @@ error value can cross the boundary.
 
 **I/O modes** — how an error is marked crossing the boundary; `--input` and `--output` are independent:
 
-TODO: Under `-!` the input is the error payload, so empty stdin is a usage error (nothing to mark).
-
 - 🧑 ✅ Four modes: **unix** (asymmetric, Unix filter) and **bang** / **array** (`[0, value]` / `[1, payload]`), **object** (`{"value": _}` / `{"error": _}`).
 - 🧑 ✅ **unix**: input is `stdin` + `-!` flag, output is `value → stdout` + `exit 0` OR `error → stderr` + `exit 1`. stdin/stdout/stderr are always pure JSON.
 - 🧑 ✅ **bang**: shortest encoding, errors are simply a `!` prefix and thus not valid JSON.
@@ -1008,7 +1006,7 @@ TODO: Under `-!` the input is the error payload, so empty stdin is a usage error
 ### Decisions
 
 - 🧑 ✅ Bundle the most important arithmetic and logic operations together into a single `@OP` reference.
-- 🧑 ✅ Make the `stdlib` as orthogonal as possible to `@OP`.
+- 🧑 ✅ Make the `stdlib` as orthogonal as possible to `@OP`. Addendum: this only applies to top-level stdlib functions. *Modules* like `matrix` are exempt.
 - 🧑 ✅ Higher-order helpers (`map`, `filter`, `reduce`, `compact`, `flatten`, `any`, `all`) are implemented via recursion in Fusion, not hidden in Ruby. They work for both arrays and objects where possible.
 - 🧑 ✅ Provide access to more advanced mathematical operations in `@math`.
 - 🧑 ✅ Where possible, builtins and stdlib functions are n-ary instead of binary.
@@ -1026,7 +1024,7 @@ TODO: Under `-!` the input is the error payload, so empty stdin is a usage error
 ### Cons
 
 - Not all operators with syntax sugar have been grouped into `@OP`. Exceptions are the structural operators `@map`, `@filter`, `@reduce`.
-- The few helpers that still reference `@OP` (currently only `@range`) will ignore `@OP` overrides. To make them aware of `@OP` overrides, create a copy of their `stdlib` source code next to your `OP.fsn`.
+- The few top-level stdlib functions that still reference `@OP` (currently only `@range`) will ignore `@OP` overrides. To make them aware of `@OP` overrides, create a copy of their `stdlib` source code next to your `OP.fsn`.
 - The native way of writing division `[a, b | @OP.negate] | @OP.product` is numerically incorrect and might produce a double rounding error. For the numerically correct division you have to use `@math.divide`.
 
 ---
@@ -1058,7 +1056,58 @@ runtime node is the `[=]` setter.
 - 🤖 ⏪ Lex negative-number literals (JSON-style). Rewound: `a-3` would be ambiguous between the literal `-3` and subtraction.
 - 🤖 ❌ Desugar every `-x` to `x | @OP.negate`, dropping literal negatives. Rejected: `-5` should stay a plain literal, not an `@OP`-routed computation.
 - 🤖 ❌ Assemble the path in the parser so `@a / b` is also the path `a/b` (divide via `(@a) / b`). Rejected: a spaced `@a / b` should read as division like every other operator.
+- 🤖 ❌ Make `&&` / `||` short-circuiting by desugaring to clause dispatch. Rejected: the boolean operators would no longer be reskinnable.
 
 ### Pros
 
 - Giving `pipe` the tightest precedence keeps the "useful reading" paren-free: a pipe's RHS has to always be a function and arithmetic never yields one, so `x|@f + 1` can only sensibly mean `(x|@f) + 1`.
+
+### Cons
+
+- By desugaring `==`/`&&`/`||` into an n-ary `@OP.equal`/`@OP.and`/`@OP.or`, the logic operators can never be short-circuiting. All inputs will be evaluated up front before getting passed to the `@OP` operator as an array. The first erroring input will propagate. The only way to create real short-circuiting is by using **clause bodies**: `a | (true => b, _ => false)`.
+
+---
+
+## 5.7 Comparison operators `<` `<=` `>=` `>`
+
+Extends the §5.6 syntax sugar with comparisons.
+
+### Decisions
+
+- 🧑 ✅ The builtins `@OP.lt` / `@OP.gt` / `@OP.lte` / `@OP.gte` map an `@OP.compare` result (`-1`/`0`/`1`) to a boolean. They pass `null` through to make partial orders possible.
+- 🧑 ✅ The inequality operator `a < b` is syntax sugar for the function chain `[a, b] | @OP.compare | @OP.lt`. Likewise `<=` / `>` / `>=` via `@OP.lte` / `@OP.gt` / `@OP.gte`.
+- 🤖 ✅ The comparisons sit at the ordering level with `??`: binary, left-associative, no folding.
+
+### Alternatives
+
+- 🧑 ⏪ The comparisons previously were stdlib functions (`@lt`, `@gt`, `@lte`, `@gte`), because they can be built in Fusion natively. Superseded: as they are now target of syntax sugar, they have been moved into `@OP`.
+- 🧑 ❌ Four direct pair-comparing members (`[a, b] | @OP.lt`). Rejected: they are semantically coupled to `@OP.compare`. Keeping them consistent would have required to always override all of them together with `@OP.compare`.
+
+### Pros
+
+- `@OP.compare` stays the single ordering primitive. The four operators are thin readers of its result. Shadowing `@OP.compare` keeps the semantics of all 5 syntax sugar operators `??`, `<`, `<=`, `>` and `>=` in sync.
+
+### Cons
+
+- Comparisons don't chain: `a < b < c` is not `a < b && b < c`.
+
+---
+
+## 5.8 Stdlib modules
+
+### Decisions
+
+- 🧑 ✅ Stdlib modules are directories (`@matrix/...`, `@vector/...`).
+- 🧑 ✅ Stdlib modules may ship shadowed default operators (`@matrix/OP`).
+
+### Alternatives
+
+- 🧑 💭 Don't ship a preconstructed `@matrix/OP` and require users to manually assemble it themselves.
+
+### Pros
+
+- Pointing a directory's `OP.fsn` at `@matrix/OP` switches the arithmetic operators `+`, `-`, `*`, `/` to matrix operations. A linear-system solver can be expressed by `([a, b] => /a * b)`.
+
+### Cons
+
+- `@matrix/...` methods make frequent use of `@@`. This makes the `@matrix/...` module unable to compose with other definitions of the basic arithmetic operations (like complex numbers).

@@ -1,4 +1,7 @@
+# Double every number in an array or object.
+# Equivalent to: (c ? @Collection => c |: (n => 2 * n))
 (
   [] => [],
-  [first, ...rest] => [2 * first, ...rest|@]
+  [first, ...rest] => [2 * first, ...rest|@],
+  obj ? @Object => obj | @entries |: ([key, value] => [key, 2 * value]) | @toObject
 )

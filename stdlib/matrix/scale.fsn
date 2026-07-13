@@ -1,0 +1,6 @@
+# Scale a matrix elementwise by a single number: each row scaled as a vector.
+# Input: [number, matrix].
+(
+  [s ? @Number, m ? @Matrix] => m |: (row => [s, row] | @vector/scale),
+  x => !{"kind": "argument_error", "origin": "stdlib", "operation": "@matrix/scale", "status": 0, "input": x, "expected": ["[_ ? @Number, _ ? @matrix/Matrix]"]}
+)

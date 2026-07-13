@@ -1,0 +1,14 @@
+# Elementwise sum of a non-empty array of equally sized matrices: a reduce
+# over @matrix/add. The guard is a flat conditions array ending in @safe: a
+# condition that errors (e.g. @dimensions of a non-matrix) collapses the array
+# into that error, @safe turns it into false, and the clause just doesn't match.
+(
+  matrices ? (ms => [
+      ms | @Array,
+      ms | @size > 0,
+      {"c": ms, "f": @Matrix} | @all,
+      ms |: @dimensions | @OP.equal,
+    ] | @OP.and | @safe) =>
+    matrices |+ @add,
+  x => !{"kind": "argument_error", "origin": "stdlib", "operation": "@matrix/sum", "status": 0, "input": x, "expected": ["_ ? (ms => [ms | @Array, ms | @size > 0, {\"c\": ms, \"f\": @matrix/Matrix} | @all, ms |: @matrix/dimensions | @OP.equal] | @OP.and | @safe)"]}
+)
