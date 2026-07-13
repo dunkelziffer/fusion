@@ -1047,7 +1047,7 @@ runtime node is the `[=]` setter.
 - 🧑 ✅ A single `/` is a path separator only inside a file-reference path; elsewhere it is division/invert. `@a/b` is the path `a/b`; `@a / b` (any space around the slash) is `@a` divided by `b`.
 - 🧑 ✅ The lexer emits a `path` token only immediately after `@`/`@@`, tight: no space after `@`/`@@`, interior slashes abutting their segments. A path starts with an identifier or `..`, never a lone `.` (so `@.map` is `.map` access on bare `@`). Bare `@`/`@@` when no tight path follows.
 - 🧑 ✅ Whitespace between `@`/`@@` and its path is no longer allowed (`@ name` is a syntax error).
-- 🔢 ✅ Runs of `==`/`&&`/`||` fold n-ary to `@OP.equal`/`@OP.and`/`@OP.or`.
+- 🧑 ✅ Runs of `==`/`&&`/`||` fold n-ary to `@OP.equal`/`@OP.and`/`@OP.or`.
 - 🧑 ✅ `??` is its own precedence level, tighter than `==` (compare produces an ordinal that `==` then tests; a boolean can't be compared).
 - 🧑 ✅ `xs |: f`, `xs |? f`, `xs |+ f` desugar to `{"c": xs, "f": f}` piped into `@map`/`@filter`/`@reduce`.
 
@@ -1056,7 +1056,7 @@ runtime node is the `[=]` setter.
 - 🤖 ⏪ Lex negative-number literals (JSON-style). Rewound: `a-3` would be ambiguous between the literal `-3` and subtraction.
 - 🤖 ❌ Desugar every `-x` to `x | @OP.negate`, dropping literal negatives. Rejected: `-5` should stay a plain literal, not an `@OP`-routed computation.
 - 🤖 ❌ Assemble the path in the parser so `@a / b` is also the path `a/b` (divide via `(@a) / b`). Rejected: a spaced `@a / b` should read as division like every other operator.
-- 🔢 ❌ Make `&&` / `||` short-circuiting by desugaring to clause dispatch. Rejected: the boolean operators would no longer be reskinnable.
+- 🤖 ❌ Make `&&` / `||` short-circuiting by desugaring to clause dispatch. Rejected: the boolean operators would no longer be reskinnable.
 
 ### Pros
 
@@ -1102,8 +1102,8 @@ Extends the §5.6 syntax sugar with comparisons.
 
 ### Alternatives
 
-- Don't ship a preconstructed `@matrix/OP` and require users to manually assemble it themselves.
-- Provide an indirection layer `@matrix/scalar_sum` (or `@scalar/sum`) -> `@OP.sum` instead of using `@@OP.sum` directly everywhere, so that the `matrix` module can be composed with different scalar arithmetics.
+- 🧑 💭 Don't ship a preconstructed `@matrix/OP` and require users to manually assemble it themselves.
+- 🧑 💭 Provide an indirection layer `@matrix/scalar_sum` (or `@scalar/sum`) -> `@OP.sum` instead of using `@@OP.sum` directly everywhere, so that the `matrix` module can be composed with different scalar arithmetics.
 
 ### Pros
 
