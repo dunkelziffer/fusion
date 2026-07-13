@@ -1103,7 +1103,6 @@ Extends the §5.6 syntax sugar with comparisons.
 ### Alternatives
 
 - 🧑 💭 Don't ship a preconstructed `@matrix/OP` and require users to manually assemble it themselves.
-- 🧑 💭 Provide an indirection layer `@matrix/scalar_sum` (or `@scalar/sum`) -> `@OP.sum` instead of using `@@OP.sum` directly everywhere, so that the `matrix` module can be composed with different scalar arithmetics.
 
 ### Pros
 
