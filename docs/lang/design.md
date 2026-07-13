@@ -1006,7 +1006,7 @@ error value can cross the boundary.
 ### Decisions
 
 - 🧑 ✅ Bundle the most important arithmetic and logic operations together into a single `@OP` reference.
-- 🧑 ✅ Make the `stdlib` as orthogonal as possible to `@OP`.
+- 🧑 ✅ Make the `stdlib` as orthogonal as possible to `@OP`. Addendum: this only applies to top-level stdlib functions. *Modules* like `matrix` are exempt.
 - 🧑 ✅ Higher-order helpers (`map`, `filter`, `reduce`, `compact`, `flatten`, `any`, `all`) are implemented via recursion in Fusion, not hidden in Ruby. They work for both arrays and objects where possible.
 - 🧑 ✅ Provide access to more advanced mathematical operations in `@math`.
 - 🧑 ✅ Where possible, builtins and stdlib functions are n-ary instead of binary.
@@ -1024,7 +1024,7 @@ error value can cross the boundary.
 ### Cons
 
 - Not all operators with syntax sugar have been grouped into `@OP`. Exceptions are the structural operators `@map`, `@filter`, `@reduce`.
-- The few helpers that still reference `@OP` (currently only `@range`) will ignore `@OP` overrides. To make them aware of `@OP` overrides, create a copy of their `stdlib` source code next to your `OP.fsn`.
+- The few top-level stdlib functions that still reference `@OP` (currently only `@range`) will ignore `@OP` overrides. To make them aware of `@OP` overrides, create a copy of their `stdlib` source code next to your `OP.fsn`.
 - The native way of writing division `[a, b | @OP.negate] | @OP.product` is numerically incorrect and might produce a double rounding error. For the numerically correct division you have to use `@math.divide`.
 
 ---
@@ -1047,7 +1047,7 @@ runtime node is the `[=]` setter.
 - 🧑 ✅ A single `/` is a path separator only inside a file-reference path; elsewhere it is division/invert. `@a/b` is the path `a/b`; `@a / b` (any space around the slash) is `@a` divided by `b`.
 - 🧑 ✅ The lexer emits a `path` token only immediately after `@`/`@@`, tight: no space after `@`/`@@`, interior slashes abutting their segments. A path starts with an identifier or `..`, never a lone `.` (so `@.map` is `.map` access on bare `@`). Bare `@`/`@@` when no tight path follows.
 - 🧑 ✅ Whitespace between `@`/`@@` and its path is no longer allowed (`@ name` is a syntax error).
-- 🧑 ✅ Runs of `==`/`&&`/`||` fold n-ary to `@OP.equal`/`@OP.and`/`@OP.or`.
+- 🔢 ✅ Runs of `==`/`&&`/`||` fold n-ary to `@OP.equal`/`@OP.and`/`@OP.or`.
 - 🧑 ✅ `??` is its own precedence level, tighter than `==` (compare produces an ordinal that `==` then tests; a boolean can't be compared).
 - 🧑 ✅ `xs |: f`, `xs |? f`, `xs |+ f` desugar to `{"c": xs, "f": f}` piped into `@map`/`@filter`/`@reduce`.
 
@@ -1056,33 +1056,36 @@ runtime node is the `[=]` setter.
 - 🤖 ⏪ Lex negative-number literals (JSON-style). Rewound: `a-3` would be ambiguous between the literal `-3` and subtraction.
 - 🤖 ❌ Desugar every `-x` to `x | @OP.negate`, dropping literal negatives. Rejected: `-5` should stay a plain literal, not an `@OP`-routed computation.
 - 🤖 ❌ Assemble the path in the parser so `@a / b` is also the path `a/b` (divide via `(@a) / b`). Rejected: a spaced `@a / b` should read as division like every other operator.
+- 🔢 ❌ Make `&&` / `||` short-circuiting by desugaring to clause dispatch. Rejected: the boolean operators would no longer be reskinnable.
 
 ### Pros
 
 - Giving `pipe` the tightest precedence keeps the "useful reading" paren-free: a pipe's RHS has to always be a function and arithmetic never yields one, so `x|@f + 1` can only sensibly mean `(x|@f) + 1`.
 
+### Cons
+
+- By desugaring `==`/`&&`/`||` into an n-ary `@OP.equal`/`@OP.and`/`@OP.or`, the logic operators can never be short-circuiting. All inputs will be evaluated up front before getting passed to the `@OP` operator as an array. The first erroring input will propagate. The only way to create real short-circuiting is by using **clause bodies**: `a | (true => b, _ => false)`.
+
 ---
 
 ## 5.7 Comparison operators `<` `<=` `>=` `>`
 
-Extends the §5.6 sugar with comparisons; moves the comparison readers from the stdlib
-into `@OP`.
+Extends the §5.6 syntax sugar with comparisons.
 
 ### Decisions
 
-- 🧑 ✅ `a < b` is sugar for `[a, b] | @OP.compare | @OP.lt`; likewise `<=` / `>` / `>=` via `@OP.lte` / `@OP.gt` / `@OP.gte`.
-- 🧑 ✅ The readers `lt` / `gt` / `lte` / `gte` are `@OP` members: they map an exact `@OP.compare` result (`-1`/`0`/`1`) to a boolean, pass `null` through (a partial order's "incomparable"), and reject anything else.
-- 🤖 ✅ The comparisons sit at the ordering level with `??`: binary, left-associative, no folding — `a < b < c` compares a boolean and errors at runtime.
+- 🧑 ✅ The builtins `@OP.lt` / `@OP.gt` / `@OP.lte` / `@OP.gte` map an `@OP.compare` result (`-1`/`0`/`1`) to a boolean. They pass `null` through to make partial orders possible.
+- 🧑 ✅ The inequality operator `a < b` is syntax sugar for the function chain `[a, b] | @OP.compare | @OP.lt`. Likewise `<=` / `>` / `>=` via `@OP.lte` / `@OP.gt` / `@OP.gte`.
+- 🤖 ✅ The comparisons sit at the ordering level with `??`: binary, left-associative, no folding.
 
 ### Alternatives
 
-- 🧑 ⏪ The readers as stdlib helpers (`@lt`, `@gt`, `@lte`, `@gte`), deliberately immune to an `@OP` override. Superseded: as members they live where the sugar points, and the override story stays one object.
-- 🧑 ❌ Four direct pair-comparing members (`[a, b] | @OP.lt`); rejected: four coupled orderings an override would have to keep consistent with `compare`.
+- 🧑 ⏪ The comparisons previously were stdlib functions (`@lt`, `@gt`, `@lte`, `@gte`), because they can be built in Fusion natively. Superseded: as they are now target of syntax sugar, they have been moved into `@OP`.
+- 🧑 ❌ Four direct pair-comparing members (`[a, b] | @OP.lt`). Rejected: they are semantically coupled to `@OP.compare`. Keeping them consistent would have required to always override all of them together with `@OP.compare`.
 
 ### Pros
 
-- `compare` stays the single ordering primitive; the four operators are thin readers of its result.
-- Overriding `compare` alone reskins `a < b` — both desugared steps resolve through the per-directory `@OP`.
+- `@OP.compare` stays the single ordering primitive. The four operators are thin readers of its result. Shadowing `@OP.compare` keeps the semantics of all 5 syntax sugar operators `??`, `<`, `<=`, `>` and `>=` in sync.
 
 ### Cons
 
@@ -1090,148 +1093,22 @@ into `@OP`.
 
 ---
 
-## 5.8 Stdlib charter
-
-How stdlib functions are written; §5.2 (one function per file) and §5.5 (orthogonality
-to `@OP`) set the frame.
+## 5.8 Stdlib modules
 
 ### Decisions
 
-- 🧑 ✅ Stdlib references `@OP` members and their sugar freely wherever no sibling `OP.fsn` changes their meaning; `@@OP` is reserved for members a sibling actually overrides (§5.11).
-- 🧑 ✅ Stdlib functions may build on other stdlib functions.
-- 🧑 ✅ Stdlib and example code uses the map-pipe sugar `|:` `|?` `|+` — except that `map`/`filter`/`reduce` write their own recursion as an explicit self-recursive `… | @`.
-- 🧑 ✅ Validation is structural, in the clause patterns themselves; a positive guard clause (`input ? (…) => computation`) is reserved for conditions patterns cannot express, like `@concat`'s "every element is a string".
+- 🧑 ✅ Stdlib modules are directories (`@matrix/...`, `@vector/...`).
+- 🧑 ✅ Stdlib modules may ship shadowed default operators (`@matrix/OP`).
 
 ### Alternatives
 
-- 🤖 ⏪ Every stdlib function as positive guard → nested computation → error fallback. Rewound: plain clauses read better wherever the condition is structural — pattern matching is the language's strength.
-- 🧑 ⏪ Stdlib never references `@OP` (`@range` grandfathered). Rewound: resolution is per file, so `@@` everywhere was noise — only a real sibling override needs the escape hatch.
+- Don't ship a preconstructed `@matrix/OP` and require users to manually assemble it themselves.
+- Provide an indirection layer `@matrix/scalar_sum` (or `@scalar/sum`) -> `@OP.sum` instead of using `@@OP.sum` directly everywhere, so that the `matrix` module can be composed with different scalar arithmetics.
 
 ### Pros
 
-- An `OP.fsn` reskin is never silently bypassed by stdlib internals — there is nothing to bypass.
-- The stdlib doubles as idiomatic example code.
+- Pointing a directory's `OP.fsn` at `@matrix/OP` switches the arithmetic operators `+`, `-`, `*`, `/` to matrix operations. A linear-system solver can be expressed by `([a, b] => /a * b)`.
 
 ### Cons
 
-- Helpers deliberately ignore a local `@OP` override; a reskinning caller must vendor them (§5.5, roadmap).
-
----
-
-## 5.9 Object construction and destructuring
-
-### Decisions
-
-- 🧑 ✅ `@entries` destructures an object into its `[key, value]` entries, in insertion order; `@toObject` builds an object from such entries, later duplicate keys winning. They are inverses: `obj | @entries | @toObject` is `obj`.
-- 🔢 ✅ The names complete the JS trio `keys`/`values`/`entries`; `toObject` names its result like `toString`, so a pipe ends in what it produces.
-- 🧑 ✅ Both are stdlib, not builtins: the `[=]` setter makes `toObject` expressible in Fusion, so the Tier-0 rule (§5.3) moves it out of the interpreter.
-
-### Alternatives
-
-- 🤖 ❌ `fromEntries` (the JS couple): in a postfix pipe it names the input you already see, not the result. `fromPairs`/`toPairs` (lodash): "pair" already means any two-element array here.
-
-### Pros
-
-- Computed keys become first-class: destructure, transform the entries, rebuild.
-- `@map`/`@filter` reduce their object case to the array case via `@entries`.
-
-### Cons
-
-- An object pass builds an intermediate entries array.
-
----
-
-## 5.10 The `@Collection` predicate
-
-### Decisions
-
-- 🧑 ✅ `@Collection` is a type predicate, true exactly for arrays and objects.
-- 🧑 ✅ All type predicates stay builtins, even derivable ones like this.
-- 🧑 ✅ `expected` patterns use `_ ? @Collection` wherever the acceptable set is exactly "array or object"; alternatives that couple the collection kind to another slot's type (`[]`, `[=]`) stay split, keeping "matches ⇒ acceptable" exact.
-
-### Alternatives
-
-- 🤖 ❌ A stdlib `Collection.fsn` (it is derivable). Rejected: the type predicates stay one uniform builtin family.
-
-### Pros
-
-- The polymorphic collection functions state their contract in one pattern (`c ? @Collection`, `"c": _ ? @Collection`).
-
-### Cons
-
-- Where the array/object alternatives differ in a coupled slot, both spellings coexist.
-
----
-
-## 5.11 The matrix and vector modules
-
-### Decisions
-
-- 🧑 ✅ Stdlib modules are directories: `@matrix/multiply`, `@vector/dot`. A module file resolves plain references against its own directory, so `matrix/OP.fsn` shadows `@OP` for the module itself.
-- 🧑 ✅ `@matrix/OP` reskins only the arithmetic members: `sum`/`negate` elementwise, `product` the matrix product, `invert` the matrix inverse (`math_error` when singular), `quotient`/`modulo` always a `math_error`. The `...@@` spread keeps every other member builtin, so module files use the comparison and boolean sugar and plain `@OP` freely, reserving `@@OP` for scalar arithmetic.
-- 🧑 ✅ The vector module is the foundation: a Vector is a non-empty array of numbers, a Matrix a non-empty array of equally sized Vectors, and the matrix operations route through the vector ones (`multiply` → `dot`, `add` → `@vector/add`, `sum` → `add`).
-- 🔢 ✅ `@matrix/dimensions` returns `{"rows": _, "columns": _}`, so every use site names its axis: `(x | @dimensions).columns == (y | @dimensions).rows`.
-- 🧑 ✅ `scale` takes the scalar first; `rotate` multiplies the rotation matrix onto a 2×2 matrix.
-- 🧑 ✅ `column`, `row` and `minor` index 0-based and strict: out-of-range is an `argument_error`, not `null`.
-- 🧑 ✅ `sum` requires equal dimensions up front; `product` checks only "non-empty array of matrices" and lets a chain mismatch surface as `@matrix/multiply`'s error.
-- 🤖 ✅ `@zip` is general stdlib, not module-private.
-
-### Alternatives
-
-- 🤖 ⏪ `@matrix/size` returning `[rows, columns]`: it shadowed the builtin `@size` for the module's own files, and positional axes read worse than `d.rows`/`d.columns`.
-- 🤖 ❌ Rectangularity checks inside each operation instead of a `Matrix` predicate: every guard would restate the shape.
-
-### Pros
-
-- Pointing a directory's `OP.fsn` at `@matrix/OP` turns linear algebra into arithmetic: a linear-system solver is `([a, b] => /a * b)`.
-- The named helpers stay useful without the reskin.
-
-### Cons
-
-- Elementwise `*` is not available under the reskin — `product` means the matrix product.
-
----
-
-## 5.12 Bare-array @all and @any
-
-### Decisions
-
-- 🧑 ✅ `@all`/`@any` accept only `{"f": predicate, "c": collection}`; the boolean fold over a plain condition array is `@OP.and`/`@OP.or`.
-
-### Alternatives
-
-- 🔢 ❌ A bare-array input with `f` defaulting to `@truthy` — shipped briefly, then removed: an exact duplicate of `@OP.and`/`@OP.or`, and since every name is equally shadowable it bought no reskin independence.
-
-### Pros
-
-- One spelling per fold: operators for boolean logic, `@all`/`@any` for predicate quantification.
-
-### Cons
-
-- Condition-array guards depend on the local meaning of `@OP.and`; a spread-less reskin changes them.
-
----
-
-## 5.13 Error-as-false guards
-
-### Decisions
-
-- 🧑 ✅ `@safe` is the stdlib error catcher `(! => false, v => v)` — the one stdlib function with an error clause.
-- 🧑 ✅ A guard whose checks don't order themselves structurally is a flat conditions array, one condition per line, piped through `@OP.and | @safe`: an erroring condition reads as "no match", and the function's own error clause reports.
-- 🧑 ✅ Structural clause guards remain the default wherever patterns express the checks (§5.8) — patterns cannot error.
-- 🤖 ✅ For disjunctions `@safe` wraps each condition, not the fold: `false` absorbs a conjunction but is the identity of a disjunction, so a collapsed error would veto satisfied conditions.
-
-### Alternatives
-
-- 🔢 ❌ Short-circuiting `&&`/`||` via desugaring to clause dispatch: fixes eagerness at the root, but the boolean operators would stop desugaring to `@OP` and lose reskinnability.
-- 🤖 ⏪ Two-stage nested-predicate guards for `sum`/`product` (sequenced, never erroring): superseded by the flat list, which yields the same payloads.
-- 🤖 💭 Per-condition `{"value"/"error"}` tagging to reproduce exact short-circuit results including surfaced errors: expressible, but far too heavy for guards.
-
-### Pros
-
-- Validation reads as a flat checklist, and every bad input gets the function's own `argument_error` — no inner helper's error leaks.
-- No new semantics: catching is ordinary clause matching (§6.2).
-
-### Cons
-
-- All conditions are computed eagerly, and a genuinely broken condition reads as "guard is false for every input" instead of failing loudly.
+- `@matrix/...` methods make frequent use of `@@`. This makes the `@matrix/...` module unable to compose with other definitions of the basic arithmetic operations (like complex numbers).
