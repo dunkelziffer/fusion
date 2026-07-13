@@ -851,8 +851,6 @@ error value can cross the boundary.
 
 **I/O modes** — how an error is marked crossing the boundary; `--input` and `--output` are independent:
 
-TODO: Under `-!` the input is the error payload, so empty stdin is a usage error (nothing to mark).
-
 - 🧑 ✅ Four modes: **unix** (asymmetric, Unix filter) and **bang** / **array** (`[0, value]` / `[1, payload]`), **object** (`{"value": _}` / `{"error": _}`).
 - 🧑 ✅ **unix**: input is `stdin` + `-!` flag, output is `value → stdout` + `exit 0` OR `error → stderr` + `exit 1`. stdin/stdout/stderr are always pure JSON.
 - 🧑 ✅ **bang**: shortest encoding, errors are simply a `!` prefix and thus not valid JSON.
@@ -1099,7 +1097,7 @@ to `@OP`) set the frame.
 
 ### Decisions
 
-- 🧑 ✅ Stdlib functions never reference `@OP`. `@range` is the grandfathered exception; no new ones.
+- 🧑 ✅ Stdlib references `@OP` members and their sugar freely wherever no sibling `OP.fsn` changes their meaning; `@@OP` is reserved for members a sibling actually overrides (§5.11).
 - 🧑 ✅ Stdlib functions may build on other stdlib functions.
 - 🧑 ✅ Stdlib and example code uses the map-pipe sugar `|:` `|?` `|+` — except that `map`/`filter`/`reduce` write their own recursion as an explicit self-recursive `… | @`.
 - 🧑 ✅ Validation is structural, in the clause patterns themselves; a positive guard clause (`input ? (…) => computation`) is reserved for conditions patterns cannot express, like `@concat`'s "every element is a string".
@@ -1107,6 +1105,7 @@ to `@OP`) set the frame.
 ### Alternatives
 
 - 🤖 ⏪ Every stdlib function as positive guard → nested computation → error fallback. Rewound: plain clauses read better wherever the condition is structural — pattern matching is the language's strength.
+- 🧑 ⏪ Stdlib never references `@OP` (`@range` grandfathered). Rewound: resolution is per file, so `@@` everywhere was noise — only a real sibling override needs the escape hatch.
 
 ### Pros
 
@@ -1166,16 +1165,73 @@ to `@OP`) set the frame.
 
 ## 5.11 The matrix and vector modules
 
-TODO
+### Decisions
+
+- 🧑 ✅ Stdlib modules are directories: `@matrix/multiply`, `@vector/dot`. A module file resolves plain references against its own directory, so `matrix/OP.fsn` shadows `@OP` for the module itself.
+- 🧑 ✅ `@matrix/OP` reskins only the arithmetic members: `sum`/`negate` elementwise, `product` the matrix product, `invert` the matrix inverse (`math_error` when singular), `quotient`/`modulo` always a `math_error`. The `...@@` spread keeps every other member builtin, so module files use the comparison and boolean sugar and plain `@OP` freely, reserving `@@OP` for scalar arithmetic.
+- 🧑 ✅ The vector module is the foundation: a Vector is a non-empty array of numbers, a Matrix a non-empty array of equally sized Vectors, and the matrix operations route through the vector ones (`multiply` → `dot`, `add` → `@vector/add`, `sum` → `add`).
+- 🔢 ✅ `@matrix/dimensions` returns `{"rows": _, "columns": _}`, so every use site names its axis: `(x | @dimensions).columns == (y | @dimensions).rows`.
+- 🧑 ✅ `scale` takes the scalar first; `rotate` multiplies the rotation matrix onto a 2×2 matrix.
+- 🧑 ✅ `column`, `row` and `minor` index 0-based and strict: out-of-range is an `argument_error`, not `null`.
+- 🧑 ✅ `sum` requires equal dimensions up front; `product` checks only "non-empty array of matrices" and lets a chain mismatch surface as `@matrix/multiply`'s error.
+- 🤖 ✅ `@zip` is general stdlib, not module-private.
+
+### Alternatives
+
+- 🤖 ⏪ `@matrix/size` returning `[rows, columns]`: it shadowed the builtin `@size` for the module's own files, and positional axes read worse than `d.rows`/`d.columns`.
+- 🤖 ❌ Rectangularity checks inside each operation instead of a `Matrix` predicate: every guard would restate the shape.
+
+### Pros
+
+- Pointing a directory's `OP.fsn` at `@matrix/OP` turns linear algebra into arithmetic: a linear-system solver is `([a, b] => /a * b)`.
+- The named helpers stay useful without the reskin.
+
+### Cons
+
+- Elementwise `*` is not available under the reskin — `product` means the matrix product.
 
 ---
 
 ## 5.12 Bare-array @all and @any
 
-TODO
+### Decisions
+
+- 🧑 ✅ `@all`/`@any` accept only `{"f": predicate, "c": collection}`; the boolean fold over a plain condition array is `@OP.and`/`@OP.or`.
+
+### Alternatives
+
+- 🔢 ❌ A bare-array input with `f` defaulting to `@truthy` — shipped briefly, then removed: an exact duplicate of `@OP.and`/`@OP.or`, and since every name is equally shadowable it bought no reskin independence.
+
+### Pros
+
+- One spelling per fold: operators for boolean logic, `@all`/`@any` for predicate quantification.
+
+### Cons
+
+- Condition-array guards depend on the local meaning of `@OP.and`; a spread-less reskin changes them.
 
 ---
 
 ## 5.13 Error-as-false guards
 
-TODO
+### Decisions
+
+- 🧑 ✅ `@safe` is the stdlib error catcher `(! => false, v => v)` — the one stdlib function with an error clause.
+- 🧑 ✅ A guard whose checks don't order themselves structurally is a flat conditions array, one condition per line, piped through `@OP.and | @safe`: an erroring condition reads as "no match", and the function's own error clause reports.
+- 🧑 ✅ Structural clause guards remain the default wherever patterns express the checks (§5.8) — patterns cannot error.
+- 🤖 ✅ For disjunctions `@safe` wraps each condition, not the fold: `false` absorbs a conjunction but is the identity of a disjunction, so a collapsed error would veto satisfied conditions.
+
+### Alternatives
+
+- 🔢 ❌ Short-circuiting `&&`/`||` via desugaring to clause dispatch: fixes eagerness at the root, but the boolean operators would stop desugaring to `@OP` and lose reskinnability.
+- 🤖 ⏪ Two-stage nested-predicate guards for `sum`/`product` (sequenced, never erroring): superseded by the flat list, which yields the same payloads.
+- 🤖 💭 Per-condition `{"value"/"error"}` tagging to reproduce exact short-circuit results including surfaced errors: expressible, but far too heavy for guards.
+
+### Pros
+
+- Validation reads as a flat checklist, and every bad input gets the function's own `argument_error` — no inner helper's error leaks.
+- No new semantics: catching is ordinary clause matching (§6.2).
+
+### Cons
+
+- All conditions are computed eagerly, and a genuinely broken condition reads as "guard is false for every input" instead of failing loudly.
